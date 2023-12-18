@@ -7,6 +7,7 @@ import torch
 from gaussian_rasterizer.culling import CameraParams
 from gaussian_rasterizer.data_types import Gaussians, Gaussian2D, Gaussian3D
 from gaussian_rasterizer.taichi import transforms, projection
+from gaussian_rasterizer.taichi.covariance import cov_to_conic
 
 
 
@@ -39,7 +40,7 @@ def project_to_image_kernel(
       )
 
       cov_in_camera = projection.gaussian_covariance_in_camera(
-          T_camera_world, gaussian.rotation, gaussian.scale())
+          T_camera_world, ti.math.normalize(gaussian.rotation), gaussian.scale())
 
       uv_cov = projection.project_gaussian_to_image(
           intrinsics_mat, point_in_camera, cov_in_camera)
@@ -54,7 +55,7 @@ def project_to_image_kernel(
       
       points[idx] = Gaussian2D.pack(
           uv=uv,
-          uv_conic=projection.cov_to_conic(uv_cov),
+          uv_conic=cov_to_conic(uv_cov),
           alpha=gaussian.alpha(),
       )
 

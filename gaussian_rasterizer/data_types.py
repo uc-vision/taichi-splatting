@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from numbers import Integral
 from types import SimpleNamespace
 from typing import Tuple
+from beartype import beartype
 import taichi as ti
 import torch
 from tensordict.prototype import tensorclass
@@ -22,7 +24,7 @@ class Gaussians():
   def concat(self):
     return torch.cat([self.position, self.feature, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
 
-
+@beartype
 @dataclass
 class CameraParams:
   camera_intrinsics: torch.Tensor # (1, 3, 3)
@@ -31,7 +33,7 @@ class CameraParams:
 
   near_plane: float
   far_plane: float
-  image_size: Tuple[int, int]
+  image_size: Tuple[Integral, Integral]
 
 
 @ti.dataclass
@@ -55,7 +57,7 @@ class Gaussian3D:
 
     @ti.func
     def scale(self):
-        return ti.exp(self.log_scaling)
+        return ti.math.exp(self.log_scaling)
 
 
 vec_g2d = ti.types.vector(struct_size(Gaussian2D), dtype=ti.f32)
@@ -77,6 +79,10 @@ def unpack_vec_g3d(vec:vec_g3d) -> Gaussian3D:
 @ti.func
 def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
   return Gaussian2D(vec[0:2], vec[2:5], vec[5])
+
+def unpack_g2d_torch(vec:torch.Tensor):
+  uv, uv_conic, alpha = vec[:, 0:2], vec[:, 2:5], vec[:, 5]
+  return uv, uv_conic, alpha
 
 # Taichi structs don't have static methods, but they can be added afterward
 Gaussian2D.vec = vec_g2d

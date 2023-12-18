@@ -76,42 +76,7 @@ def project_gaussian_to_image(
     J = get_projective_transform_jacobian(
         projective_transform, point_in_camera)
     
+    
     cov_uv = J @ cov_in_camera @ J.transpose()
     return cov_uv
-
-@ti.func
-def radii_from_cov(uv_cov: mat2):
-    large_eigen_values = (uv_cov[0, 0] + uv_cov[1, 1] +
-                          ti.sqrt((uv_cov[0, 0] - uv_cov[1, 1]) * (uv_cov[0, 0] - uv_cov[1, 1]) + 4.0 * uv_cov[0, 1] * uv_cov[1, 0])) / 2.0
-    # 3.0 is a value from experiment
-    return ti.sqrt(large_eigen_values) * 3.0
-
-
-@ti.func
-def cov_to_conic(
-    gaussian_covariance: mat2,
-) -> vec3:
-    inv_cov = gaussian_covariance.inverse()
-    return vec3(inv_cov[0, 0], inv_cov[0, 1], inv_cov[1, 1])
-
-@ti.func
-def conic_to_cov(
-    conic: ti.math.vec3,
-) -> ti.math.mat2:
-    return ti.math.mat2([conic.x, conic.y], [conic.y, conic.z]).inverse()
-
-
-
-
-
-@ti.func
-def radii_from_cov(uv_cov: ti.math.mat2):
-    large_eigen_values = (uv_cov[0, 0] + uv_cov[1, 1] +
-                          ti.sqrt((uv_cov[0, 0] - uv_cov[1, 1]) * (uv_cov[0, 0] - uv_cov[1, 1]) + 4.0 * uv_cov[0, 1] * uv_cov[1, 0])) / 2.0
-    # 3.0 is a value from experiment
-    return ti.sqrt(large_eigen_values) * 3.0
-
-@ti.func
-def radii_from_conic(conic: ti.math.vec3):
-    return radii_from_cov(conic_to_cov(conic))
 
