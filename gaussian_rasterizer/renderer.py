@@ -5,7 +5,7 @@ from gaussian_rasterizer.culling import CameraParams, frustum_culling
 from gaussian_rasterizer.data_types import Gaussians, unpack_g2d_torch
 from gaussian_rasterizer.tile_mapper import map_to_tiles
 from gaussian_rasterizer.projection import project_to_image
-
+from gaussian_rasterizer.rasterizer import rasterize
 
 
 def render_gaussians(
@@ -25,4 +25,7 @@ def render_gaussians(
   gaussians2d, depths = project_to_image(culled, camera_params)
 
   overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, depths, 
+    image_size=camera_params.image_size, tile_size=tile_size)
+  
+  image = rasterize(gaussians2d, culled.feature, tile_ranges, overlap_to_point, 
     image_size=camera_params.image_size, tile_size=tile_size)
