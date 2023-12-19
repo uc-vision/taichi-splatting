@@ -17,12 +17,17 @@ def render_gaussians(
     ):
   
   gaussians = gaussians.contiguous()
+  n = gaussians.feature.shape[1]
+  w, h = camera_params.image_size
 
   point_mask = frustum_culling(gaussians.position,
     camera_params=camera_params, margin_pixels=margin_tiles * tile_size
   )
 
+
   culled:Gaussians = gaussians[point_mask]
+  # if culled.batch_size[0] > 0:
+
   gaussians2d, depths = project_to_image(culled, camera_params)
 
   overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
@@ -34,5 +39,9 @@ def render_gaussians(
   image = rasterize(gaussians=gaussians2d, features=features_depth, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=camera_params.image_size, tile_size=tile_size)
-  
+
+  # else:
+
+  #   image = torch.zeros((h, w, n + 1), dtype=torch.float32, device=gaussians.device)
+
   return image[..., :n], image[..., n]

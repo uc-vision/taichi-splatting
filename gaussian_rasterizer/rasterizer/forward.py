@@ -39,19 +39,16 @@ def forward_kernel(feature_size: int, tile_size: int):
     camera_height, camera_width = image_feature.shape
 
     tile_area = ti.static(tile_size * tile_size)
-    tile_dim = ivec2(camera_width // tile_size, camera_height // tile_size)
+    tiles_wide, tiles_high = camera_width // tile_size, camera_height // tile_size
 
     ti.loop_config(block_dim=(tile_area))
-    for tile_v, tile_u, v, u in ti.ndrange(tile_dim.y, tile_dim.x, tile_size, tile_size):
-      tile = ivec2(tile_u, tile_v)
-      tile_pixel = ivec2(u, v)
-
-      pixel = tile * tile_size + tile_pixel
+    for tile_v, tile_u, v, u in ti.ndrange(tiles_high, tiles_wide, tile_size, tile_size):
+      pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v)
 
       # put each tile_size * tile_size tile in the same CUDA thread group (block)
-      tile_id = tile.x + tile.y * tile_dim.x
+      tile_id = tile_u + tile_v * tiles_wide
       # can wait for other threads in the same group, also have a shared memory.
-      thread_id = tile_pixel.x + tile_pixel.y * tile_size
+      thread_id = u + v * tile_size
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
       T_i = 1.0
@@ -84,13 +81,14 @@ def forward_kernel(feature_size: int, tile_size: int):
         group_start_offset = start_offset + point_group_id * tile_area
 
         # each thread in a block loads one point into shared memory
-        # then all threads in the block process all the points in the shared memory
+        # then all threads in the block process those points sequentially
         load_index = group_start_offset + thread_id
-        if load_index + thread_id < end_offset:
+        if load_index < end_offset:
           point_idx = overlap_to_point[load_index]
 
           tile_point[thread_id] = points[point_idx]
           tile_feature[thread_id] = point_features[point_idx]
+
 
         ti.simt.block.sync()
 
@@ -102,9 +100,10 @@ def forward_kernel(feature_size: int, tile_size: int):
           if pixel_saturated:
             break
 
-          point = Gaussian2D.unpack(tile_point[group_offset])
-          alpha = point.alpha * conic_pdf(pixel + 0.5, point.uv, point.uv_conic)
-
+          uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[group_offset])
+          gaussian_alpha = conic_pdf(ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
+          alpha = point_alpha * gaussian_alpha
+            
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
           # 255 ) and also clamp 𝛼 with 0.99 from above.
           if alpha < 1. / 255.:
@@ -122,6 +121,7 @@ def forward_kernel(feature_size: int, tile_size: int):
           # weight = alpha * T_i
           accum_feature += tile_feature[group_offset] * alpha * T_i
           accum_weight += alpha * T_i
+      
 
           T_i = next_T_i
         # end of point group loop

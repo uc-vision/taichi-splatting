@@ -18,13 +18,13 @@ def tile_mapper(tile_size:int=16):
 
   @ti.func
   def gaussian_tile_ranges(
-      gaussian: ti.template(),
+      uv: ti.math.vec2,
+      uv_conic: ti.math.vec3,
       image_size: ti.math.ivec2,
   ) -> ivec4:
-      uv = gaussian.uv
 
       # avoid zero radii, at least 1 pixel
-      radius = ti.max(radii_from_conic(gaussian.uv_conic), 1.0)  
+      radius = ti.max(radii_from_conic(uv_conic), 1.0)  
 
       min_bound = ti.max(0.0, uv - radius)
       max_bound = uv + radius
@@ -52,9 +52,9 @@ def tile_mapper(tile_size:int=16):
   ):
 
       for idx in range(gaussians.shape[0]):
-          gaussian = Gaussian2D.unpack(gaussians[idx])
+          uv, uv_conic, _ = Gaussian2D.unpack(gaussians[idx])
 
-          min_bound, max_bound = gaussian_tile_ranges(gaussian, image_size)
+          min_bound, max_bound = gaussian_tile_ranges(uv, uv_conic, image_size)
           tile_ranges[idx] = ivec4(*min_bound, *max_bound)
 
           size = max_bound - min_bound
@@ -79,12 +79,6 @@ def tile_mapper(tile_size:int=16):
     last_tile_id = ti.cast(sorted_keys[sorted_keys.shape[0] - 1] >> 32, ti.i32)
     tile_ranges[last_tile_id][1] = sorted_keys.shape[0]
 
-  def find_tile_ranges(sorted_keys:torch.Tensor, image_size:Tuple[int, int]):
-    num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
-
-    tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=sorted_keys.device)
-    find_ranges_kernel(sorted_keys, tile_ranges)
-    return tile_ranges
 
   @ti.kernel
   def generate_sort_keys_kernel(
@@ -151,11 +145,19 @@ def tile_mapper(tile_size:int=16):
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
     cum_overlap_counts, tile_overlap_ranges, total_overlap = generate_tile_overlaps(
        gaussians, image_size)
-  
-    overlap_key, overlap_to_point = sort_tile_depths(
-       depths, tile_overlap_ranges, cum_overlap_counts, total_overlap, image_size)
     
-    tile_ranges = find_tile_ranges(overlap_key, image_size)
+    num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
+    tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
+
+    if total_overlap > 0:
+      overlap_key, overlap_to_point = sort_tile_depths(
+        depths, tile_overlap_ranges, cum_overlap_counts, total_overlap, image_size)
+
+
+      find_ranges_kernel(overlap_key, tile_ranges)
+    else:
+      overlap_to_point = torch.zeros((0, ), dtype=torch.int32, device=gaussians.device)
+
     return overlap_to_point, tile_ranges
     
   return f

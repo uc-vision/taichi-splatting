@@ -24,7 +24,7 @@ def project_to_image_kernel(
 ):
 
   for idx in range(gaussians.shape[0]):
-      gaussian = Gaussian3D.unpack(gaussians[idx])
+      gaussian = Gaussian3D.from_vec(gaussians[idx])
       
       r = transforms.quat_to_mat(q_camera_pointcloud[0])
       t = t_camera_pointcloud[0]
@@ -53,7 +53,7 @@ def project_to_image_kernel(
       #     ray_direction=ray_direction,
       # )
       
-      points[idx] = Gaussian2D.pack(
+      points[idx] = Gaussian2D.to_vec(
           uv=uv,
           uv_conic=cov_to_conic(uv_cov),
           alpha=gaussian.alpha(),

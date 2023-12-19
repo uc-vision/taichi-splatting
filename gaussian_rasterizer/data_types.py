@@ -65,19 +65,30 @@ vec_g3d = ti.types.vector(struct_size(Gaussian3D), dtype=ti.f32)
 
 
 @ti.func
-def pack_vec_g2d(uv:vec2, uv_conic:vec3, alpha:ti.f32) -> vec_g2d:
+def to_vec_g2d(uv:vec2, uv_conic:vec3, alpha:ti.f32) -> vec_g2d:
   return vec_g2d(*uv, *uv_conic, alpha)
 
 @ti.func
-def pack_vec_g3d(position:vec3, log_scaling:vec3, rotation:vec4, alpha_logit:ti.f32) -> vec_g3d:
+def to_vec_g3d(position:vec3, log_scaling:vec3, rotation:vec4, alpha_logit:ti.f32) -> vec_g3d:
   return vec_g3d(*position, *log_scaling, *rotation, alpha_logit)
+
 
 @ti.func
 def unpack_vec_g3d(vec:vec_g3d) -> Gaussian3D:
-  return Gaussian3D(vec[0:3], vec[3:6], vec[6:10], vec[10])
+  return vec[0:3], vec[3:6], vec[6:10], vec[10]
 
 @ti.func
 def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
+  return vec[0:2], vec[2:5], vec[5]
+
+
+
+@ti.func
+def from_vec_g3d(vec:vec_g3d) -> Gaussian3D:
+  return Gaussian3D(vec[0:3], vec[3:6], vec[6:10], vec[10])
+
+@ti.func
+def from_vec_g2d(vec:vec_g2d) -> Gaussian2D:
   return Gaussian2D(vec[0:2], vec[2:5], vec[5])
 
 def unpack_g2d_torch(vec:torch.Tensor):
@@ -86,11 +97,14 @@ def unpack_g2d_torch(vec:torch.Tensor):
 
 # Taichi structs don't have static methods, but they can be added afterward
 Gaussian2D.vec = vec_g2d
-Gaussian2D.pack = pack_vec_g2d
+Gaussian2D.to_vec = to_vec_g2d
+Gaussian2D.from_vec = from_vec_g2d
 Gaussian2D.unpack = unpack_vec_g2d
 
-Gaussian3D.vec = vec_g3d
-Gaussian3D.pack = pack_vec_g3d
-Gaussian3D.unpack = unpack_vec_g3d
 
+
+Gaussian3D.vec = vec_g3d
+Gaussian3D.to_vec = to_vec_g3d
+Gaussian3D.from_vec = from_vec_g3d
+Gaussian3D.unpack = unpack_vec_g3d
 
