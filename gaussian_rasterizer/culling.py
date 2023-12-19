@@ -47,7 +47,7 @@ def frustum_culling_kernel(
 
 
 def frustum_culling(pointcloud: torch.Tensor, camera_params: CameraParams, margin_pixels: int):
-  mask = torch.zeros(pointcloud.shape[0], dtype=torch.bool)
+  mask = torch.zeros(pointcloud.shape[0], dtype=torch.bool, device=pointcloud.device)
 
   print(camera_params.t_camera_pointcloud, camera_params.q_camera_pointcloud)
 

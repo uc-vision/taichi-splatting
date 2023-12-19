@@ -62,9 +62,10 @@ def project_to_image_kernel(
       depths[idx] = point_in_camera.z
 
 def project_to_image(gaussians:Gaussians, camera_params: CameraParams):
+  device = gaussians.position.device
   
-  points = torch.empty((*gaussians.shape, Gaussian2D.vec.n), dtype=torch.float32)
-  depths = torch.empty((*gaussians.shape, ), dtype=torch.float32)
+  points = torch.empty((*gaussians.shape, Gaussian2D.vec.n), dtype=torch.float32, device=device)
+  depths = torch.empty((*gaussians.shape, ), dtype=torch.float32, device=device)
 
   gaussians3d = torch.concat([gaussians.position, gaussians.log_scaling, gaussians.rotation, gaussians.alpha_logit], dim=-1)
   project_to_image_kernel(

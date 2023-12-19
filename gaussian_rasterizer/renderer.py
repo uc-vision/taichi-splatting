@@ -1,8 +1,9 @@
 
 import taichi as ti
+import torch
 
 from gaussian_rasterizer.culling import CameraParams, frustum_culling
-from gaussian_rasterizer.data_types import Gaussians, unpack_g2d_torch
+from gaussian_rasterizer.data_types import Gaussians
 from gaussian_rasterizer.tile_mapper import map_to_tiles
 from gaussian_rasterizer.projection import project_to_image
 from gaussian_rasterizer.rasterizer import rasterize
@@ -27,8 +28,11 @@ def render_gaussians(
   overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
     image_size=camera_params.image_size, tile_size=tile_size)
   
-  image = rasterize(gaussians=gaussians2d, features=culled.feature, 
+  n = culled.feature.shape[1]
+  features_depth=torch.cat([culled.feature, depths.unsqueeze(1)], dim=1) 
+
+  image = rasterize(gaussians=gaussians2d, features=features_depth, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=camera_params.image_size, tile_size=tile_size)
   
-  return image
+  return image[..., :n], image[..., n]

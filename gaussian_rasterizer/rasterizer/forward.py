@@ -55,7 +55,7 @@ def forward_kernel(feature_size: int, tile_size: int):
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
       T_i = 1.0
-      accum_feature = ti.math.vec3([0., 0., 0.])
+      accum_feature = feature_vec(0.)
       accum_weight = 0.
 
       # open the shared memory
@@ -127,9 +127,9 @@ def forward_kernel(feature_size: int, tile_size: int):
         # end of point group loop
       # end of point group id loop
 
-      image_feature[pixel] = accum_feature
-      image_alpha[pixel] = 1. - T_i
-      image_last_valid[pixel] = last_point_idx
+      image_feature[pixel.y, pixel.x] = accum_feature
+      image_alpha[pixel.y, pixel.x] = 1. - T_i
+      image_last_valid[pixel.y, pixel.x] = last_point_idx
 
     # end of pixel loop
 
@@ -158,10 +158,11 @@ def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
       image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
   """
 
-  image_feature = torch.zeros((image_size[1], image_size[0], features.shape[1]),
+  shape = (image_size[1], image_size[0])
+  image_feature = torch.zeros((*shape, features.shape[1]),
                               dtype=torch.float32, device=features.device)
-  image_alpha = torch.zeros(image_size, dtype=torch.float32, device=features.device)
-  image_last_valid = torch.zeros(image_size, dtype=torch.int32, device=features.device)
+  image_alpha = torch.zeros(shape, dtype=torch.float32, device=features.device)
+  image_last_valid = torch.zeros(shape, dtype=torch.int32, device=features.device)
 
   k = forward_kernel(features.shape[1], tile_size)
   k(gaussians, features, 
