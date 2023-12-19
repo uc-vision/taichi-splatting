@@ -24,8 +24,11 @@ def render_gaussians(
   culled:Gaussians = gaussians[point_mask]
   gaussians2d, depths = project_to_image(culled, camera_params)
 
-  overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, depths, 
+  overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
     image_size=camera_params.image_size, tile_size=tile_size)
   
-  image = rasterize(gaussians2d, culled.feature, tile_ranges, overlap_to_point, 
+  image = rasterize(gaussians=gaussians2d, features=culled.feature, 
+    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=camera_params.image_size, tile_size=tile_size)
+  
+  return image

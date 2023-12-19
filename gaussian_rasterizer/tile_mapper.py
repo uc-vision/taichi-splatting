@@ -165,14 +165,15 @@ def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor,
                  image_size:Tuple[Integral, Integral], tile_size:int=16
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
-    - gaussians: (N, 6) torch tensor of packed gaussians, N is the number of gaussians
-    - depths: (N, ) torch float tensor, where N is the number of gaussians
-    - image_size: (2, ) tuple of ints, (width, height)
-    - tile_size: int, tile size in pixels
+    Parameters:
+     gaussians: (N, 6) torch tensor of packed gaussians, N is the number of gaussians
+     depths: (N, ) torch float tensor, where N is the number of gaussians
+     image_size: (2, ) tuple of ints, (width, height)
+     tile_size: int, tile size in pixels
 
-    returns:
-    - overlap_to_point: (K, ) torch tensor, where K is the number of overlaps, maps overlap index to point index
-    - tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
+    Returns:
+     overlap_to_point: (K, ) torch tensor, where K is the number of overlaps, maps overlap index to point index
+     tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
   
   mapper = tile_mapper(tile_size=tile_size)

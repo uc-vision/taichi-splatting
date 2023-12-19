@@ -38,13 +38,20 @@ def cov_to_conic(
 
 @ti.func
 def conic_to_cov(
-    conic: ti.math.vec3,
+    conic: vec3,
 ) -> mat2:
     return mat2([conic.x, conic.y], [conic.y, conic.z]).inverse()
 
 
 
 @ti.func
-def radii_from_conic(conic: ti.math.vec3):
+def radii_from_conic(conic: vec3):
     return radii_from_cov(conic_to_cov(conic))
 
+
+
+@ti.func
+def conic_pdf(xy: vec2, uv: vec2, uv_conic: vec3) -> ti.f32:
+    v = xy - uv
+    return ti.exp(-0.5 * (v.x * v.x * uv_conic.x + v.y * v.y * uv_conic.z) 
+        - v.x * v.y * uv_conic.y)
