@@ -1,4 +1,4 @@
-### Taichi Gaussian Rasterizer
+# Taichi Gaussian Rasterizer
 
 Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python library. 
 
