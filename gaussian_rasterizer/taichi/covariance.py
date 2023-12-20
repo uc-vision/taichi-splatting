@@ -1,6 +1,4 @@
 import taichi as ti
-import numpy as np
-
 from taichi.math import vec2, mat2, vec3
 
 
@@ -12,7 +10,7 @@ def radii_from_cov(uv_cov: mat2) -> ti.f32:
     large_eigen_values = (uv_cov[0, 0] + uv_cov[1, 1] +
                           ti.sqrt(d * d + 4.0 * uv_cov[0, 1] * uv_cov[1, 0])) / 2.0
     # 3.0 is a value from experiment
-    return ti.sqrt(large_eigen_values) * 3.0
+    return ti.sqrt(large_eigen_values)
 
 @ti.func
 def cov_axes(A):

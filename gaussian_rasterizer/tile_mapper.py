@@ -14,7 +14,7 @@ from taichi.math import ivec4
 
 
 @cache
-def tile_mapper(tile_size:int=16):
+def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
 
   @ti.func
   def gaussian_tile_ranges(
@@ -24,7 +24,7 @@ def tile_mapper(tile_size:int=16):
   ) -> ivec4:
 
       # avoid zero radii, at least 1 pixel
-      radius = ti.max(radii_from_conic(uv_conic), 1.0)  
+      radius = ti.max(radii_from_conic(uv_conic) * thresh_deviations, 1.0)  
 
       min_bound = ti.max(0.0, uv - radius)
       max_bound = uv + radius

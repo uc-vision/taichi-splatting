@@ -13,7 +13,10 @@ from gaussian_rasterizer.taichi.covariance import conic_pdf
 
 
 @cache
-def forward_kernel(feature_size: int, tile_size: int):
+def forward_kernel(feature_size: int, tile_size: int,
+                   clamp_max_alpha: float = 0.99,
+                   alpha_threshold: float = 1. / 255.,
+                   saturate_threshold: float = 0.9999,):
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
 
@@ -53,7 +56,6 @@ def forward_kernel(feature_size: int, tile_size: int):
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
       T_i = 1.0
       accum_feature = feature_vec(0.)
-      accum_weight = 0.
 
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
@@ -73,7 +75,7 @@ def forward_kernel(feature_size: int, tile_size: int):
         tile_saturated = ti.simt.block.sync_all_nonzero(predicate=ti.cast(
             pixel_saturated, ti.i32))
         if tile_saturated != 0:
-          break
+          continue
 
         ti.simt.block.sync()
 
@@ -96,39 +98,39 @@ def forward_kernel(feature_size: int, tile_size: int):
             tile_area, num_points_in_tile - point_group_id * tile_area)
 
         # in parallel across a block, render all points in the group
-        for group_offset in range(max_point_group_offset):
+        for in_group_idx in range(max_point_group_offset):
           if pixel_saturated:
             break
 
-          uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[group_offset])
+          uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = conic_pdf(ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
           alpha = point_alpha * gaussian_alpha
             
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
           # 255 ) and also clamp 𝛼 with 0.99 from above.
-          if alpha < 1. / 255.:
+          if alpha < alpha_threshold:
             continue
-          alpha = ti.min(alpha, 0.99)
+
+          alpha = ti.min(alpha, clamp_max_alpha)
           # from paper: before a Gaussian is included in the forward rasterization
           # pass, we compute the accumulated opacity if we were to include it
           # and stop front-to-back blending before it can exceed 0.9999.
           next_T_i = T_i * (1 - alpha)
-          if next_T_i < 0.0001:
+          if next_T_i < ti.static(1 - saturate_threshold):
             pixel_saturated = True
             continue  # somehow faster than directly breaking
-          last_point_idx = group_start_offset + group_offset + 1
+          last_point_idx = group_start_offset + in_group_idx + 1
 
           # weight = alpha * T_i
-          accum_feature += tile_feature[group_offset] * alpha * T_i
-          accum_weight += alpha * T_i
-      
-
+          accum_feature += tile_feature[in_group_idx] * alpha * T_i
           T_i = next_T_i
         # end of point group loop
       # end of point group id loop
 
       image_feature[pixel.y, pixel.x] = accum_feature
-      image_alpha[pixel.y, pixel.x] = 1. - T_i
+
+      # No need to accumulate a normalisation factor as it is exactly 1 - T_i
+      image_alpha[pixel.y, pixel.x] = 1. - T_i    
       image_last_valid[pixel.y, pixel.x] = last_point_idx
 
     # end of pixel loop

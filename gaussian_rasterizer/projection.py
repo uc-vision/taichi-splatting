@@ -1,8 +1,6 @@
 
-from dataclasses import asdict
-from functools import cache
 import taichi as ti
-from taichi.math import vec2, vec3, mat3, vec4, mat4
+from taichi.math import vec3, mat3, vec4
 import torch
 from gaussian_rasterizer.culling import CameraParams
 from gaussian_rasterizer.data_types import Gaussians, Gaussian2D, Gaussian3D
@@ -51,7 +49,7 @@ def project_to_image_kernel(
       # point_color = gaussian_point_3d.get_color_by_ray(
       #     ray_origin=ray_origin,
       #     ray_direction=ray_direction,
-      # )
+      # ) 
       
       points[idx] = Gaussian2D.to_vec(
           uv=uv,
