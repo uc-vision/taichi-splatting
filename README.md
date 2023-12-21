@@ -4,18 +4,25 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 
 ## Progress
 
+
 ### Done
 * Simple view culling 
 * Projection (no gradient yet)
 * Tile mapping 
 * Rasterizer forward pass
-
+* Spherical harmonics forward pass
 
 ### Todo
 * Rasterizer backward pass
 * Projection autograd wrapper
 * Tile mapping tighter culling for tile overlaps
-* Spherical harmonics with autograd
+* Fix spherical harmonics autograd (currently crashes Taichi)
+
+
+### Modifications
+
+* Exposed all internal constants as parameters
+* Switched to matrices as inputs instead of quaternions 
 
 
 ## Attribution - Taichi 3D Guassian Splatting
