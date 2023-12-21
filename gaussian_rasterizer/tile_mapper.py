@@ -22,7 +22,7 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
 
   @ti.dataclass
-  class GridTest:
+  class GridQuery:
     inv_basis: mat2
     rel_min_bound: vec2
 
@@ -35,12 +35,12 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
       return not separates_bbox(self.inv_basis, lower, lower + tile_size)
       
   @ti.func 
-  def create_grid_test(v: Gaussian2D.vec, image_size:ivec2) -> GridTest:
+  def grid_query(v: Gaussian2D.vec, image_size:ivec2) -> GridQuery:
       uv, uv_conic, _ = Gaussian2D.unpack(v)
       uv_cov = conic_to_cov(uv_conic)
 
       min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
-      return GridTest(
+      return GridQuery(
         # Find tiles which intersect the oriented box
         inv_basis = cov_inv_basis(uv_cov, gaussian_scale),
         rel_min_bound = min_tile * tile_size - uv,
@@ -85,10 +85,10 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
   ):
 
       for idx in range(gaussians.shape[0]):
-          test = create_grid_test(gaussians[idx], image_size)
+          query = grid_query(gaussians[idx], image_size)
           inside = 0
-          for tile_uv in ti.grouped(ti.ndrange(*test.tile_span)):
-            if test.test_tile(tile_uv):
+          for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
+            if query.test_tile(tile_uv):
               inside += 1
 
           counts[idx + 1] = inside
@@ -131,12 +131,12 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
     for idx in range(cumulative_overlap_counts.shape[0]):
       encoded_depth_key = ti.bit_cast(depth[idx], ti.i32)
-      test = create_grid_test(gaussians[idx], image_size)
+      query = grid_query(gaussians[idx], image_size)
 
       overlap_idx = 0
-      for tile_uv in ti.grouped(ti.ndrange(*test.tile_span)):
-        if test.test_tile(tile_uv):
-          tile = tile_uv + test.min_tile
+      for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
+        if query.test_tile(tile_uv):
+          tile = tile_uv + query.min_tile
 
           key_idx = cumulative_overlap_counts[idx] + overlap_idx
           encoded_tile_id = ti.cast(tile.x + tile.y * tiles_wide, ti.i32)
