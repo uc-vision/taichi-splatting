@@ -19,7 +19,8 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 * Fix spherical harmonics autograd (currently crashes Taichi)
 
 
-# Modifications
+### Modifications
+
 * Exposed all internal constants as parameters
 * Switched to matrices as inputs instead of quaternions 
 
