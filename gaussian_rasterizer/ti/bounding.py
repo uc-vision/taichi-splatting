@@ -95,3 +95,22 @@ class AABB:
       
     return separates
   
+
+@ti.func
+def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
+  separates = False
+  rel_points = ti.Matrix.cols(
+      [lower, vec2(upper.x, lower.y), upper, vec2(lower.x, upper.y)])
+
+  local_points = (inv_basis @ rel_points)
+
+  separates = False
+  for i in ti.static(range(2)):
+    min_val = ti.min(*local_points[i, :])
+    max_val = ti.max(*local_points[i, :])
+    if (min_val > 1. or max_val < -1.):
+      separates = True
+
+
+
+  return separates

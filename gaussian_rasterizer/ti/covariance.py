@@ -53,3 +53,10 @@ def conic_pdf(xy: vec2, uv: vec2, uv_conic: vec3) -> ti.f32:
     v = xy - uv
     return ti.exp(-0.5 * (v.x * v.x * uv_conic.x + v.y * v.y * uv_conic.z) 
         - v.x * v.y * uv_conic.y)
+
+
+
+@ti.func
+def cov_inv_basis(uv_cov: mat2, scale: ti.f32) -> mat2:
+    basis = ti.Matrix.cols(cov_axes(uv_cov))
+    return (basis * scale).inverse()

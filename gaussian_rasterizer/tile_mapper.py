@@ -3,28 +3,29 @@ from numbers import Integral
 from typing import Tuple
 from beartype import beartype
 import taichi as ti
-from taichi.math import ivec2 
+from taichi.math import ivec2, mat2
 
 import torch
 
 from gaussian_rasterizer.data_types import Gaussian2D
-from gaussian_rasterizer.ti.covariance import radii_from_conic
+from gaussian_rasterizer.ti.covariance import conic_to_cov, cov_inv_basis, radii_from_cov
+from gaussian_rasterizer.ti.bounding import separates_bbox
 
-from taichi.math import ivec4
+from taichi.math import ivec4, vec2
 
 
 @cache
-def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
+def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
   @ti.func
   def gaussian_tile_ranges(
-      uv: ti.math.vec2,
-      uv_conic: ti.math.vec3,
+      uv: vec2,
+      uv_cov: mat2,
       image_size: ti.math.ivec2,
   ) -> ivec4:
 
       # avoid zero radii, at least 1 pixel
-      radius = ti.max(radii_from_conic(uv_conic) * thresh_deviations, 1.0)  
+      radius = ti.max(radii_from_cov(uv_cov) * gaussian_scale, 1.0)  
 
       min_bound = ti.max(0.0, uv - radius)
       max_bound = uv + radius
@@ -41,24 +42,35 @@ def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
       return min_tile_bound, max_tile_bound
   
 
+
   @ti.kernel
   def tile_overlaps_kernel(
       gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1),  
       image_size: ivec2,
 
       # outputs
-      tile_ranges: ti.types.ndarray(ivec4, ndim=1),
       counts: ti.types.ndarray(ti.i32, ndim=1),
   ):
 
       for idx in range(gaussians.shape[0]):
           uv, uv_conic, _ = Gaussian2D.unpack(gaussians[idx])
+          uv_cov = conic_to_cov(uv_conic)
 
-          min_bound, max_bound = gaussian_tile_ranges(uv, uv_conic, image_size)
-          tile_ranges[idx] = ivec4(*min_bound, *max_bound)
+          min_bound, max_bound = gaussian_tile_ranges(uv, uv_cov, image_size)
+          tile_span = max_bound - min_bound
 
-          size = max_bound - min_bound
-          counts[idx + 1] = size.x * size.y
+          # Find tiles which intersect the oriented box
+          inv_basis = cov_inv_basis(uv_cov, gaussian_scale)
+          rel_min_bound = min_bound * tile_size - uv
+
+          inside = 0
+          for tile_uv in ti.grouped(ti.ndrange(tile_span.x, tile_span.y)):
+            lower = rel_min_bound + tile_uv * tile_size
+            if not separates_bbox(inv_basis, lower, lower + tile_size):
+              inside += 1
+
+          counts[idx + 1] = inside
+
 
 
   @ti.kernel
@@ -83,7 +95,7 @@ def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
   @ti.kernel
   def generate_sort_keys_kernel(
       depth: ti.types.ndarray(ti.f32, ndim=1),  # (M)
-      tile_overlap_ranges : ti.types.ndarray(ivec4, ndim=1), # (M, 4)
+      gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
       cumulative_overlap_counts: ti.types.ndarray(ti.i64, ndim=1),  # (M)
       # (K), K = sum(num_overlap_tiles)
       image_size: ivec2,
@@ -98,21 +110,31 @@ def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
     for idx in range(cumulative_overlap_counts.shape[0]):
       encoded_depth_key = ti.bit_cast(depth[idx], ti.i32)
 
-      tile_range = tile_overlap_ranges[idx]
-      tile_span = tile_range.zw - tile_range.xy
-      
-      for u, v in ti.ndrange(tile_span.x, tile_span.y):
-        overlap_idx = v + u * tile_span.y # index in overlap list
-        tile = tile_range.xy + ivec2(u, v)
+      uv, uv_conic, _ = Gaussian2D.unpack(gaussians[idx])
+      uv_cov = conic_to_cov(uv_conic)
 
-        key_idx = cumulative_overlap_counts[idx] + overlap_idx
-        encoded_tile_id = ti.cast(tile.x + tile.y * tiles_wide, ti.i32)
-        
-        sort_key = ti.cast(encoded_depth_key, ti.i64) + (
-           ti.cast(encoded_tile_id, ti.i64) << 32)
-    
-        overlap_sort_key[key_idx] = sort_key # sort based on tile_id, depth
-        overlap_to_point[key_idx] = idx # map overlap index back to point index
+      min_bound, max_bound = gaussian_tile_ranges(uv, uv_cov, image_size)
+      tile_span = max_bound - min_bound
+
+      # Find tiles which intersect the oriented box
+      inv_basis = cov_inv_basis(uv_cov, gaussian_scale)
+      rel_min_bound = min_bound * tile_size - uv
+
+      overlap_idx = 0
+      for tile_uv in ti.grouped(ti.ndrange(tile_span.x, tile_span.y)):
+        lower = rel_min_bound + tile_uv * tile_size
+        if not separates_bbox(inv_basis, lower, lower + tile_size):
+          tile = min_bound + tile_uv
+
+          key_idx = cumulative_overlap_counts[idx] + overlap_idx
+          encoded_tile_id = ti.cast(tile.x + tile.y * tiles_wide, ti.i32)
+          
+          sort_key = ti.cast(encoded_depth_key, ti.i64) + (
+            ti.cast(encoded_tile_id, ti.i64) << 32)
+      
+          overlap_sort_key[key_idx] = sort_key # sort based on tile_id, depth
+          overlap_to_point[key_idx] = idx # map overlap index back to point index
+          overlap_idx += 1
 
   def sort_tile_depths(depths:torch.Tensor, tile_overlap_ranges:torch.Tensor, cum_overlap_counts:torch.Tensor, total_overlap:int, image_size):
 
@@ -130,20 +152,19 @@ def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
 
 
   def generate_tile_overlaps(gaussians, image_size):
-    tile_overlap_ranges = torch.zeros( (gaussians.shape[0], 4), dtype=torch.int32,  device=gaussians.device)
     overlap_counts = torch.zeros( (1 + gaussians.shape[0], ), dtype=torch.int32, device=gaussians.device)
 
-    tile_overlaps_kernel(gaussians, ivec2(image_size), tile_overlap_ranges, overlap_counts)
+    tile_overlaps_kernel(gaussians, ivec2(image_size), overlap_counts)
 
     cum_overlap_counts = overlap_counts.cumsum(dim=0)
     total_overlap = cum_overlap_counts[-1].item()
     
 
-    return cum_overlap_counts[:-1], tile_overlap_ranges, total_overlap
+    return cum_overlap_counts[:-1], total_overlap
 
 
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
-    cum_overlap_counts, tile_overlap_ranges, total_overlap = generate_tile_overlaps(
+    cum_overlap_counts, total_overlap = generate_tile_overlaps(
        gaussians, image_size)
     
     num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
@@ -151,7 +172,7 @@ def tile_mapper(tile_size:int=16, thresh_deviations:float=3.0):
 
     if total_overlap > 0:
       overlap_key, overlap_to_point = sort_tile_depths(
-        depths, tile_overlap_ranges, cum_overlap_counts, total_overlap, image_size)
+        depths, gaussians, cum_overlap_counts, total_overlap, image_size)
 
 
       find_ranges_kernel(overlap_key, tile_ranges)

@@ -12,7 +12,6 @@ def frustum_culling_kernel(
     pointcloud: ti.types.ndarray(vec3, ndim=1),  # (N, 3)
 
     T_image_world: ti.types.ndarray(mat4, ndim=1),  # (1, 4, 4)
-
     output_mask: ti.types.ndarray(ti.u1, ndim=1),  # (N), output
     
     near_plane: ti.f32,
