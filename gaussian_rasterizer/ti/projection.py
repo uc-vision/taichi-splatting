@@ -1,6 +1,6 @@
 import taichi as ti
 from taichi.math import vec2, vec3, vec4, mat2, mat3, mat4
-from gaussian_rasterizer.taichi.transforms import quat_to_mat
+from gaussian_rasterizer.ti.transforms import quat_to_mat
 
 from gaussian_rasterizer.torch.transforms import split_rt
 mat2x3f = ti.types.matrix(n=2, m=3, dtype=ti.f32)

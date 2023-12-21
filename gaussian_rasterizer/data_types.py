@@ -9,7 +9,7 @@ from tensordict.prototype import tensorclass
 
 from taichi.math import vec2, vec3, vec4
 
-from gaussian_rasterizer.taichi.util import sigmoid, struct_size
+from gaussian_rasterizer.ti.util import sigmoid, struct_size
 
 @tensorclass
 class Gaussians():

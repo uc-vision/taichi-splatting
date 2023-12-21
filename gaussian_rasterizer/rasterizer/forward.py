@@ -9,7 +9,7 @@ from taichi.math import ivec2
 import torch
 
 from gaussian_rasterizer.data_types import Gaussian2D
-from gaussian_rasterizer.taichi.covariance import conic_pdf
+from gaussian_rasterizer.ti.covariance import conic_pdf
 
 
 @cache

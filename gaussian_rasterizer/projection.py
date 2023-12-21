@@ -4,8 +4,8 @@ from taichi.math import vec3, mat3, vec4
 import torch
 from gaussian_rasterizer.culling import CameraParams
 from gaussian_rasterizer.data_types import Gaussians, Gaussian2D, Gaussian3D
-from gaussian_rasterizer.taichi import transforms, projection
-from gaussian_rasterizer.taichi.covariance import cov_to_conic
+from gaussian_rasterizer.ti import transforms, projection
+from gaussian_rasterizer.ti.covariance import cov_to_conic
 
 
 

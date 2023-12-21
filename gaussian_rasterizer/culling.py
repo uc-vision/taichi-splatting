@@ -5,8 +5,8 @@ import torch
 
 from gaussian_rasterizer.data_types import CameraParams
 
-from .taichi.transforms import qt_to_mat
-from .taichi.projection import point_to_camera
+from .ti.transforms import qt_to_mat
+from .ti.projection import point_to_camera
 
 
 

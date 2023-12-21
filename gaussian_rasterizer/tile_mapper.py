@@ -8,7 +8,7 @@ from taichi.math import ivec2
 import torch
 
 from gaussian_rasterizer.data_types import Gaussian2D
-from gaussian_rasterizer.taichi.covariance import radii_from_conic
+from gaussian_rasterizer.ti.covariance import radii_from_conic
 
 from taichi.math import ivec4
 
