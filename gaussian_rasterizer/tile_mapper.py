@@ -14,8 +14,41 @@ from gaussian_rasterizer.ti.bounding import separates_bbox
 from taichi.math import ivec4, vec2
 
 
+
+
+
 @cache
 def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
+
+
+  @ti.dataclass
+  class GridTest:
+    inv_basis: mat2
+    rel_min_bound: vec2
+
+    min_tile: ivec2
+    tile_span: ivec2
+
+    @ti.func
+    def test_tile(self, tile_uv: ivec2):
+      lower = self.rel_min_bound + tile_uv * tile_size
+      return not separates_bbox(self.inv_basis, lower, lower + tile_size)
+      
+  @ti.func 
+  def create_grid_test(v: Gaussian2D.vec, image_size:ivec2) -> GridTest:
+      uv, uv_conic, _ = Gaussian2D.unpack(v)
+      uv_cov = conic_to_cov(uv_conic)
+
+      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
+      return GridTest(
+        # Find tiles which intersect the oriented box
+        inv_basis = cov_inv_basis(uv_cov, gaussian_scale),
+        rel_min_bound = min_tile * tile_size - uv,
+
+        min_tile = min_tile,
+        tile_span = max_tile - min_tile)
+
+
 
   @ti.func
   def gaussian_tile_ranges(
@@ -42,7 +75,6 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
       return min_tile_bound, max_tile_bound
   
 
-
   @ti.kernel
   def tile_overlaps_kernel(
       gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1),  
@@ -53,20 +85,10 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
   ):
 
       for idx in range(gaussians.shape[0]):
-          uv, uv_conic, _ = Gaussian2D.unpack(gaussians[idx])
-          uv_cov = conic_to_cov(uv_conic)
-
-          min_bound, max_bound = gaussian_tile_ranges(uv, uv_cov, image_size)
-          tile_span = max_bound - min_bound
-
-          # Find tiles which intersect the oriented box
-          inv_basis = cov_inv_basis(uv_cov, gaussian_scale)
-          rel_min_bound = min_bound * tile_size - uv
-
+          test = create_grid_test(gaussians[idx], image_size)
           inside = 0
-          for tile_uv in ti.grouped(ti.ndrange(tile_span.x, tile_span.y)):
-            lower = rel_min_bound + tile_uv * tile_size
-            if not separates_bbox(inv_basis, lower, lower + tile_size):
+          for tile_uv in ti.grouped(ti.ndrange(*test.tile_span)):
+            if test.test_tile(tile_uv):
               inside += 1
 
           counts[idx + 1] = inside
@@ -109,22 +131,12 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
     for idx in range(cumulative_overlap_counts.shape[0]):
       encoded_depth_key = ti.bit_cast(depth[idx], ti.i32)
-
-      uv, uv_conic, _ = Gaussian2D.unpack(gaussians[idx])
-      uv_cov = conic_to_cov(uv_conic)
-
-      min_bound, max_bound = gaussian_tile_ranges(uv, uv_cov, image_size)
-      tile_span = max_bound - min_bound
-
-      # Find tiles which intersect the oriented box
-      inv_basis = cov_inv_basis(uv_cov, gaussian_scale)
-      rel_min_bound = min_bound * tile_size - uv
+      test = create_grid_test(gaussians[idx], image_size)
 
       overlap_idx = 0
-      for tile_uv in ti.grouped(ti.ndrange(tile_span.x, tile_span.y)):
-        lower = rel_min_bound + tile_uv * tile_size
-        if not separates_bbox(inv_basis, lower, lower + tile_size):
-          tile = min_bound + tile_uv
+      for tile_uv in ti.grouped(ti.ndrange(*test.tile_span)):
+        if test.test_tile(tile_uv):
+          tile = tile_uv + test.min_tile
 
           key_idx = cumulative_overlap_counts[idx] + overlap_idx
           encoded_tile_id = ti.cast(tile.x + tile.y * tiles_wide, ti.i32)
