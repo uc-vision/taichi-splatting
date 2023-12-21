@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from numbers import Integral
-from types import SimpleNamespace
 from typing import Tuple
 from beartype import beartype
 import taichi as ti
@@ -27,13 +26,29 @@ class Gaussians():
 @beartype
 @dataclass
 class CameraParams:
-  camera_intrinsics: torch.Tensor # (1, 3, 3)
-  q_camera_pointcloud: torch.Tensor # (1, 4)
-  t_camera_pointcloud: torch.Tensor # (1, 3)
+  T_image_camera: torch.Tensor # (1, 3, 3) camera projection matrix
+  T_camera_world  : torch.Tensor # (1, 4, 4) camera view matrix
+
+  @property
+  def T_image_world(self):
+    T_image_camera = torch.eye(4, device=self.T_image_camera.device, dtype=torch.float32)
+    T_image_camera[0:3, 0:3] = self.T_image_camera
+
+    return T_image_camera @ self.T_camera_world
+
 
   near_plane: float
   far_plane: float
   image_size: Tuple[Integral, Integral]
+
+  def __post_init__(self):
+    assert self.T_image_camera.shape == (1, 3, 3), f"Expected shape (1, 3, 3), got {self.T_image_camera.shape}"
+    assert self.T_camera_world.shape == (1, 4, 4), f"Expected shape (1, 3, 3), got {self.T_camera_world.shape}"
+
+    assert len(self.image_size) == 2
+    assert self.near_plane > 0
+    assert self.far_plane > self.near_plane
+
 
 
 @ti.dataclass

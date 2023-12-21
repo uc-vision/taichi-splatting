@@ -1,5 +1,5 @@
 import taichi as ti
-from taichi.math import vec2, vec3, vec4, mat2, mat3, mat4
+from taichi.math import vec3, vec4, mat2, mat3, mat4
 from gaussian_rasterizer.ti.transforms import quat_to_mat
 
 from gaussian_rasterizer.torch.transforms import split_rt
@@ -14,6 +14,16 @@ def point_to_camera(
     point_in_camera = (T_camera_world @ vec4(*position, 1)).xyz
     uv = (projective_transform @ point_in_camera) / point_in_camera.z
     return uv.xy, point_in_camera
+
+
+@ti.func
+def point_to_image(
+    position: vec3,
+    T_image_world: mat4,
+):
+    point_in_camera = (T_image_world @ vec4(*position, 1))
+    return point_in_camera.xy / point_in_camera.z, point_in_camera.z
+
 
 
 def camera_origin(T_camera_world: mat4):
