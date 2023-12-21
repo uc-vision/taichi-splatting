@@ -4,27 +4,28 @@ from beartype import beartype
 import taichi as ti
 from taichi.math import vec3
 import torch
+from tqdm import tqdm
 
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics
 
 
 vec16f = ti.types.vector(16, ti.float32)
-vec9f = ti.types.vector(9, ti.float32)
-vec4f = ti.types.vector(4, ti.float32)
-vec1f = ti.types.vector(1, ti.float32)
+vec9f = ti.types.vector(9,   ti.float32)
+vec4f = ti.types.vector(4,   ti.float32)
+vec1f = ti.types.vector(1,   ti.float32)
 
 @ti.func
 def rsh_cart_0(xyz: vec3) -> vec1f:
-    return vec9f(
+    return vec1f(
         0.282094791773878
     )
 
 
 @ti.func
-def rsh_cart_1(xyz: vec3) -> vec9f:
+def rsh_cart_1(xyz: vec3) -> vec4f:
     x, y, z = xyz
-    return vec9f(
+    return vec4f(
         0.282094791773878,
         -0.48860251190292 * y,
         0.48860251190292 * z,
@@ -113,7 +114,6 @@ def evaluate_sh_kernel(degree:int, dimension:int=3):
           coeffs = rsh_cart(dirs[i])
           params_i = params[i]
 
-
           for d in range(dimension):
               out[i][d] = coeffs.dot(params_i[d, :])
 
@@ -151,21 +151,39 @@ def evaluate_sh(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for 
     return _module_function.apply(params.contiguous(), dirs.contiguous())
 
 
+def random_inputs(max_dim=6, max_deg=3, max_n=1000, device='cpu'):
+    dimension = torch.randint(1, max_dim, (1,)).item()
+    degree = torch.randint(0, max_deg + 1, (1, )).item()
+
+    n = torch.randint(1, max_n, (1,) ).item()
+
+    params = torch.rand(n, dimension, (degree + 1)**2, device=device, dtype=torch.float32)
+    dirs = torch.randn(n, 3, device=device, dtype=torch.float32)
+    dirs = torch.nn.functional.normalize(dirs, dim=1)
+
+    return params, dirs
+
+
+def test_sh(iters = 100, device='cpu'):
+  from gaussian_rasterizer.torch import spherical_harmonics as sh
+
+  for _ in tqdm(range(iters)):  
+      params, dirs = random_inputs(device=device)
+
+      params.requires_grad_(True)
+      out1 = evaluate_sh(params, dirs)
+
+
+      out2 = sh.evaluate_sh(params, dirs)
+      assert torch.allclose(out1, out2, atol=1e-5)
+
+
+
 
 if __name__ == '__main__':
     ti.init(debug=True)
 
-    degree = 3
-    dimension = 5
-
-    params = torch.rand(100, dimension, (degree + 1)**2).requires_grad_(True)
-    dirs = torch.rand(100, 3)
-
-    out = evaluate_sh(params, dirs)
-    print(out.shape)
-
-    x = out.sum()
-    x.backward()
+    test_sh(1000, device='cpu')
 
     
     
