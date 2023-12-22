@@ -1,9 +1,8 @@
-# Taichi Gaussian Rasterizer
+# Taichi Splatting
 
 Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python library. 
 
 ## Progress
-
 
 ### Done
 * Simple view culling 
@@ -15,7 +14,6 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 ### Todo
 * Rasterizer backward pass
 * Projection autograd wrapper
-* Tile mapping tighter culling for tile overlaps
 * Fix spherical harmonics autograd (currently crashes Taichi)
 
 
@@ -23,6 +21,7 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 
 * Exposed all internal constants as parameters
 * Switched to matrices as inputs instead of quaternions 
+* Tile mapping tighter culling for tile overlaps (~30% less rendered splats!)
 
 
 ## Attribution - Taichi 3D Guassian Splatting

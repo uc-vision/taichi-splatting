@@ -7,9 +7,9 @@ from taichi.math import ivec2, mat2
 
 import torch
 
-from gaussian_rasterizer.data_types import Gaussian2D
-from gaussian_rasterizer.ti.covariance import conic_to_cov, cov_inv_basis, radii_from_cov
-from gaussian_rasterizer.ti.bounding import separates_bbox
+from taichi_splatting.data_types import Gaussian2D
+from taichi_splatting.ti.covariance import conic_to_cov, cov_inv_basis, radii_from_cov
+from taichi_splatting.ti.bounding import separates_bbox
 
 from taichi.math import ivec4, vec2
 

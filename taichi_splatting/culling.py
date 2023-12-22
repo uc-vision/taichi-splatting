@@ -2,8 +2,8 @@ import taichi as ti
 from taichi.math import vec3, mat4
 import torch
 
-from gaussian_rasterizer.data_types import CameraParams
-from gaussian_rasterizer.ti.projection import point_to_image
+from taichi_splatting.data_types import CameraParams
+from taichi_splatting.ti.projection import point_to_image
 
 
 

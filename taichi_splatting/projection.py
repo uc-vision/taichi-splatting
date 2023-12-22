@@ -2,10 +2,10 @@
 import taichi as ti
 from taichi.math import  mat3, mat4
 import torch
-from gaussian_rasterizer.culling import CameraParams
-from gaussian_rasterizer.data_types import Gaussians, Gaussian2D, Gaussian3D
-from gaussian_rasterizer.ti import projection
-from gaussian_rasterizer.ti.covariance import cov_to_conic
+from taichi_splatting.culling import CameraParams
+from taichi_splatting.data_types import Gaussians, Gaussian2D, Gaussian3D
+from taichi_splatting.ti import projection
+from taichi_splatting.ti.covariance import cov_to_conic
 
 
 

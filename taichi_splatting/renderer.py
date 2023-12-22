@@ -2,11 +2,11 @@
 import taichi as ti
 import torch
 
-from gaussian_rasterizer.culling import CameraParams, frustum_culling
-from gaussian_rasterizer.data_types import Gaussians
-from gaussian_rasterizer.tile_mapper import map_to_tiles
-from gaussian_rasterizer.projection import project_to_image
-from gaussian_rasterizer.rasterizer import rasterize
+from taichi_splatting.culling import CameraParams, frustum_culling
+from taichi_splatting.data_types import Gaussians
+from taichi_splatting.tile_mapper import map_to_tiles
+from taichi_splatting.projection import project_to_image
+from taichi_splatting.rasterizer import rasterize
 
 
 def render_gaussians(

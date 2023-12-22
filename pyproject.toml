@@ -1,2 +1,28 @@
+[project]
+name = "taichi-splatting"  
+version = "3.0.0"  
+description = "A Taichi Gaussian Splatting library"  
+readme = "README.md" 
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+
+maintainers = [
+  {name = "Oliver Batchelor", email = "oliver.batchelor@canterbury.ac.nz" } 
+]
+
+dependencies = [
+  "beartype", 
+  "taichi", 
+  "tqdm", 
+  "tensordict"
+]
+
+[project.urls] 
+"Homepage" = "https://github.com/uc-vision/taichi-splatting"
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.ruff]
 indent-width = 2

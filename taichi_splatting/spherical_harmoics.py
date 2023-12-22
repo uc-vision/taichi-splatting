@@ -165,7 +165,7 @@ def random_inputs(max_dim=6, max_deg=3, max_n=1000, device='cpu'):
 
 
 def test_sh(iters = 100, device='cpu'):
-  from gaussian_rasterizer.torch import spherical_harmonics as sh
+  from taichi_splatting.torch import spherical_harmonics as sh
 
   for _ in tqdm(range(iters)):  
       params, dirs = random_inputs(device=device)

@@ -8,8 +8,8 @@ from taichi.math import ivec2
 
 import torch
 
-from gaussian_rasterizer.data_types import Gaussian2D
-from gaussian_rasterizer.ti.covariance import conic_pdf
+from taichi_splatting.data_types import Gaussian2D
+from taichi_splatting.ti.covariance import conic_pdf
 
 
 @cache
