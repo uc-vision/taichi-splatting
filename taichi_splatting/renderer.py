@@ -1,5 +1,4 @@
 
-import taichi as ti
 import torch
 
 from taichi_splatting.culling import CameraParams, frustum_culling

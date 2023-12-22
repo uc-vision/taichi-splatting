@@ -16,7 +16,6 @@ class Gaussians():
   log_scaling   : torch.Tensor # 3  - scale = exp(log_scalining) 
   rotation      : torch.Tensor # 4  - quaternion wxyz
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
-
   feature      : torch.Tensor # N  - (any rgb, spherical harmonics etc)
 
 
@@ -43,7 +42,7 @@ class CameraParams:
 
   def __post_init__(self):
     assert self.T_image_camera.shape == (1, 3, 3), f"Expected shape (1, 3, 3), got {self.T_image_camera.shape}"
-    assert self.T_camera_world.shape == (1, 4, 4), f"Expected shape (1, 3, 3), got {self.T_camera_world.shape}"
+    assert self.T_camera_world.shape == (1, 4, 4), f"Expected shape (1, 4, 4), got {self.T_camera_world.shape}"
 
     assert len(self.image_size) == 2
     assert self.near_plane > 0
@@ -115,7 +114,6 @@ Gaussian2D.vec = vec_g2d
 Gaussian2D.to_vec = to_vec_g2d
 Gaussian2D.from_vec = from_vec_g2d
 Gaussian2D.unpack = unpack_vec_g2d
-
 
 
 Gaussian3D.vec = vec_g3d

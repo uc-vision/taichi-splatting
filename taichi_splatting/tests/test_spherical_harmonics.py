@@ -7,7 +7,8 @@ from taichi_splatting import spherical_harmonics as taichi_sh
 
 ti.init(debug=True)
 
-def random_inputs(max_dim=3, max_deg=3, max_n=10, device='cpu'):
+def random_inputs(seed, max_dim=3, max_deg=3, max_n=100, device='cpu'):
+    torch.random.manual_seed(seed)
     dimension = torch.randint(1, max_dim, (1,)).item()
     degree = torch.randint(1, max_deg + 1, (1, )).item()
     n = torch.randint(1, max_n, (1,) ).item()
@@ -16,7 +17,7 @@ def random_inputs(max_dim=3, max_deg=3, max_n=10, device='cpu'):
     dirs = torch.randn(n, 3, device=device, dtype=torch.float32)
     dirs = torch.nn.functional.normalize(dirs, dim=1)
 
-    return params, dirs, dict(dim=dimension, deg=degree, n=n)
+    return params, dirs, dict(dim=dimension, deg=degree, n=n, seed=seed)
 
 
 def eval_with_grad(f, *args):
@@ -26,8 +27,10 @@ def eval_with_grad(f, *args):
   return out, [arg.grad for arg in args]
 
 def test_sh(iters = 100, device='cpu'):
-  for _ in tqdm(range(iters)):  
-      params, dirs, args = random_inputs(device=device)
+
+  seeds = torch.randint(0, 10000, (iters, ), device=device)
+  for seed in tqdm(seeds):
+      params, dirs, args = random_inputs(seed, device=device)
 
       out1, grads1 = eval_with_grad(torch_sh.evaluate_sh, params, dirs)
       out2, grads2 = eval_with_grad(taichi_sh.evaluate_sh, params, dirs)
@@ -40,7 +43,5 @@ def test_sh(iters = 100, device='cpu'):
         
         assert torch.allclose(grad1 * 2, grad2, atol=1e-5), f"grad1 != grad2 for {args}"
 
-# if __name__ == '__main__':
-#     ti.init(debug=True)
-
-#     test_sh(1000, device='cpu')
+if __name__ == '__main__':
+  test_sh()
