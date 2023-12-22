@@ -12,13 +12,13 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 * Spherical harmonics with autograd
 
 ### Todo
-* Rasterizer backward pass
+* Port rasterizer backward pass
 * Projection autograd wrapper
 
-### Modifications
+### Improvements
 
 * Exposed all internal constants as parameters
-* Switched to matrices as inputs instead of quaternions 
+* Switched to matrices as inputs instead of quaternions
 * Tile mapping tighter culling for tile overlaps (~30% less rendered splats!)
 * All configuration parameters exposed (e.g. tile_size, saturation threshold etc.)
 
