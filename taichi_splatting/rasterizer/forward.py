@@ -1,4 +1,5 @@
 
+from dataclasses import dataclass
 from functools import cache
 from numbers import Integral
 from typing import Tuple
@@ -11,14 +12,19 @@ import torch
 from taichi_splatting.data_types import Gaussian2D
 from taichi_splatting.ti.covariance import conic_pdf
 
+@dataclass(frozen=True)
+class Config:
+  tile_size: int = 16
+  clamp_max_alpha: float = 0.99
+  alpha_threshold: float = 1. / 255.
+  saturate_threshold: float = 0.9999
+
 
 @cache
-def forward_kernel(feature_size: int, tile_size: int,
-                   clamp_max_alpha: float = 0.99,
-                   alpha_threshold: float = 1. / 255.,
-                   saturate_threshold: float = 0.9999,):
+def forward_kernel(config: Config, feature_size: int):
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
+  tile_size = config.tile_size
 
   @ti.kernel
   def _forward_kernel(
@@ -108,15 +114,15 @@ def forward_kernel(feature_size: int, tile_size: int,
             
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
           # 255 ) and also clamp 𝛼 with 0.99 from above.
-          if alpha < alpha_threshold:
+          if alpha < ti.static(config.alpha_threshold):
             continue
 
-          alpha = ti.min(alpha, clamp_max_alpha)
+          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
           # from paper: before a Gaussian is included in the forward rasterization
           # pass, we compute the accumulated opacity if we were to include it
           # and stop front-to-back blending before it can exceed 0.9999.
           next_T_i = T_i * (1 - alpha)
-          if next_T_i < ti.static(1 - saturate_threshold):
+          if next_T_i < ti.static(1 - ti.static(config.saturate_threshold)):
             pixel_saturated = True
             continue  # somehow faster than directly breaking
           last_point_idx = group_start_offset + in_group_idx + 1
@@ -138,11 +144,51 @@ def forward_kernel(feature_size: int, tile_size: int,
   return _forward_kernel
 
 
+
+class _module_function(torch.autograd.Function):
+  @staticmethod
+  def forward(ctx, gaussians: torch.Tensor, features: torch.Tensor,
+              overlap_to_point: torch.Tensor, tile_overlap_ranges: torch.Tensor,
+              image_size: Tuple[Integral, Integral], config: Config
+              ) -> torch.Tensor:
+      
+    shape = (image_size[1], image_size[0])
+    image_feature = torch.zeros((*shape, features.shape[1]),
+                                dtype=torch.float32, device=features.device)
+    image_alpha = torch.zeros(shape, dtype=torch.float32, device=features.device)
+    image_last_valid = torch.zeros(shape, dtype=torch.int32, device=features.device)
+
+    k = forward_kernel(config, features.shape[1])
+    k(gaussians, features, 
+      tile_overlap_ranges, overlap_to_point,
+      image_feature, image_alpha, image_last_valid)
+
+    # Non differentiable parameters
+    ctx.overlap_to_point = overlap_to_point
+    ctx.tile_overlap_ranges = tile_overlap_ranges
+    ctx.image_last_valid = image_last_valid
+    ctx.config = config
+
+    ctx.save_for_backward(gaussians, features, 
+                          image_feature, image_alpha)
+    
+    return image_feature, image_alpha
+
+  @staticmethod
+  def backward(ctx, grad_image_feature, grad_image_alpha):
+      gaussians, features, image_feature, image_alpha = ctx.saved_tensors
+
+      grad_gaussians = torch.zeros_like(gaussians)
+      grad_features = torch.zeros_like(features)
+
+      # backward_kernel()
+      return grad_gaussians, grad_features, None, None, None, None
+
 @beartype
 def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
               overlap_to_point: torch.Tensor, tile_overlap_ranges: torch.Tensor,
-              image_size: Tuple[Integral, Integral], tile_size: int
-              ) -> torch.Tensor:
+              image_size: Tuple[Integral, Integral], config: Config
+              ) -> Tuple[torch.Tensor, torch.Tensor]:
   """
   Paraeters:
       gaussians: (N, 6)  packed gaussians, N is the number of gaussians
@@ -154,21 +200,13 @@ def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
         maps overlap index to point index (0..N]
 
       image_size: (2, ) tuple of ints, (width, height)
-      tile_size: int, tile size in pixels
+      config: Config - configuration parameters for rasterization
 
     Returns:
       image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
   """
 
-  shape = (image_size[1], image_size[0])
-  image_feature = torch.zeros((*shape, features.shape[1]),
-                              dtype=torch.float32, device=features.device)
-  image_alpha = torch.zeros(shape, dtype=torch.float32, device=features.device)
-  image_last_valid = torch.zeros(shape, dtype=torch.int32, device=features.device)
 
-  k = forward_kernel(features.shape[1], tile_size)
-  k(gaussians, features, 
-    tile_overlap_ranges, overlap_to_point,
-    image_feature, image_alpha, image_last_valid)
-
-  return image_feature
+  return _module_function.apply(gaussians, features, 
+          overlap_to_point, tile_overlap_ranges, 
+          image_size, config)

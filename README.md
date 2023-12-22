@@ -20,6 +20,7 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 * Exposed all internal constants as parameters
 * Switched to matrices as inputs instead of quaternions 
 * Tile mapping tighter culling for tile overlaps (~30% less rendered splats!)
+* All configuration parameters exposed (e.g. tile_size, saturation threshold etc.)
 
 
 ## Attribution - Taichi 3D Guassian Splatting

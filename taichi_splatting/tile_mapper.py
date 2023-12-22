@@ -14,9 +14,6 @@ from taichi_splatting.ti.bounding import separates_bbox
 from taichi.math import ivec4, vec2
 
 
-
-
-
 @cache
 def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 

@@ -1,1 +1,1 @@
-from .forward import rasterize
+from .forward import rasterize, Config
