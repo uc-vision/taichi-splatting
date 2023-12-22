@@ -4,7 +4,7 @@ from typing import Tuple
 from beartype import beartype
 import taichi as ti
 import torch
-from tensordict.prototype import tensorclass
+from tensordict import tensorclass
 
 from taichi.math import vec2, vec3, vec4
 

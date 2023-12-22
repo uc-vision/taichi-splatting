@@ -4,7 +4,6 @@ from beartype import beartype
 import taichi as ti
 from taichi.math import vec3
 import torch
-from tqdm import tqdm
 
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics
@@ -114,7 +113,7 @@ def evaluate_sh_kernel(degree:int, dimension:int=3):
           coeffs = rsh_cart(dirs[i])
           params_i = params[i]
 
-          for d in range(dimension):
+          for d in ti.static(range(dimension)):
               out[i][d] = coeffs.dot(params_i[d, :])
 
   return _evaluate_sh3_kernel
@@ -136,7 +135,7 @@ class _module_function(torch.autograd.Function):
   @staticmethod
   def backward(ctx, doutput):
       params, dirs, out = ctx.saved_tensors
-      out.grad = doutput
+      out.grad = doutput.contiguous()
 
       ctx.kernel.grad(params, dirs, out)
       return params.grad, dirs.grad
@@ -151,39 +150,13 @@ def evaluate_sh(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for 
     return _module_function.apply(params.contiguous(), dirs.contiguous())
 
 
-def random_inputs(max_dim=6, max_deg=3, max_n=1000, device='cpu'):
-    dimension = torch.randint(1, max_dim, (1,)).item()
-    degree = torch.randint(0, max_deg + 1, (1, )).item()
-
-    n = torch.randint(1, max_n, (1,) ).item()
-
-    params = torch.rand(n, dimension, (degree + 1)**2, device=device, dtype=torch.float32)
-    dirs = torch.randn(n, 3, device=device, dtype=torch.float32)
-    dirs = torch.nn.functional.normalize(dirs, dim=1)
-
-    return params, dirs
-
-
-def test_sh(iters = 100, device='cpu'):
-  from taichi_splatting.torch import spherical_harmonics as sh
-
-  for _ in tqdm(range(iters)):  
-      params, dirs = random_inputs(device=device)
-
-      params.requires_grad_(True)
-      out1 = evaluate_sh(params, dirs)
-
-
-      out2 = sh.evaluate_sh(params, dirs)
-      assert torch.allclose(out1, out2, atol=1e-5)
 
 
 
 
-if __name__ == '__main__':
-    ti.init(debug=True)
 
-    test_sh(1000, device='cpu')
+
+
 
     
     
