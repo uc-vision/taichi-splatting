@@ -29,16 +29,17 @@ class _module_function(torch.autograd.Function):
     ctx.overlap_to_point = overlap_to_point
     ctx.tile_overlap_ranges = tile_overlap_ranges
     ctx.image_last_valid = image_last_valid
+    ctx.image_alpha = image_alpha
     ctx.config = config
 
     ctx.save_for_backward(gaussians, features, 
                           image_feature, image_alpha)
     
-    return image_feature, image_alpha
+    return image_feature
 
   @staticmethod
-  def backward(ctx, grad_image_feature, grad_image_alpha):
-      gaussians, features, image_feature, image_alpha = ctx.saved_tensors
+  def backward(ctx, grad_image_feature:torch.Tensor):
+      gaussians, features, image_feature = ctx.saved_tensors
 
       grad_gaussians = torch.zeros_like(gaussians)
       grad_features = torch.zeros_like(features)
@@ -51,7 +52,7 @@ class _module_function(torch.autograd.Function):
 def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
               overlap_to_point: torch.Tensor, tile_overlap_ranges: torch.Tensor,
               image_size: Tuple[Integral, Integral], config: Config
-              ) -> Tuple[torch.Tensor, torch.Tensor]:
+              ) -> torch.Tensor:
   """
   Paraeters:
       gaussians: (N, 6)  packed gaussians, N is the number of gaussians

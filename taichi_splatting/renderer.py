@@ -35,7 +35,7 @@ def render_gaussians(
   features_depth=torch.cat([culled.feature, depths.unsqueeze(1)], dim=1) 
 
   raster_config = Config(tile_size=tile_size)
-  image, alpha = rasterize(gaussians=gaussians2d, features=features_depth, 
+  image = rasterize(gaussians=gaussians2d, features=features_depth, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=camera_params.image_size, config=raster_config)
 

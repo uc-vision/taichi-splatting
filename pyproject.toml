@@ -26,3 +26,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.ruff]
 indent-width = 2
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # disable "UserWarning: The .grad attribute of a Tensor that is not a leaf Tensor"
+    "ignore::UserWarning"  
+]
+

@@ -14,6 +14,7 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 ### Todo
 * Port rasterizer backward pass
 * Projection autograd wrapper
+* Training code (likely different repository)
 
 ### Improvements
 

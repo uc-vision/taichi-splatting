@@ -2,7 +2,6 @@ import taichi as ti
 from taichi.math import vec2, mat2, vec3
 
 
-
 @ti.func
 def radii_from_cov(uv_cov: mat2) -> ti.f32:
     
@@ -50,10 +49,29 @@ def radii_from_conic(conic: vec3):
 
 @ti.func
 def conic_pdf(xy: vec2, uv: vec2, uv_conic: vec3) -> ti.f32:
-    v = xy - uv
-    return ti.exp(-0.5 * (v.x * v.x * uv_conic.x + v.y * v.y * uv_conic.z) 
-        - v.x * v.y * uv_conic.y)
+    dx, dy = xy - uv
+    a, b, c = uv_conic
 
+    return ti.exp(-0.5 * (dx**2 * a + dy**2 * c) - dx * dy * b)
+
+
+@ti.func
+def conic_pdf_with_grad(xy: vec2, uv: vec2, uv_conic: vec3):
+    dx, dy = xy - uv
+    a, b, c = uv_conic
+
+    dx2 = dx**2
+    dy2 = dy**2
+    dxdy = dx * dy
+    
+    p = ti.exp(-0.5 * (dx2 * a + dy2 * c) - dxdy * b)
+    dp_duv = vec2(
+        (b * dy - 0.5 * a * (2 * uv.x - 2 * xy.x)) * p,
+        (b * dx - 0.5 * c * (2 * uv.y - 2 * xy.y)) * p
+    )
+    dp_dconic = vec3(-0.5 * dx2 * p, -dxdy * p, -0.5 * dy2 * p)
+
+    return p, dp_duv, dp_dconic
 
 
 @ti.func

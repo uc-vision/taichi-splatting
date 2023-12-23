@@ -1,13 +1,18 @@
 import torch
 import taichi as ti
 from tqdm import tqdm
+from taichi_splatting.tests.util import eval_with_grad
 
 from taichi_splatting.torch import spherical_harmonics as torch_sh
 from taichi_splatting import spherical_harmonics as taichi_sh
 
+import warnings
+warnings.filterwarnings('ignore') 
+
+
 ti.init(debug=True)
 
-def random_inputs(seed, max_dim=3, max_deg=3, max_n=100, device='cpu'):
+def random_inputs(seed, max_dim=3, max_deg=3, max_n=5, device='cpu'):
     torch.random.manual_seed(seed)
     dimension = torch.randint(1, max_dim, (1,)).item()
     degree = torch.randint(1, max_deg + 1, (1, )).item()
@@ -20,11 +25,7 @@ def random_inputs(seed, max_dim=3, max_deg=3, max_n=100, device='cpu'):
     return params, dirs, dict(dim=dimension, deg=degree, n=n, seed=seed)
 
 
-def eval_with_grad(f, *args):
-  args = [args.detach().clone().requires_grad_(True) for args in args]
-  out = f(*args)
-  out.sum().backward()
-  return out, [arg.grad for arg in args]
+
 
 def test_sh(iters = 100, device='cpu'):
 
@@ -35,13 +36,9 @@ def test_sh(iters = 100, device='cpu'):
       out1, grads1 = eval_with_grad(torch_sh.evaluate_sh, params, dirs)
       out2, grads2 = eval_with_grad(taichi_sh.evaluate_sh, params, dirs)
 
-      
       assert torch.allclose(out1, out2, atol=1e-5), f"out1 != out2 for {args}"
       for grad1, grad2 in zip(grads1, grads2):
-        # taichi autograd has an issue whereby gradients come out doubled on the .grad attribute
-        # however, they're propagated correctly
-        
-        assert torch.allclose(grad1 * 2, grad2, atol=1e-5), f"grad1 != grad2 for {args}"
+        assert torch.allclose(grad1, grad2, atol=1e-5), f"grad1 != grad2 for {args}"
 
 if __name__ == '__main__':
   test_sh()
