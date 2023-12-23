@@ -142,6 +142,7 @@ def backward_kernel(config: Config, feature_size: int):
           # alpha_grad * point_alpha is dp
           # (2,) as the paper said, view space gradient is used for detect candidates for densification
 
+          # TODO: accumulate in block shared feature and write to global memory
           grad_point_features[point_offset] += point_grad_feature
           grad_points[point_offset] += alpha_grad * Gaussian2D.pack(
               point_alpha * dp_dmean, 

@@ -2,10 +2,12 @@
 import taichi as ti
 from taichi.math import  mat3, mat4
 import torch
+
 from taichi_splatting.culling import CameraParams
-from taichi_splatting.data_types import Gaussians, Gaussian2D, Gaussian3D
+from taichi_splatting.data_types import  Gaussian2D, Gaussian3D, Gaussians3D
 from taichi_splatting.ti import projection
 from taichi_splatting.ti.covariance import cov_to_conic
+
 
 
 
@@ -52,7 +54,7 @@ def project_to_image_kernel(
 
       depths[idx] = point_in_camera.z
 
-def project_to_image(gaussians:Gaussians, camera_params: CameraParams):
+def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams):
   device = gaussians.position.device
   
   points = torch.empty((*gaussians.shape, Gaussian2D.vec.n), dtype=torch.float32, device=device)

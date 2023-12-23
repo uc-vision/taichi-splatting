@@ -3,24 +3,38 @@ from numbers import Integral
 from typing import Tuple
 from beartype import beartype
 import taichi as ti
-import torch
 from tensordict import tensorclass
+import torch
 
 from taichi.math import vec2, vec3, vec4
 
 from taichi_splatting.ti.util import sigmoid, struct_size
 
+
 @tensorclass
-class Gaussians():
+class Gaussians3D():
   position     : torch.Tensor # 3  - xyz
   log_scaling   : torch.Tensor # 3  - scale = exp(log_scalining) 
   rotation      : torch.Tensor # 4  - quaternion wxyz
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
   feature      : torch.Tensor # N  - (any rgb, spherical harmonics etc)
 
+  def pack_gaussian3d(self):
+    return torch.cat([self.position, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
 
-  def concat(self):
-    return torch.cat([self.position, self.feature, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
+
+@tensorclass
+class Gaussians2D():
+  position     : torch.Tensor # 2  - xy
+  depth        : torch.Tensor # 1  - for sorting
+  log_scaling   : torch.Tensor # 2  - scale = exp(log_scalining) 
+  rotation      : torch.Tensor # 2  - unit length imaginary number
+  alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
+  
+  feature      : torch.Tensor # N  - (any rgb, label etc)
+
+
+
 
 @beartype
 @dataclass

@@ -2,14 +2,16 @@
 import torch
 
 from taichi_splatting.culling import CameraParams, frustum_culling
-from taichi_splatting.data_types import Gaussians
+from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.tile_mapper import map_to_tiles
 from taichi_splatting.projection import project_to_image
 from taichi_splatting.rasterizer import rasterize, Config
 
 
+
+
 def render_gaussians(
-      gaussians: Gaussians,
+      gaussians: Gaussians3D,
       camera_params: CameraParams,
       tile_size: int = 16,
       margin_tiles: int = 3,
@@ -25,7 +27,7 @@ def render_gaussians(
   )
 
 
-  culled:Gaussians = gaussians[point_mask]
+  culled:Gaussians3D = gaussians[point_mask]
   gaussians2d, depths = project_to_image(culled, camera_params)
 
   overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
