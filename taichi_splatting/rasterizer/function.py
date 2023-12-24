@@ -1,4 +1,5 @@
 from .forward import Config, forward_kernel
+from .backward import backward_kernel
 
 from numbers import Integral
 from typing import Tuple
@@ -33,7 +34,7 @@ class _module_function(torch.autograd.Function):
     ctx.config = config
 
     ctx.save_for_backward(gaussians, features, 
-                          image_feature, image_alpha)
+                          image_feature)
     
     return image_feature
 
@@ -44,7 +45,15 @@ class _module_function(torch.autograd.Function):
       grad_gaussians = torch.zeros_like(gaussians)
       grad_features = torch.zeros_like(features)
 
-      # backward_kernel()
+      k = backward_kernel(ctx.config, features.shape[1])
+
+      k(gaussians, features, 
+        ctx.tile_overlap_ranges, ctx.overlap_to_point,
+        image_feature, ctx.image_alpha, ctx.image_last_valid,
+        grad_image_feature,
+        grad_gaussians, grad_features)
+
+
       return grad_gaussians, grad_features, None, None, None, None
 
 
