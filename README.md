@@ -12,6 +12,15 @@ Examples:
   * Depth covariance without needing to build it into the renderer and remaining differentiable.
   * Fully differentiable camera parameters (and ability to swap in new camera models)
 
+## Major dependencies
+
+* Taichi >= 1.7.0
+* Torch >= 1.8 (probably works with earlier versions, too)
+
+## Installing
+
+* Clone down with `git clone` and install with `pip install ./taichi-spatting`
+* `pip install taichi-splatting`
 
 ## Progress
 

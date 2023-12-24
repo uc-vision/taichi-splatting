@@ -104,6 +104,7 @@ def forward_kernel(config: Config, feature_size: int):
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = conic_pdf(ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
           alpha = point_alpha * gaussian_alpha
+
             
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
           # 255 ) and also clamp 𝛼 with 0.99 from above.
