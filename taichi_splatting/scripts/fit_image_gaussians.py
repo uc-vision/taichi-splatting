@@ -17,7 +17,7 @@ def inverse_sigmoid(x:torch.Tensor):
 def random_2d_gaussians(n, image_size, seed=0):
   w, h = image_size
 
-  scale =  0.25 * w / math.sqrt(n) 
+  scale = 0.5 * w / math.sqrt(n) 
 
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
   depth = torch.rand(n)  
@@ -28,7 +28,7 @@ def random_2d_gaussians(n, image_size, seed=0):
   rotation = torch.randn(n, 2) 
   rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)
 
-  alpha = torch.rand(n) * 0.5 + 0.499
+  alpha = torch.rand(n) * 0.5 + 0.1
 
   return Gaussians2D(
     position=position,
