@@ -46,6 +46,7 @@ def parse_args():
   parser.add_argument('image_file', type=str)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--tile_size', type=int, default=16)
+  parser.add_argument('--n', type=int, default=20000)
   
 
   return parser.parse_args()
@@ -96,22 +97,19 @@ def main():
 
   torch.manual_seed(args.seed)
 
-  gaussians = random_2d_gaussians(20000, (w, h)).to(torch.device('cuda:0'))
+  gaussians = random_2d_gaussians(args.n, (w, h)).to(torch.device('cuda:0'))
   opt, params = optimizer(gaussians, base_lr=1.0)
 
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
 
   while True:
+  
     opt.zero_grad()
 
     image = render_gaussians(params, (w, h), tile_size=args.tile_size)
     loss = torch.nn.functional.l1_loss(image, ref_image) 
-
-    # s = params.log_scaling.exp()
-    # loss += (s.max(1).values / s.min(1).values).mean() * 0.01
     
     loss.backward()
-
 
     check_finite(params)
     opt.step()
