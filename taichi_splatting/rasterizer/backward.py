@@ -16,6 +16,9 @@ class Config:
   saturate_threshold: float = 0.9999
 
 
+
+
+
 @cache
 def backward_kernel(config: Config, feature_size: int):
 
@@ -58,15 +61,22 @@ def backward_kernel(config: Config, feature_size: int):
       tile_id = tile_u + tile_v * tiles_wide
       thread_id = u + v * tile_size
 
-      # The initial value of accumulated alpha (initial value of accumulated multiplication)
-      T_i = 1.0
-      accum_feature = feature_vec(0.)
 
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
 
+      # tile_last_point = ti.simt.block.SharedArray((1,), dtype=ti.i32)
+      # tile_last_point[0] = 0
+      # ti.simt.block.sync()
+
+      # ti.atomic_max(tile_last_point[0], image_last_valid[pixel.y, pixel.x])
+      # ti.simt.block.sync()
+      # end_offset = tile_last_point[0]
+
+
       start_offset, end_offset = tile_overlap_ranges[tile_id]
+
       tile_point_count = end_offset - start_offset
 
       last_point_idx = image_last_valid[pixel.y, pixel.x]
@@ -88,6 +98,9 @@ def backward_kernel(config: Config, feature_size: int):
 
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
+
+        ti.simt.block.sync()
+
         group_offset_base = point_group_id * tile_area
 
         block_end_idx = end_offset - group_offset_base
@@ -115,10 +128,10 @@ def backward_kernel(config: Config, feature_size: int):
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           feature = tile_feature[in_group_idx]
 
-          gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
+          p, dp_dmean, dp_dconic = conic_pdf_with_grad(
             ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
           
-          alpha = point_alpha * gaussian_alpha
+          alpha = point_alpha * p
           
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
           # 255 ) and also clamp 𝛼 with 0.99 from above.
@@ -138,25 +151,21 @@ def backward_kernel(config: Config, feature_size: int):
 
           point_offset = overlap_to_point[point_index]
           point_grad_feature = alpha * T_i * grad_pixel_feature
+            
+          grad_point = alpha_grad * Gaussian2D.to_vec(
+              point_alpha * dp_dmean, 
+              point_alpha * dp_dconic,
+              p)
 
           # alpha_grad * point_alpha is dp
           # (2,) as the paper said, view space gradient is used for detect candidates for densification
 
           # TODO: accumulate in block shared feature and write to global memory
           grad_point_features[point_offset] += point_grad_feature
-          grad_points[point_offset] += alpha_grad * Gaussian2D.pack(
-              point_alpha * dp_dmean, 
-              point_alpha * dp_dconic,
-              gaussian_alpha)
-
+          grad_points[point_offset] += grad_point
+          
         # end of point group loop
       # end of point group id loop
-
-      image_feature[pixel.y, pixel.x] = accum_feature
-
-      # No need to accumulate a normalisation factor as it is exactly 1 - T_i
-      image_alpha[pixel.y, pixel.x] = 1. - T_i    
-      image_last_valid[pixel.y, pixel.x] = last_point_idx
 
     # end of pixel loop
 

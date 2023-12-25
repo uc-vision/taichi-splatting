@@ -8,7 +8,7 @@ import torch
 
 from taichi.math import vec2, vec3, vec4
 
-from taichi_splatting.ti.util import sigmoid, struct_size
+from taichi_splatting.ti.conversions import sigmoid, struct_size
 
 
 @tensorclass

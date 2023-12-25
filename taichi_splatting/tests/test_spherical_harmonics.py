@@ -12,14 +12,14 @@ warnings.filterwarnings('ignore')
 
 ti.init(debug=True)
 
-def random_inputs(seed, max_dim=3, max_deg=3, max_n=5, device='cpu'):
+def random_inputs(seed, max_dim=3, max_deg=3, max_n=5, device='cpu', dtype=torch.float32):
     torch.random.manual_seed(seed)
     dimension = torch.randint(1, max_dim, (1,)).item()
     degree = torch.randint(1, max_deg + 1, (1, )).item()
     n = torch.randint(1, max_n, (1,) ).item()
 
-    params = torch.rand(n, dimension, (degree + 1)**2, device=device, dtype=torch.float32)
-    dirs = torch.randn(n, 3, device=device, dtype=torch.float32)
+    params = torch.rand(n, dimension, (degree + 1)**2, device=device, dtype=dtype)
+    dirs = torch.randn(n, 3, device=device, dtype=dtype)
     dirs = torch.nn.functional.normalize(dirs, dim=1)
 
     return (params, dirs)
@@ -41,13 +41,13 @@ def test_sh(iters = 100, device='cpu'):
 
 def gradcheck(func, args, **kwargs):
   args = [x.requires_grad_(True) for x in args]
-  torch.autograd.gradcheck(func, args, **kwargs, eps=1e-2, atol=1e-3, rtol=1e-2)
+  torch.autograd.gradcheck(func, args, **kwargs)
 
 def test_sh_gradtest(iters = 100, device='cpu'):
 
-  seeds = torch.randint(0, 10000, (iters, ), device=device)
+  seeds = torch.randint(40, 10000, (iters, ), device=device)
   for seed in tqdm(seeds):
-      inputs = random_inputs(seed, device=device)
+      inputs = random_inputs(seed, device=device, dtype=torch.float64)
       gradcheck(taichi_sh.evaluate_sh, inputs)
 
 if __name__ == '__main__':

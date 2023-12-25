@@ -2,90 +2,13 @@ from functools import cache
 import math
 from beartype import beartype
 import taichi as ti
-from taichi.math import vec3
 import torch
 
 from taichi_splatting.autograd import restore_grad
+from taichi_splatting.ti.conversions import torch_taichi
 
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics
-
-
-vec16f = ti.types.vector(16, ti.float32)
-vec9f = ti.types.vector(9,   ti.float32)
-vec4f = ti.types.vector(4,   ti.float32)
-vec1f = ti.types.vector(1,   ti.float32)
-
-@ti.func
-def rsh_cart_0(xyz: vec3) -> vec1f:
-    return vec1f(
-        0.282094791773878
-    )
-
-
-@ti.func
-def rsh_cart_1(xyz: vec3) -> vec4f:
-    x, y, z = xyz
-    return vec4f(
-        0.282094791773878,
-        -0.48860251190292 * y,
-        0.48860251190292 * z,
-        -0.48860251190292 * x,
-    )
-
-@ti.func
-def rsh_cart_2(xyz: vec3) -> vec9f:
-    x, y, z = xyz
-
-    x2 = x**2
-    y2 = y**2
-    z2 = z**2
-    xy = x * y
-    xz = x * z
-    yz = y * z
-
-    return vec9f(
-        0.282094791773878,
-        -0.48860251190292 * y,
-        0.48860251190292 * z,
-        -0.48860251190292 * x,
-        1.09254843059208 * xy,
-        -1.09254843059208 * yz,
-        0.94617469575756 * z2 - 0.31539156525252,
-        -1.09254843059208 * xz,
-        0.54627421529604 * x2 - 0.54627421529604 * y2,
-    )
-
-@ti.func
-def rsh_cart_3(xyz: vec3) -> vec16f:
-    x, y, z = xyz.x, xyz.y, xyz.z
-
-    x2 = x**2
-    y2 = y**2
-    z2 = z**2
-    xy = x * y
-    xz = x * z
-    yz = y * z
-
-    return vec16f(
-        0.282094791773878,
-        -0.48860251190292 * y,
-        0.48860251190292 * z,
-        -0.48860251190292 * x,
-        1.09254843059208 * xy,
-        -1.09254843059208 * yz,
-        0.94617469575756 * z2 - 0.31539156525252,
-        -1.09254843059208 * xz,
-        0.54627421529604 * x2 - 0.54627421529604 * y2,
-        -0.590043589926644 * y * (3.0 * x2 - y2),
-        2.89061144264055 * xy * z,
-        0.304697199642977 * y * (1.5 - 7.5 * z2),
-        1.24392110863372 * z * (1.5 * z2 - 0.5) - 0.497568443453487 * z,
-        0.304697199642977 * x * (1.5 - 7.5 * z2),
-        1.44530572132028 * z * (x2 - y2),
-        -0.590043589926644 * x * (x2 - 3.0 * y2),
-    )        
-
 
 def check_sh_degree(sh_features):
   n_sh = sh_features.shape[2]
@@ -94,20 +17,106 @@ def check_sh_degree(sh_features):
   assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({sh_features.shape})"
   return (n - 1)
 
-
 @cache
-def evaluate_sh_kernel(degree:int, dimension:int=3):
+def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
+  ti_dtype = torch_taichi[dtype]
+
+
+  vec16 = ti.types.vector(16, ti_dtype)
+  vec9 = ti.types.vector(9,   ti_dtype)
+  vec4 = ti.types.vector(4,   ti_dtype)
+  vec3 = ti.types.vector(3,   ti_dtype)
+  vec1 = ti.types.vector(1,   ti_dtype)
+
+  @ti.func
+  def rsh_cart_0(_: vec3) -> vec1:
+      return vec1(
+          0.282094791773878
+      )
+
+
+  @ti.func
+  def rsh_cart_1(xyz: vec3) -> vec4:
+      x, y, z = xyz
+      return vec4(
+          0.282094791773878,
+          -0.48860251190292 * y,
+          0.48860251190292 * z,
+          -0.48860251190292 * x,
+      )
+
+  @ti.func
+  def rsh_cart_2(xyz: vec3) -> vec9:
+      x, y, z = xyz
+
+      x2 = x**2
+      y2 = y**2
+      z2 = z**2
+      xy = x * y
+      xz = x * z
+      yz = y * z
+
+      return vec9(
+          0.282094791773878,
+          -0.48860251190292 * y,
+          0.48860251190292 * z,
+          -0.48860251190292 * x,
+          1.09254843059208 * xy,
+          -1.09254843059208 * yz,
+          0.94617469575756 * z2 - 0.31539156525252,
+          -1.09254843059208 * xz,
+          0.54627421529604 * x2 - 0.54627421529604 * y2,
+      )
+
+  @ti.func
+  def rsh_cart_3(xyz: vec3) -> vec16:
+      x, y, z = xyz.x, xyz.y, xyz.z
+
+      x2 = x**2
+      y2 = y**2
+      z2 = z**2
+      xy = x * y
+      xz = x * z
+      yz = y * z
+
+      return vec16(
+          0.282094791773878,
+          -0.48860251190292 * y,
+          0.48860251190292 * z,
+          -0.48860251190292 * x,
+          1.09254843059208 * xy,
+          -1.09254843059208 * yz,
+          0.94617469575756 * z2 - 0.31539156525252,
+          -1.09254843059208 * xz,
+          0.54627421529604 * x2 - 0.54627421529604 * y2,
+          -0.590043589926644 * y * (3.0 * x2 - y2),
+          2.89061144264055 * xy * z,
+          0.304697199642977 * y * (1.5 - 7.5 * z2),
+          1.24392110863372 * z * (1.5 * z2 - 0.5) - 0.497568443453487 * z,
+          0.304697199642977 * x * (1.5 - 7.5 * z2),
+          1.44530572132028 * z * (x2 - y2),
+          -0.590043589926644 * x * (x2 - 3.0 * y2),
+      )        
+
+
+  def check_sh_degree(sh_features):
+    n_sh = sh_features.shape[2]
+    n = int(math.sqrt(n_sh))
+
+    assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({sh_features.shape})"
+    return (n - 1)
+
+
   assert degree >= 0 and degree <= 3
 
   rsh_cart_n = [rsh_cart_0, rsh_cart_1, rsh_cart_2, rsh_cart_3]
   rsh_cart = rsh_cart_n[degree]
 
-  param_mat = ti.types.matrix(n=dimension, m=(degree + 1)**2, dtype=ti.f32)
-  vec = ti.types.vector(n=dimension, dtype=ti.f32)
-
+  param_mat = ti.types.matrix(n=dimension, m=(degree + 1)**2, dtype=ti_dtype)
+  vec = ti.types.vector(n=dimension, dtype=ti_dtype)
 
   @ti.kernel    
-  def _evaluate_sh3_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
+  def evaluate_sh_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
                           dirs:ti.types.ndarray(vec3, ndim=1), 
                           out:ti.types.ndarray(vec, ndim=1)):
       
@@ -118,39 +127,39 @@ def evaluate_sh_kernel(degree:int, dimension:int=3):
           for d in ti.static(range(dimension)):
               out[i][d] = coeffs.dot(params_i[d, :])
 
-  return _evaluate_sh3_kernel
 
 
-class _module_function(torch.autograd.Function):
-  @staticmethod
-  def forward(ctx, params:torch.Tensor, dirs:torch.Tensor) -> torch.Tensor:
-      
-      degree = check_sh_degree(params)
-      ctx.kernel = evaluate_sh_kernel(degree, params.shape[1])
+  class _module_function(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, params:torch.Tensor, dirs:torch.Tensor) -> torch.Tensor:
+        
+        out = torch.zeros(dirs.shape[0], params.shape[1], dtype=dtype, device=params.device)
+        evaluate_sh_kernel(params, dirs, out)
 
-      out = torch.zeros(dirs.shape[0], params.shape[1], dtype=torch.float32, device=params.device)
-      ctx.kernel(params, dirs, out)
+        ctx.save_for_backward(params, dirs, out)
+        return out
 
-      ctx.save_for_backward(params, dirs, out)
-      return out
+    @staticmethod
+    def backward(ctx, doutput):
+        params, dirs, out = ctx.saved_tensors
 
-  @staticmethod
-  def backward(ctx, doutput):
-      params, dirs, out = ctx.saved_tensors
+        with restore_grad(params, dirs, out):
+          out.grad = doutput.contiguous()
+          evaluate_sh_kernel.grad(params, dirs, out)
 
-      with restore_grad(params, dirs, out):
-        out.grad = doutput.contiguous()
-        ctx.kernel.grad(params, dirs, out)
-
-        return params.grad, dirs.grad
-
+          return params.grad, dirs.grad
+        
+  return _module_function
 
 
 @beartype
 def evaluate_sh(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
                 dirs:torch.Tensor     # N, 3
                 ) -> torch.Tensor:    # N, K
-    
+    degree = check_sh_degree(params)
+
+    _module_function = sh_function(degree=degree, 
+                                   dimension=params.shape[1], dtype=params.dtype)
     return _module_function.apply(params.contiguous(), dirs.contiguous())
 
 
