@@ -5,6 +5,8 @@ import taichi as ti
 from taichi.math import vec3
 import torch
 
+from taichi_splatting.autograd import restore_grad
+
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics
 
@@ -135,10 +137,12 @@ class _module_function(torch.autograd.Function):
   @staticmethod
   def backward(ctx, doutput):
       params, dirs, out = ctx.saved_tensors
-      out.grad = doutput.contiguous()
 
-      ctx.kernel.grad(params, dirs, out)
-      return params.grad, dirs.grad
+      with restore_grad(params, dirs, out):
+        out.grad = doutput.contiguous()
+        ctx.kernel.grad(params, dirs, out)
+
+        return params.grad, dirs.grad
 
 
 

@@ -22,23 +22,34 @@ def random_inputs(seed, max_dim=3, max_deg=3, max_n=5, device='cpu'):
     dirs = torch.randn(n, 3, device=device, dtype=torch.float32)
     dirs = torch.nn.functional.normalize(dirs, dim=1)
 
-    return params, dirs, dict(dim=dimension, deg=degree, n=n, seed=seed)
-
-
+    return (params, dirs)
 
 
 def test_sh(iters = 100, device='cpu'):
 
   seeds = torch.randint(0, 10000, (iters, ), device=device)
   for seed in tqdm(seeds):
-      params, dirs, args = random_inputs(seed, device=device)
+      inputs  = random_inputs(seed, device=device)
 
-      out1, grads1 = eval_with_grad(torch_sh.evaluate_sh, params, dirs)
-      out2, grads2 = eval_with_grad(taichi_sh.evaluate_sh, params, dirs)
+      out1, grads1 = eval_with_grad(torch_sh.evaluate_sh, *inputs)
+      out2, grads2 = eval_with_grad(taichi_sh.evaluate_sh, *inputs)
 
-      assert torch.allclose(out1, out2, atol=1e-5), f"out1 != out2 for {args}"
+      assert torch.allclose(out1, out2, atol=1e-5), f"out1 != out2 seed={seed}"
       for grad1, grad2 in zip(grads1, grads2):
-        assert torch.allclose(grad1, grad2, atol=1e-5), f"grad1 != grad2 for {args}"
+        if not torch.allclose(grad1, grad2, atol=1e-5):
+          raise AssertionError(f"grad1 != grad2 for seed={seed}")
+
+def gradcheck(func, args, **kwargs):
+  args = [x.requires_grad_(True) for x in args]
+  torch.autograd.gradcheck(func, args, **kwargs, eps=1e-2, atol=1e-3, rtol=1e-2)
+
+def test_sh_gradtest(iters = 100, device='cpu'):
+
+  seeds = torch.randint(0, 10000, (iters, ), device=device)
+  for seed in tqdm(seeds):
+      inputs = random_inputs(seed, device=device)
+      gradcheck(taichi_sh.evaluate_sh, inputs)
 
 if __name__ == '__main__':
   test_sh()
+  test_sh_gradtest()
