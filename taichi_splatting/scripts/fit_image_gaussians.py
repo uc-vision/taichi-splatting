@@ -5,10 +5,11 @@ import argparse
 import torch
 from torch.optim import Adam
 
-from taichi_splatting.renderer2d import check_finite, render_gaussians, Gaussians2D
+from taichi_splatting.renderer2d import render_gaussians, Gaussians2D
 import taichi as ti
 
 from taichi_splatting.torch_ops.projection import inverse_sigmoid
+from taichi_splatting.torch_ops.util import check_finite
 
 
 def random_2d_gaussians(n, image_size, seed=0):

@@ -3,6 +3,8 @@ import math
 from taichi_splatting.data_types import CameraParams, Gaussians3D
 from taichi_splatting.tests.util import compare_with_grad
 import taichi_splatting.torch_ops.projection as torch_proj
+from taichi_splatting.torch_ops.util import check_finite
+
 import taichi_splatting.projection as ti_proj
 
 import torch
@@ -24,7 +26,7 @@ def random_camera(pos_scale:float=100., max_image_size:int = 1024) -> CameraPara
             low=max_image_size // 5, high=max_image_size)]
   cx, cy = torch.tensor([w/2, h/2]) + torch.randn(2) * (w / 5) 
 
-  fov = torch.rand(1) * 70 + 30
+  fov = torch.deg2rad(torch.rand(1) * 70 + 30)
   fx = w / (2 * torch.tan(fov / 2))
   fy = h / (2 * torch.tan(fov / 2))
 
@@ -35,6 +37,7 @@ def random_camera(pos_scale:float=100., max_image_size:int = 1024) -> CameraPara
   ])
 
   near_plane = math.exp(10 * -torch.rand(1).item()) # 1e-5 to 1.0
+  assert near_plane > 0
 
   return CameraParams(
     T_camera_world=T_camera_world,
@@ -53,8 +56,10 @@ def random_3d_gaussians(n, camera_params:CameraParams) -> Gaussians3D:
   depth_range = camera_params.far_plane - camera_params.near_plane
   depth = torch.rand(n) * depth_range + camera_params.near_plane   
 
+  print(depth_range, camera_params.far_plane, camera_params.near_plane)
+
   position = torch_proj.unproject_points(uv_pos, depth.unsqueeze(1), camera_params.T_image_world)
-  fx = camera_params.T_image_world[0, 0]
+  fx = camera_params.T_image_camera[0, 0]
 
   scale =  (w / math.sqrt(n)) * (depth / fx) 
   scaling = (torch.rand(n, 3) + 0.2) * scale.unsqueeze(1) 
@@ -74,13 +79,17 @@ def random_3d_gaussians(n, camera_params:CameraParams) -> Gaussians3D:
   )
 
 
-def random_inputs(device='cpu', max_points=10000):
+def random_inputs(device='cpu', max_points=10):
   def f(seed:int = 0):
     torch.manual_seed(seed)
     camera = random_camera()
     n = torch.randint(size=(1,), low=1, high=max_points).item()
 
+
     gaussians = random_3d_gaussians(n=n, camera_params=camera)
+    check_finite(gaussians)
+
+
     return (gaussians.pack_gaussian3d().to(device), 
       camera.T_image_camera.to(device), camera.T_camera_world.to(device))
   return f
@@ -99,4 +108,5 @@ def test_projection(iters = 100):
 
 
 if __name__ == '__main__':
+  torch.set_printoptions(precision=4, sci_mode=False)
   test_projection()

@@ -34,16 +34,7 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
   return tuple(pad(x) for x in image_size)
 
 
-def check_finite(tensor_dict):
-  for k, v in tensor_dict.items():
-    n = (~torch.isfinite(v)).sum()
-    if n > 0:
-      raise ValueError(f'Found {n} non-finite values in {k}')
 
-    if v.grad is not None:
-      n = (~torch.isfinite(v.grad)).sum()
-      if n > 0:
-        raise ValueError(f'Found {n} non-finite gradients in {k}')
 
 def render_gaussians(
       gaussians: Gaussians2D,

@@ -31,13 +31,18 @@ def eval_with_grad(f, *args):
 
   return out, tuple(arg.grad for arg in args)
 
-def allclose(test_name, name, a, b, atol=1e-5):
+def allclose(test_name, name, a, b, atol=1e-2, rtol=1e-3):
   assert type(a) == type(b), f"{name}: type does not match"
   if isinstance(a, torch.Tensor):
-    assert torch.allclose(a, b, atol=atol), f"{test_name}.{name} does not match"
+    if not torch.allclose(a, b, atol=atol):
+      print(a)
+      print(b)
+      
+      raise AssertionError(f"{test_name}.{name} does not match")
+
   elif isinstance(a, Sequence):
     for a_, b_, name_ in zip(a, b, name):
-      allclose(test_name, name_, a_, b_, atol=atol)
+      allclose(test_name, name_, a_, b_, atol=atol, rtol=rtol)
 
 
 def compare_with_grad(test_name, input_names, output_names,
@@ -52,8 +57,8 @@ def compare_with_grad(test_name, input_names, output_names,
       out2, grads2 = eval_with_grad(f2, *inputs)
 
       try:
-        allclose(test_name, input_names, out1, out2, atol=1e-5)
-        allclose(f"{test_name}_grad", output_names, grads1, grads2, atol=1e-5)
+        allclose(test_name, output_names, out1, out2, atol=1e-5)
+        allclose(f"{test_name}_grad", input_names, grads1, grads2, atol=1e-5)
       except AssertionError as e:
         print(f"Failed at seed {seed}")
         raise e

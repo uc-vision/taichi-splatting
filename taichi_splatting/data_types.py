@@ -145,6 +145,11 @@ def unpack_g2d_torch(vec:torch.Tensor):
   uv, uv_conic, alpha = vec[:, 0:2], vec[:, 2:5], vec[:, 5]
   return uv, uv_conic, alpha
 
+@ti.func
+def unpack_activate_g3d(vec:vec_g3d):
+  position, log_scaling, rotation, alpha_logit = unpack_vec_g3d(vec)
+  return position, ti.exp(log_scaling), ti.math.normalize(rotation), sigmoid(alpha_logit)
+
 # Taichi structs don't have static methods, but they can be added afterward
 Gaussian2D.vec = vec_g2d
 Gaussian2D.to_vec = to_vec_g2d
@@ -156,4 +161,5 @@ Gaussian3D.vec = vec_g3d
 Gaussian3D.to_vec = to_vec_g3d
 Gaussian3D.from_vec = from_vec_g3d
 Gaussian3D.unpack = unpack_vec_g3d
+Gaussian3D.unpack_activate = unpack_activate_g3d
 

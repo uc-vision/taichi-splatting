@@ -11,39 +11,50 @@ from taichi_splatting.taichi_funcs import projection
 from taichi_splatting.taichi_funcs.covariance import cov_to_conic
 
 
+@ti.func
+def mat3_from_ndarray(ndarray:ti.template()):
+  return mat3([ndarray[i, j] 
+                          for i in ti.static(range(3)) for j in ti.static(range(3))])
+
+@ti.func
+def mat4_from_ndarray(ndarray:ti.template()):
+  return mat4([ndarray[i, j] 
+                          for i in ti.static(range(4)) for j in ti.static(range(4))])
+
 
 @ti.kernel
 def project_to_image_kernel(  
   gaussians: ti.types.ndarray(Gaussian3D.vec, ndim=1),  # (N, 3 + feature_vec.n1) # input
 
-  T_image_camera: ti.types.ndarray(mat3, ndim=1),  # (1, 3, 3) camera projection
-  T_camera_world: ti.types.ndarray(mat4, ndim=1),  # (1, 4, 4)
+  T_image_camera: ti.types.ndarray(ndim=2),  # (3, 3) camera projection
+  T_camera_world: ti.types.ndarray(ndim=2),  # (4, 4)
   
   points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (N, 6)
   depths: ti.types.ndarray(ti.f32, ndim=1),  # (N, 2)
 ):
 
   for idx in range(gaussians.shape[0]):
-      gaussian = Gaussian3D.from_vec(gaussians[idx])
-      uv, point_in_camera = projection.point_to_camera(
-          position=gaussian.position,
-          T_camera_world=T_camera_world[0],
-          projective_transform=T_image_camera[0],
-      )
+      position, scale, rotation, alpha = Gaussian3D.unpack_activate(gaussians[idx])
 
+      camera_image = mat3_from_ndarray(T_image_camera)
+      camera_world = mat4_from_ndarray(T_camera_world)
+
+      uv, point_in_camera = projection.point_to_camera(
+          position, camera_world, camera_image)
+    
       cov_in_camera = projection.gaussian_covariance_in_camera(
-          T_camera_world[0], ti.math.normalize(gaussian.rotation), gaussian.scale())
+          camera_world, rotation, scale)
 
       uv_cov = projection.project_gaussian_to_image(
-          T_image_camera[0], point_in_camera, cov_in_camera)
+          camera_image, point_in_camera, cov_in_camera)
 
+      depths[idx] = point_in_camera.z
       points[idx] = Gaussian2D.to_vec(
           uv=uv,
           uv_conic=cov_to_conic(uv_cov),
-          alpha=gaussian.alpha(),
+          alpha=alpha,
       )
 
-      depths[idx] = point_in_camera.z
 
 
 
@@ -55,7 +66,7 @@ class _module_function(torch.autograd.Function):
       depths = torch.empty((gaussians.shape[0], ), dtype=torch.float32, device=gaussians.device)
 
       project_to_image_kernel(gaussians, 
-            T_image_camera.unsqueeze(0), T_camera_world.unsqueeze(0),
+            T_image_camera, T_camera_world,
             points, depths)
       
       ctx.save_for_backward(gaussians, T_image_camera, T_camera_world, points, depths)
@@ -70,7 +81,7 @@ class _module_function(torch.autograd.Function):
         depths.grad = ddepths.contiguous()
         project_to_image_kernel.grad(
           gaussians,  
-          T_image_camera.unsqueeze(0), T_camera_world.unsqueeze(0), 
+          T_image_camera, T_camera_world, 
           points, depths)
 
         return gaussians.grad,  T_image_camera.grad, T_camera_world.grad
