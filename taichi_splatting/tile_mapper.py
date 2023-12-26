@@ -8,8 +8,8 @@ from taichi.math import ivec2, mat2
 import torch
 
 from taichi_splatting.data_types import Gaussian2D
-from taichi_splatting.ti.covariance import conic_to_cov, cov_inv_basis, radii_from_cov
-from taichi_splatting.ti.bounding import separates_bbox
+from taichi_splatting.taichi_funcs.covariance import conic_to_cov, cov_inv_basis, radii_from_cov
+from taichi_splatting.taichi_funcs.bounding import separates_bbox
 
 from taichi.math import ivec4, vec2
 

@@ -1,8 +1,6 @@
 import math
-import random
 import cv2
 import argparse
-import numpy as np
 
 import torch
 from torch.optim import Adam
@@ -10,13 +8,11 @@ from torch.optim import Adam
 from taichi_splatting.renderer2d import check_finite, render_gaussians, Gaussians2D
 import taichi as ti
 
-def inverse_sigmoid(x:torch.Tensor):
-  return torch.log(x / (1 - x))
+from taichi_splatting.torch_ops.projection import inverse_sigmoid
 
 
 def random_2d_gaussians(n, image_size, seed=0):
   w, h = image_size
-
   scale = 0.5 * w / math.sqrt(n) 
 
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)

@@ -26,10 +26,9 @@ def render_gaussians(
     camera_params=camera_params, margin_pixels=margin_tiles * tile_size
   )
 
-
   culled:Gaussians3D = gaussians[point_mask]
   gaussians2d, depths = project_to_image(culled, camera_params)
-
+  
   overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
     image_size=camera_params.image_size, tile_size=tile_size)
   

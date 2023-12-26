@@ -3,7 +3,7 @@ from taichi.math import vec3, mat4
 import torch
 
 from taichi_splatting.data_types import CameraParams
-from taichi_splatting.ti.projection import point_to_image
+from taichi_splatting.taichi_funcs.projection import point_to_image
 
 
 
@@ -38,7 +38,7 @@ def frustum_culling(pointcloud: torch.Tensor, camera_params: CameraParams, margi
 
   frustum_culling_kernel(
     pointcloud=pointcloud.contiguous(),
-    T_image_world=camera_params.T_image_world,
+    T_image_world=camera_params.T_image_world.unsqueeze(0),
     output_mask=mask,
 
     near_plane=camera_params.near_plane,

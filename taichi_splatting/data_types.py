@@ -7,8 +7,7 @@ from tensordict import tensorclass
 import torch
 
 from taichi.math import vec2, vec3, vec4
-
-from taichi_splatting.ti.conversions import sigmoid, struct_size
+from taichi_splatting.taichi_funcs.conversions import sigmoid, struct_size
 
 
 @tensorclass
@@ -19,9 +18,23 @@ class Gaussians3D():
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
   feature      : torch.Tensor # N  - (any rgb, spherical harmonics etc)
 
+  def __post_init__(self):
+    assert self.position.shape[1] == 3, f"Expected shape (N, 3), got {self.position.shape}"
+    assert self.log_scaling.shape[1] == 3, f"Expected shape (N, 3), got {self.log_scaling.shape}"
+    assert self.rotation.shape[1] == 4, f"Expected shape (N, 4), got {self.rotation.shape}"
+    assert self.alpha_logit.shape[1] == 1, f"Expected shape (N, 1), got {self.alpha_logit.shape}"
+
+
   def pack_gaussian3d(self):
     return torch.cat([self.position, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
 
+  @property
+  def scale(self):
+    return torch.exp(self.log_scaling)
+
+  @property
+  def alpha(self):
+    return torch.sigmoid(self.alpha_logit)
 
 @tensorclass
 class Gaussians2D():
@@ -39,8 +52,8 @@ class Gaussians2D():
 @beartype
 @dataclass
 class CameraParams:
-  T_image_camera: torch.Tensor # (1, 3, 3) camera projection matrix
-  T_camera_world  : torch.Tensor # (1, 4, 4) camera view matrix
+  T_image_camera: torch.Tensor # (3, 3) camera projection matrix
+  T_camera_world  : torch.Tensor # (4, 4) camera view matrix
 
   @property
   def T_image_world(self):
@@ -49,14 +62,23 @@ class CameraParams:
 
     return T_image_camera @ self.T_camera_world
 
-
   near_plane: float
   far_plane: float
   image_size: Tuple[Integral, Integral]
 
+
+  def to(self, device=torch.device("cuda:0")):
+    return CameraParams(
+      T_image_camera=self.T_image_camera.to(device=device),
+      T_camera_world=self.T_camera_world.to(device=device),
+      near_plane=self.near_plane,
+      far_plane=self.far_plane,
+      image_size=self.image_size
+    )
+
   def __post_init__(self):
-    assert self.T_image_camera.shape == (1, 3, 3), f"Expected shape (1, 3, 3), got {self.T_image_camera.shape}"
-    assert self.T_camera_world.shape == (1, 4, 4), f"Expected shape (1, 4, 4), got {self.T_camera_world.shape}"
+    assert self.T_image_camera.shape == (3, 3), f"Expected shape (3, 3), got {self.T_image_camera.shape}"
+    assert self.T_camera_world.shape == (4, 4), f"Expected shape (4, 4), got {self.T_camera_world.shape}"
 
     assert len(self.image_size) == 2
     assert self.near_plane > 0

@@ -6,7 +6,7 @@ from taichi.math import ivec2
 
 
 from taichi_splatting.data_types import Gaussian2D
-from taichi_splatting.ti.covariance import conic_pdf, isfin
+from taichi_splatting.taichi_funcs.covariance import conic_pdf, isfin
 
 @dataclass(frozen=True)
 class Config:

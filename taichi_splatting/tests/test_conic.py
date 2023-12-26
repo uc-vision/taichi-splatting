@@ -3,8 +3,8 @@ import torch
 import taichi as ti
 from taichi.math import vec2, vec3
 
-from taichi_splatting.ti.covariance import conic_pdf_with_grad, conic_pdf
-from taichi_splatting.tests.util import eval_with_grad
+from taichi_splatting.taichi_funcs.covariance import conic_pdf_with_grad, conic_pdf
+from taichi_splatting.tests.util import compare_with_grad
 
 import warnings
 warnings.filterwarnings('ignore') 
@@ -13,7 +13,8 @@ warnings.filterwarnings('ignore')
 ti.init(debug=True)
 
 def torch_conic_pdf(xy:torch.Tensor, uv:torch.Tensor, uv_conic:torch.Tensor) -> torch.Tensor:
-    dx, dy = (xy - uv).T
+    # detach gradient as the taichi code doesn't generate gradients for xy
+    dx, dy = (xy.detach() - uv).T
     a, b, c = uv_conic.T
     return torch.exp(-0.5 * (dx**2 * a + dy**2 * c) - dx * dy * b)
 
@@ -76,19 +77,9 @@ def random_inputs(seed, n, device='cpu'):
     return (uv + dx), uv, conic.exp()
 
 
-def test_conic_grad( device='cpu'):
-    xy, uv, uv_conic = random_inputs(0, 1000, device=device)
-
-    out1, grads1 = eval_with_grad(torch_conic_pdf, xy, uv, uv_conic)
-    out2, grads2 = eval_with_grad(ConicPdf.apply, xy, uv, uv_conic)
-
-    assert torch.allclose(out1, out2, atol=1e-5), "out1 != out2"
-    for grad1, grad2 in zip(grads1, grads2):
-        if grad1 is None or grad2 is None:
-            continue
-        
-        assert torch.allclose(grad1, grad2, atol=1e-5), "grad1 != grad2"
+def test_conic():
+  compare_with_grad(ConicPdf.apply, torch_conic_pdf, random_inputs, iters=100)
 
 
 if __name__ == '__main__':
-  test_conic_grad()
+  test_conic()

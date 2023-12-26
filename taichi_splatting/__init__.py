@@ -1,1 +1,1 @@
-from . import culling, renderer, renderer2d, projection, rasterizer, tile_mapper, spherical_harmonics, data_types, ti
+from . import culling, renderer, renderer2d, projection, rasterizer, tile_mapper, spherical_harmonics, data_types, taichi_funcs

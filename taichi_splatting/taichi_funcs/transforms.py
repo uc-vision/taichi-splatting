@@ -99,3 +99,4 @@ def quat_rotate(q: ti.math.vec4, v: ti.math.vec3) -> ti.math.vec3:
     qv = ti.math.vec4(*v, 0.0)
     q_rot = quat_mul(q, quat_mul(qv, quat_mul(q)))
     return q_rot.xyz
+
