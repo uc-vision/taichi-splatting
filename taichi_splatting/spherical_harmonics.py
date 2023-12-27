@@ -116,12 +116,15 @@ def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
   vec = ti.types.vector(n=dimension, dtype=ti_dtype)
 
   @ti.kernel    
-  def evaluate_sh_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
-                          dirs:ti.types.ndarray(vec3, ndim=1), 
+  def evaluate_sh_at_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
+                          points:ti.types.ndarray(vec3, ndim=1), 
+                          camera_pos:ti.types.ndarray(ti_dtype, ndim=1),
                           out:ti.types.ndarray(vec, ndim=1)):
       
       for i in range(params.shape[0]):
-          coeffs = rsh_cart(dirs[i])
+          pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
+
+          coeffs = rsh_cart(ti.math.normalize(pos - points[i]))
           params_i = params[i]
 
           for d in ti.static(range(dimension)):
@@ -131,36 +134,37 @@ def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
 
   class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, params:torch.Tensor, dirs:torch.Tensor) -> torch.Tensor:
+    def forward(ctx, params:torch.Tensor, points:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
-        out = torch.zeros(dirs.shape[0], params.shape[1], dtype=dtype, device=params.device)
-        evaluate_sh_kernel(params, dirs, out)
+        out = torch.zeros(points.shape[0], params.shape[1], dtype=dtype, device=params.device)
+        evaluate_sh_at_kernel(params, points, camera_pos, out)
 
-        ctx.save_for_backward(params, dirs, out)
+        ctx.save_for_backward(params, points, camera_pos, out)
         return out
 
     @staticmethod
     def backward(ctx, doutput):
-        params, dirs, out = ctx.saved_tensors
+        params, points, camera_pos, out = ctx.saved_tensors
 
-        with restore_grad(params, dirs, out):
+        with restore_grad(params, points, camera_pos, out):
           out.grad = doutput.contiguous()
-          evaluate_sh_kernel.grad(params, dirs, out)
+          evaluate_sh_at_kernel.grad(params, points, camera_pos, out)
 
-          return params.grad, dirs.grad
+          return params.grad, points.grad, camera_pos.grad
         
   return _module_function
 
 
 @beartype
-def evaluate_sh(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
-                dirs:torch.Tensor     # N, 3
+def evaluate_sh_at(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
+                points:torch.Tensor,     # N, 3
+                camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
     degree = check_sh_degree(params)
 
     _module_function = sh_function(degree=degree, 
                                    dimension=params.shape[1], dtype=params.dtype)
-    return _module_function.apply(params.contiguous(), dirs.contiguous())
+    return _module_function.apply(params.contiguous(), points.contiguous(), camera_pos.contiguous())
 
 
 

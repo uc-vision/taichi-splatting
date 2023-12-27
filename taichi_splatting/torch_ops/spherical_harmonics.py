@@ -27,7 +27,16 @@ def evaluate_sh(params:torch.Tensor,  # N, K, D where D = (degree + 1)^2
   return torch.einsum('nd,nkd->nk', coeffs, params)
 
 
+@beartype
+def evaluate_sh_at(params:torch.Tensor,  # N, K, D where D = (degree + 1)^2
+                points:torch.Tensor,     # N, 3
+                camera_pos:torch.Tensor # 3
+                ) -> torch.Tensor:    # N, K
 
+  dirs = camera_pos.unsqueeze(0) - points
+  dirs = torch.nn.functional.normalize(dirs, dim=1)
+ 
+  return evaluate_sh(params, dirs)
 
 if __name__ == "__main__":
     dimension = 5

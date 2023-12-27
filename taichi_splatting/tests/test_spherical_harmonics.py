@@ -21,19 +21,19 @@ def random_inputs(max_dim=3, max_deg=3, max_n=100, device='cpu', dtype=torch.flo
 
     params = torch.rand(n, dimension, (degree + 1)**2, device=device, dtype=dtype)
 
-    dirs = torch.randn(n, 3, device=device, dtype=dtype)
-    dirs = torch.nn.functional.normalize(dirs, dim=1)
+    points = torch.randn(n, 3, device=device, dtype=dtype)
+    camera_pos = torch.randn(3, device=device, dtype=dtype)
 
-    return (params, dirs)
+    return (params, points, camera_pos)
   return f
 
 def test_sh(iters = 100, device='cpu'):
   make_inputs = random_inputs(max_n=100, device=device, dtype=torch.float32)
   compare_with_grad("spherical_harmonics", 
-    input_names=["params", "dirs"], 
+    input_names=["params", "dirs", "camera_pos"], 
     output_names="out",
-    f1=taichi_sh.evaluate_sh,
-    f2=torch_sh.evaluate_sh,
+    f1=taichi_sh.evaluate_sh_at,
+    f2=torch_sh.evaluate_sh_at,
     gen_inputs=make_inputs,
     iters=iters)
   
@@ -50,7 +50,7 @@ def test_sh_gradcheck(iters = 100, device='cpu'):
   seeds = torch.randint(40, 10000, (iters, ), device=device)
   for seed in tqdm(seeds, desc="spherical_harmonics_gradcheck"):
       inputs = make_inputs(seed)
-      gradcheck(taichi_sh.evaluate_sh, inputs)
+      gradcheck(taichi_sh.evaluate_sh_at, inputs)
 
 if __name__ == '__main__':
   test_sh()
