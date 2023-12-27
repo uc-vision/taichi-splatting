@@ -30,6 +30,3 @@ def struct_size(ti_struct:ti.lang.struct.StructType):
       size += 1
   return int(size)
 
-@ti.func
-def sigmoid(x:ti.f32):
-    return 1. / (1. + ti.exp(-x))

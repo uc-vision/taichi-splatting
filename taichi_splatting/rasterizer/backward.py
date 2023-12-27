@@ -4,10 +4,8 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 
-
-from taichi_splatting.data_types import Gaussian2D
-from taichi_splatting.taichi_funcs.covariance import conic_pdf_with_grad
-
+from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
+ 
 @dataclass(frozen=True)
 class Config:
   tile_size: int = 16

@@ -23,9 +23,9 @@ def eval_with_grad(f, *args):
 
   if isinstance(out, tuple):
     for o in out:
-      loss += o.sum()
+      loss += o.mean()
   else:
-    loss = out.sum()
+    loss = out.mean()
 
   loss.backward()
 
@@ -46,7 +46,7 @@ def allclose(test_name, name, a, b, atol=1e-2, rtol=1e-3):
 
 
 def compare_with_grad(test_name, input_names, output_names,
-      f1, f2, gen_inputs, iters=100, device='cpu'):
+      f1, f2, gen_inputs, iters=100):
 
   seeds = torch.randint(0, 10000, (iters, ))
   for seed in tqdm(seeds, desc=test_name):

@@ -2,12 +2,8 @@ from dataclasses import dataclass
 from numbers import Integral
 from typing import Tuple
 from beartype import beartype
-import taichi as ti
 from tensordict import tensorclass
 import torch
-
-from taichi.math import vec2, vec3, vec4
-from taichi_splatting.taichi_funcs.conversions import sigmoid, struct_size
 
 
 @tensorclass
@@ -46,7 +42,10 @@ class Gaussians2D():
   
   feature      : torch.Tensor # N  - (any rgb, label etc)
 
-
+  @staticmethod
+  def unpack_vec(vec):
+    uv, uv_conic, alpha = vec[:, 0:2], vec[:, 2:5], vec[:, 5]
+    return uv, uv_conic, alpha
 
 
 @beartype
@@ -57,7 +56,8 @@ class CameraParams:
 
   @property
   def T_image_world(self):
-    T_image_camera = torch.eye(4, device=self.T_image_camera.device, dtype=torch.float32)
+    T_image_camera = torch.eye(4, 
+      device=self.T_image_camera.device, dtype=self.T_image_camera.dtype)
     T_image_camera[0:3, 0:3] = self.T_image_camera
 
     return T_image_camera @ self.T_camera_world
@@ -66,11 +66,24 @@ class CameraParams:
   far_plane: float
   image_size: Tuple[Integral, Integral]
 
+  def __repr__(self):
+    w, h = self.image_size
+    fx, fy = self.T_image_camera[0, 0], self.T_image_camera[1, 1]
+    cx, cy = self.T_image_camera[0, 2], self.T_image_camera[1, 2]
 
-  def to(self, device=torch.device("cuda:0")):
+    pos_str = ", ".join([f"{x:.3f}" for x in self.camera_position])
+    return f"CameraParams({w}x{h}, fx={fx:.4f}, fy={fy:.4f}, cx={cx:.4f}, cy={cy:.4f}, clipping={self.near_plane:.4f}-{self.far_plane:.4f}, position=({pos_str})"
+  
+
+  @property
+  def camera_position(self):
+    T_world_camera = torch.inverse(self.T_camera_world)
+    return T_world_camera[0:3, 3]
+
+  def to(self, device=None, dtype=None):
     return CameraParams(
-      T_image_camera=self.T_image_camera.to(device=device),
-      T_camera_world=self.T_camera_world.to(device=device),
+      T_image_camera=self.T_image_camera.to(device=device, dtype=dtype),
+      T_camera_world=self.T_camera_world.to(device=device, dtype=dtype),
       near_plane=self.near_plane,
       far_plane=self.far_plane,
       image_size=self.image_size
@@ -85,81 +98,4 @@ class CameraParams:
     assert self.far_plane > self.near_plane
 
 
-
-@ti.dataclass
-class Gaussian2D:
-    uv        : vec2
-    uv_conic  : vec3
-    alpha   : ti.f32
-
-
-
-@ti.dataclass
-class Gaussian3D:
-    position   : vec3
-    log_scaling : vec3
-    rotation    : vec4
-    alpha_logit : ti.f32
-
-    @ti.func
-    def alpha(self):
-      return sigmoid(self.alpha_logit)
-
-    @ti.func
-    def scale(self):
-        return ti.math.exp(self.log_scaling)
-
-
-vec_g2d = ti.types.vector(struct_size(Gaussian2D), dtype=ti.f32)
-vec_g3d = ti.types.vector(struct_size(Gaussian3D), dtype=ti.f32)
-
-
-@ti.func
-def to_vec_g2d(uv:vec2, uv_conic:vec3, alpha:ti.f32) -> vec_g2d:
-  return vec_g2d(*uv, *uv_conic, alpha)
-
-@ti.func
-def to_vec_g3d(position:vec3, log_scaling:vec3, rotation:vec4, alpha_logit:ti.f32) -> vec_g3d:
-  return vec_g3d(*position, *log_scaling, *rotation, alpha_logit)
-
-
-@ti.func
-def unpack_vec_g3d(vec:vec_g3d) -> Gaussian3D:
-  return vec[0:3], vec[3:6], vec[6:10], vec[10]
-
-@ti.func
-def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
-  return vec[0:2], vec[2:5], vec[5]
-
-
-
-@ti.func
-def from_vec_g3d(vec:vec_g3d) -> Gaussian3D:
-  return Gaussian3D(vec[0:3], vec[3:6], vec[6:10], vec[10])
-
-@ti.func
-def from_vec_g2d(vec:vec_g2d) -> Gaussian2D:
-  return Gaussian2D(vec[0:2], vec[2:5], vec[5])
-
-def unpack_g2d_torch(vec:torch.Tensor):
-  uv, uv_conic, alpha = vec[:, 0:2], vec[:, 2:5], vec[:, 5]
-  return uv, uv_conic, alpha
-
-@ti.func
-def unpack_activate_g3d(vec:vec_g3d):
-  position, log_scaling, rotation, alpha_logit = unpack_vec_g3d(vec)
-  return position, ti.exp(log_scaling), ti.math.normalize(rotation), sigmoid(alpha_logit)
-
-# Taichi structs don't have static methods, but they can be added afterward
-Gaussian2D.vec = vec_g2d
-Gaussian2D.to_vec = to_vec_g2d
-Gaussian2D.from_vec = from_vec_g2d
-Gaussian2D.unpack = unpack_vec_g2d
-
-
-Gaussian3D.vec = vec_g3d
-Gaussian3D.to_vec = to_vec_g3d
-Gaussian3D.from_vec = from_vec_g3d
-Gaussian3D.unpack = unpack_vec_g3d
-Gaussian3D.unpack_activate = unpack_activate_g3d
 

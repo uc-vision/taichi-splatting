@@ -3,9 +3,9 @@ from taichi.math import vec3, mat4
 import torch
 
 from taichi_splatting.data_types import CameraParams
-from taichi_splatting.taichi_funcs.projection import point_to_image
+from taichi_splatting.taichi_lib.f32 import point_to_image
 
-
+ 
 
 @ti.kernel
 def frustum_culling_kernel(

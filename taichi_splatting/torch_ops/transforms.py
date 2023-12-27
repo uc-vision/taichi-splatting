@@ -30,7 +30,7 @@ def join_rt(r, t):
 def make_homog(points):
   shape = list(points.shape)
   shape[-1] = 1
-  return torch.concatenate([points, torch.ones(shape, dtype=torch.float32, device=points.device)], axis=-1)
+  return torch.concatenate([points, torch.ones(shape, dtype=points.dtype, device=points.device)], axis=-1)
 
 def transform44(transform, points):
 

@@ -5,7 +5,7 @@ import taichi as ti
 import torch
 
 from taichi_splatting.autograd import restore_grad
-from taichi_splatting.taichi_funcs.conversions import torch_taichi
+from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics

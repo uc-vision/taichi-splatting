@@ -22,6 +22,14 @@ Examples:
 * Clone down with `git clone` and install with `pip install ./taichi-spatting`
 * `pip install taichi-splatting`
 
+
+## Conventions
+
+### Transformation matrices
+
+Transformations are notated `T_x_y`, for example `T_camera_world` can be used to transform points in the world to points in the local camera by `points_camera = T_camera_world @ points_world`
+
+
 ## Progress
 
 ### Done

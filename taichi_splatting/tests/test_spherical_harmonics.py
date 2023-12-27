@@ -29,10 +29,15 @@ def random_inputs(max_dim=3, max_deg=3, max_n=100, device='cpu', dtype=torch.flo
 
 def test_sh(iters = 100, device='cpu'):
   make_inputs = random_inputs(max_n=100, device=device, dtype=torch.float32)
+  compare_with_grad("spherical_harmonics", 
+    input_names=["params", "dirs"], 
+    output_names="out",
+    f1=taichi_sh.evaluate_sh,
+    f2=torch_sh.evaluate_sh,
+    gen_inputs=make_inputs,
+    iters=iters)
+  
 
-  compare_with_grad("sphereical_harmonics", "outputs", ["params", "dirs"],
-     torch_sh.evaluate_sh, taichi_sh.evaluate_sh, 
-                    make_inputs, iters=iters, device=device)
 
 
 def gradcheck(func, args, **kwargs):

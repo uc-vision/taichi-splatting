@@ -4,9 +4,7 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 
-
-from taichi_splatting.data_types import Gaussian2D
-from taichi_splatting.taichi_funcs.covariance import conic_pdf, isfin
+from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
 
 @dataclass(frozen=True)
 class Config:
