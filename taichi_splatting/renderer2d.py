@@ -5,7 +5,7 @@ import torch
 import math
 from taichi_splatting.data_types import Gaussians2D
 
-from taichi_splatting.tile_mapper import map_to_tiles
+from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
 from taichi_splatting.rasterizer import rasterize, Config
 
 
@@ -27,11 +27,6 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
     return torch.cat([points.position, conic, alpha.unsqueeze(1)], dim=-1)  
     
 
-def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
-  def pad(x):
-    return int(math.ceil(x / tile_size) * tile_size)
- 
-  return tuple(pad(x) for x in image_size)
 
 
 

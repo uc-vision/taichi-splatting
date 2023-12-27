@@ -53,7 +53,7 @@ def optimizer(gaussians: Gaussians2D, base_lr=1.0):
 
   learning_rates = dict(
     position=0.01,
-    log_scaling=0.01,
+    log_scaling=0.025,
     rotation=0.01,
     alpha_logit=0.2,
     feature=0.01

@@ -24,7 +24,8 @@ def evaluate_sh(params:torch.Tensor,  # N, K, D where D = (degree + 1)^2
   rsh_cart = rsh_cart_n[degree]
   coeffs = rsh_cart(dirs) # N, D
  
-  return torch.einsum('nd,nkd->nk', coeffs, params)
+  out = torch.einsum('nd,nkd->nk', coeffs, params)
+  return torch.clamp(out + 0.5, 0., 1.)
 
 
 @beartype

@@ -1,4 +1,5 @@
 from functools import cache
+import math
 from numbers import Integral
 from typing import Tuple
 from beartype import beartype
@@ -11,6 +12,12 @@ from taichi_splatting.taichi_lib.f32 import (
   Gaussian2D, conic_to_cov, cov_inv_basis, radii_from_cov, separates_bbox)
 
 from taichi.math import ivec4, vec2
+
+def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
+  def pad(x):
+    return int(math.ceil(x / tile_size) * tile_size)
+ 
+  return tuple(pad(x) for x in image_size)
 
 
 @cache
@@ -191,6 +198,7 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
     
   return f
 
+
 @beartype
 def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor, 
                  image_size:Tuple[Integral, Integral], tile_size:int=16
@@ -206,6 +214,8 @@ def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor,
      overlap_to_point: (K, ) torch tensor, where K is the number of overlaps, maps overlap index to point index
      tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
+  w, h = image_size
+  assert w % tile_size == 0 and h % tile_size == 0, f"image size ({w}x{h}) is not divisible by tile size {tile_size}"
   
   mapper = tile_mapper(tile_size=tile_size)
   return mapper(gaussians, depths, image_size)

@@ -128,7 +128,8 @@ def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
           params_i = params[i]
 
           for d in ti.static(range(dimension)):
-              out[i][d] = coeffs.dot(params_i[d, :])
+              out[i][d] = ti.math.clamp(
+                 0.5 + coeffs.dot(params_i[d, :]), 0, 1)
 
 
 
