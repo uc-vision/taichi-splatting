@@ -34,9 +34,6 @@ def render_gaussians(
       margin_tiles: int = 3
     ):
   
-  for k, v in asdict(camera_params).items():
-    if isinstance (v, torch.Tensor):
-      print(v.dtype)
   
   gaussians = cull_gaussians(gaussians, camera_params, tile_size, margin_tiles)
   gaussians2d, depths = project_to_image(gaussians, camera_params)
