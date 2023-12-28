@@ -96,7 +96,7 @@ def forward_kernel(config: Config, feature_size: int):
 
         # in parallel across a block, render all points in the group
         for in_group_idx in range(max_point_group_offset):
-          if pixel_saturated or in_group_idx >= max_point_group_offset:
+          if pixel_saturated:
             break
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
