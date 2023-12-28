@@ -44,6 +44,7 @@ def parse_args():
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--n', type=int, default=20000)
+  parser.add_argument('--debug', action='store_true')
   
 
   return parser.parse_args()
@@ -52,9 +53,9 @@ def parse_args():
 def optimizer(gaussians: Gaussians2D, base_lr=1.0):
 
   learning_rates = dict(
-    position=0.01,
+    position=0.1,
     log_scaling=0.025,
-    rotation=0.01,
+    rotation=0.005,
     alpha_logit=0.2,
     feature=0.01
   )
@@ -82,12 +83,13 @@ def display_image(image):
 
 
 def main():
-  ti.init(arch=ti.cuda, log_level=ti.INFO)
   device = torch.device('cuda:0')
 
   args = parse_args()
   ref_image = cv2.imread(args.image_file)
   h, w = ref_image.shape[:2]
+
+  ti.init(arch=ti.cuda, log_level=ti.INFO, debug=args.debug)
 
   print(f'Image size: {w}x{h}')
   cv2.namedWindow('rendered', cv2.WINDOW_FULLSCREEN)
@@ -110,6 +112,10 @@ def main():
 
     check_finite(params)
     opt.step()
+
+    with torch.no_grad():
+      params.log_scaling.clamp_(min=-1, max=6)
+  
 
     display_image(image)
     

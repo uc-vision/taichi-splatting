@@ -4,10 +4,10 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 
 This work is largely derived off [Taichi 3D Gaussian Splatting](https://github.com/wanmeihuali/taichi_3d_gaussian_splatting)
 
-Key differences are the rendering algorithm is decomposed into separate operations (projection, shading functions, tile mapping and rasterization) which can be combined in different ways in order to facilitate a more flexible use. Using the Taichi autodiff for a simpler implementation. 
+Key differences are the rendering algorithm is decomposed into separate operations (projection, shading functions, tile mapping and rasterization) which can be combined in different ways in order to facilitate a more flexible use. Using the Taichi autodiff for a simpler implementation where possible. 
 
 Examples:
-  * Projecting features for lifting 2D to 3D,
+  * Projecting features for lifting 2D to 3D
   * Colours via. spherical harmonics
   * Depth covariance without needing to build it into the renderer and remaining differentiable.
   * Fully differentiable camera parameters (and ability to swap in new camera models)
@@ -23,26 +23,21 @@ Examples:
 * `pip install taichi-splatting`
 
 
-## Conventions
-
-### Transformation matrices
-
-Transformations are notated `T_x_y`, for example `T_camera_world` can be used to transform points in the world to points in the local camera by `points_camera = T_camera_world @ points_world`
-
-
 ## Progress
 
 ### Done
 * Simple view culling 
-* Projection (no gradient yet)
+* Projection with autograd
 * Tile mapping 
 * Rasterizer forward pass
 * Spherical harmonics with autograd
+* Gradient tests for most parts (float64)
+* Fit to image training example/test
 
 ### Todo
-* Port rasterizer backward pass
-* Projection autograd wrapper
-* Training code (likely different repository)
+
+* 3D training code (likely different repository)
+* 3D viewer (extract from private codebase)
 
 ### Improvements
 
@@ -52,5 +47,9 @@ Transformations are notated `T_x_y`, for example `T_camera_world` can be used to
 * All configuration parameters exposed (e.g. tile_size, saturation threshold etc.)
 
 
+## Conventions
 
+### Transformation matrices
+
+Transformations are notated `T_x_y`, for example `T_camera_world` can be used to transform points in the world to points in the local camera by `points_camera = T_camera_world @ points_world`
 

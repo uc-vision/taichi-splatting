@@ -1,4 +1,5 @@
 
+from dataclasses import asdict
 from numbers import Integral
 from typing import Tuple
 import torch
@@ -11,28 +12,31 @@ from taichi_splatting.rasterizer import rasterize, Config
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
 
-
 def render_sh_gaussians(
   gaussians: Gaussians3D,
   camera_params: CameraParams,
   tile_size: int = 16,
   margin_tiles: int = 3
 ):
-
+      
   gaussians = cull_gaussians(gaussians, camera_params, tile_size, margin_tiles)
-  features = evaluate_sh_at(gaussians.position, gaussians.feature, camera_params.camera_position)
+  features = evaluate_sh_at(gaussians.feature, gaussians.position, camera_params.camera_position)
   gaussians2d, depths = project_to_image(gaussians, camera_params)
 
   return _render_with_features(gaussians2d, depths, features,
     image_size=camera_params.image_size, tile_size=tile_size)
 
 
-def render_feature_gaussians(
+def render_gaussians(
       gaussians: Gaussians3D,
       camera_params: CameraParams,
       tile_size: int = 16,
       margin_tiles: int = 3
     ):
+  
+  for k, v in asdict(camera_params).items():
+    if isinstance (v, torch.Tensor):
+      print(v.dtype)
   
   gaussians = cull_gaussians(gaussians, camera_params, tile_size, margin_tiles)
   gaussians2d, depths = project_to_image(gaussians, camera_params)
@@ -58,9 +62,11 @@ def _render_with_features(gaussians2d:torch.Tensor, depths:torch.Tensor,
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=padded_size, config=raster_config)
 
+
   # crop back to orginal size
   w, h = image_size
   image = image[:h, :w]
+  
 
   return image[..., :n], image[..., n]
 

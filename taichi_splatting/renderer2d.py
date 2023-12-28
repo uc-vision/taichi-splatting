@@ -2,12 +2,10 @@
 from numbers import Integral
 from typing import Tuple
 import torch
-import math
 from taichi_splatting.data_types import Gaussians2D
 
 from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
 from taichi_splatting.rasterizer import rasterize, Config
-
 
 
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
@@ -27,17 +25,12 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
     return torch.cat([points.position, conic, alpha.unsqueeze(1)], dim=-1)  
     
 
-
-
-
-
 def render_gaussians(
       gaussians: Gaussians2D,
       image_size: Tuple[Integral, Integral],
       tile_size: int = 16
     ):
   
-
   gaussians2d = project_gaussians2d(gaussians)
   padded_size = pad_to_tile(image_size, tile_size)
 

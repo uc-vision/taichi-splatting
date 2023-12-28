@@ -11,6 +11,8 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 # https://github.com/cheind/torch-spherical-harmonics
 
 def check_sh_degree(sh_features):
+  assert len(sh_features.shape) == 3, f"SH features must have 3 dimensions, got {sh_features.shape}"
+
   n_sh = sh_features.shape[2]
   n = int(math.sqrt(n_sh))
 
