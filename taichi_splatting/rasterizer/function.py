@@ -2,7 +2,7 @@ from functools import cache
 
 from taichi_splatting.autograd import restore_grad
 
-from .forward import Config, forward_kernel
+from .forward import RasterConfig, forward_kernel
 from .backward import backward_kernel
 
 from numbers import Integral
@@ -12,7 +12,7 @@ import torch
 from beartype import beartype
 
 @cache
-def render_function(config:Config, num_features:int):
+def render_function(config:RasterConfig, num_features:int):
   forward = forward_kernel(config, num_features)
   backward = backward_kernel(config, num_features)
 
@@ -39,13 +39,13 @@ def render_function(config:Config, num_features:int):
       ctx.image_last_valid = image_last_valid
       ctx.image_alpha = image_alpha
 
-      ctx.save_for_backward(gaussians, features, 
-                            image_feature)
-      
-      return image_feature
+      ctx.mark_non_differentiable(image_alpha, image_last_valid)
+      ctx.save_for_backward(gaussians, features, image_feature)
+            
+      return image_feature, image_alpha
 
     @staticmethod
-    def backward(ctx, grad_image_feature:torch.Tensor):
+    def backward(ctx, grad_image_feature:torch.Tensor, grad_alpha:torch.Tensor):
         gaussians, features, image_feature = ctx.saved_tensors
 
         grad_gaussians = torch.zeros_like(gaussians)
@@ -56,19 +56,23 @@ def render_function(config:Config, num_features:int):
           backward(gaussians, features, 
             ctx.tile_overlap_ranges, ctx.overlap_to_point,
             image_feature, ctx.image_alpha, ctx.image_last_valid,
-            grad_image_feature,
+            grad_image_feature.contiguous(),
             grad_gaussians, grad_features)
 
           return grad_gaussians, grad_features, None, None, None, None
   return _module_function
 
+
+
+
+
 @beartype
 def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
               overlap_to_point: torch.Tensor, tile_overlap_ranges: torch.Tensor,
-              image_size: Tuple[Integral, Integral], config: Config
-              ) -> torch.Tensor:
+              image_size: Tuple[Integral, Integral], config: RasterConfig
+              ) -> Tuple[torch.Tensor, torch.Tensor]:
   """
-  Paraeters:
+  Parameters:
       gaussians: (N, 6)  packed gaussians, N is the number of gaussians
       features: (N, F)   features, F is the number of features
 
@@ -82,6 +86,7 @@ def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
 
     Returns:
       image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
+      alpha: (H, W) torch tensor, where H, W are the image height and width
   """
   _module_function = render_function(config, features.shape[1])
 

@@ -87,6 +87,7 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
       counts: ti.types.ndarray(ti.i32, ndim=1),
   ):
 
+      counts[0] = 0
       for idx in range(gaussians.shape[0]):
           query = grid_query(gaussians[idx], image_size)
           inside = 0
@@ -153,8 +154,8 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
   def sort_tile_depths(depths:torch.Tensor, tile_overlap_ranges:torch.Tensor, cum_overlap_counts:torch.Tensor, total_overlap:int, image_size):
 
-    overlap_key = torch.zeros((total_overlap, ), dtype=torch.int64, device=cum_overlap_counts.device)
-    overlap_to_point = torch.zeros((total_overlap, ), dtype=torch.int32, device=cum_overlap_counts.device)
+    overlap_key = torch.empty((total_overlap, ), dtype=torch.int64, device=cum_overlap_counts.device)
+    overlap_to_point = torch.empty((total_overlap, ), dtype=torch.int32, device=cum_overlap_counts.device)
 
     generate_sort_keys_kernel(depths, tile_overlap_ranges, cum_overlap_counts, image_size,
                               overlap_key, overlap_to_point)
@@ -167,7 +168,7 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
 
   def generate_tile_overlaps(gaussians, image_size):
-    overlap_counts = torch.zeros( (1 + gaussians.shape[0], ), dtype=torch.int32, device=gaussians.device)
+    overlap_counts = torch.empty( (1 + gaussians.shape[0], ), dtype=torch.int32, device=gaussians.device)
 
     tile_overlaps_kernel(gaussians, ivec2(image_size), overlap_counts)
 
@@ -183,7 +184,7 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
        gaussians, image_size)
     
     num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
-    tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
+    tile_ranges = torch.empty((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
 
     if total_overlap > 0:
       overlap_key, overlap_to_point = sort_tile_depths(
@@ -192,7 +193,7 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
       find_ranges_kernel(overlap_key, tile_ranges)
     else:
-      overlap_to_point = torch.zeros((0, ), dtype=torch.int32, device=gaussians.device)
+      overlap_to_point = torch.empty((0, ), dtype=torch.int32, device=gaussians.device)
 
     return overlap_to_point, tile_ranges
     

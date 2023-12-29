@@ -5,6 +5,7 @@ import torch
 
 
 torch_taichi = {
+    torch.float16: ti.f16,
     torch.float32: ti.f32,
     torch.float64: ti.f64,
     torch.int32: ti.i32,

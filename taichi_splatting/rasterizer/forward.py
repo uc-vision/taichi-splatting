@@ -7,7 +7,7 @@ from taichi.math import ivec2
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
 
 @dataclass(frozen=True)
-class Config:
+class RasterConfig:
   tile_size: int = 16
   clamp_max_alpha: float = 0.99
   alpha_threshold: float = 1. / 255.
@@ -15,10 +15,12 @@ class Config:
 
 
 @cache
-def forward_kernel(config: Config, feature_size: int):
+def forward_kernel(config: RasterConfig, feature_size: int):
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
+  tile_area = tile_size * tile_size
+
 
   @ti.kernel
   def _forward_kernel(
@@ -38,8 +40,6 @@ def forward_kernel(config: Config, feature_size: int):
   ):
 
     camera_height, camera_width = image_feature.shape
-
-    tile_area = ti.static(tile_size * tile_size)
     tiles_wide, tiles_high = camera_width // tile_size, camera_height // tile_size
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
@@ -114,7 +114,7 @@ def forward_kernel(config: Config, feature_size: int):
           # pass, we compute the accumulated opacity if we were to include it
           # and stop front-to-back blending before it can exceed 0.9999.
           next_T_i = T_i * (1 - alpha)
-          if next_T_i < ti.static(1 - ti.static(config.saturate_threshold)):
+          if next_T_i < ti.static(1 - config.saturate_threshold):
             pixel_saturated = True
             continue  # somehow faster than directly breaking
           last_point_idx = group_start_offset + in_group_idx + 1

@@ -8,7 +8,7 @@ from taichi_splatting.culling import CameraParams, frustum_culling
 from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
 from taichi_splatting.projection import project_to_image
-from taichi_splatting.rasterizer import rasterize, Config
+from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
 
@@ -54,8 +54,8 @@ def _render_with_features(gaussians2d:torch.Tensor, depths:torch.Tensor,
   n = features.shape[1]
   features_depth=torch.cat([features, depths.unsqueeze(1)], dim=1) 
 
-  raster_config = Config(tile_size=tile_size)
-  image = rasterize(gaussians=gaussians2d, features=features_depth, 
+  raster_config = RasterConfig(tile_size=tile_size)
+  image, alpha = rasterize(gaussians=gaussians2d, features=features_depth, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=padded_size, config=raster_config)
 

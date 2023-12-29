@@ -1,2 +1,2 @@
-from .forward import Config, forward_kernel
+from .forward import RasterConfig, forward_kernel
 from .function import rasterize

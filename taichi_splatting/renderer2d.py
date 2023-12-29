@@ -5,7 +5,7 @@ import torch
 from taichi_splatting.data_types import Gaussians2D
 
 from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
-from taichi_splatting.rasterizer import rasterize, Config
+from taichi_splatting.rasterizer import rasterize, RasterConfig
 
 
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
@@ -37,9 +37,9 @@ def render_gaussians(
   overlap_to_point, ranges = map_to_tiles(gaussians2d, gaussians.depth, 
     image_size=padded_size, tile_size=tile_size)
   
-  raster_config = Config(tile_size=tile_size)
+  raster_config = RasterConfig(tile_size=tile_size)
 
-  image = rasterize(gaussians=gaussians2d, features=gaussians.feature, 
+  image, alpha = rasterize(gaussians=gaussians2d, features=gaussians.feature, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=padded_size, config=raster_config)
   

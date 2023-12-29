@@ -11,21 +11,23 @@ import taichi as ti
 from taichi_splatting.torch_ops.projection import inverse_sigmoid
 from taichi_splatting.torch_ops.util import check_finite
 
+import time
 
-def random_2d_gaussians(n, image_size, seed=0):
+def random_2d_gaussians(n, image_size, scale_factor=0.5, alpha_range=(0.1, 0.6)):
+  
   w, h = image_size
-  scale = 0.5 * w / math.sqrt(n) 
 
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
   depth = torch.rand(n)  
   
-  # scaling = torch.full_like(position, scale)
-  scaling = (torch.rand(n, 2) + 0.5) * scale 
+  density_scale = scale_factor * w / math.sqrt(n) 
+  scaling = (torch.rand(n, 2) + 0.2) * density_scale 
 
   rotation = torch.randn(n, 2) 
   rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)
 
-  alpha = torch.rand(n) * 0.5 + 0.1
+  low, high = alpha_range
+  alpha = torch.rand(n) * (high - low) + low
 
   return Gaussians2D(
     position=position,
@@ -34,7 +36,6 @@ def random_2d_gaussians(n, image_size, seed=0):
     rotation=rotation,
     alpha_logit=inverse_sigmoid(alpha),
     feature=torch.rand(n, 3),
-
     batch_size=(n,)
   )
 
@@ -45,6 +46,9 @@ def parse_args():
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--n', type=int, default=20000)
   parser.add_argument('--debug', action='store_true')
+  parser.add_argument('--show', action='store_true')
+  parser.add_argument('--profile', action='store_true')
+  parser.add_argument('--epoch', type=int, default=100, help='Number of iterations per measurement/profiling')
   
 
   return parser.parse_args()
@@ -86,13 +90,17 @@ def main():
   device = torch.device('cuda:0')
 
   args = parse_args()
+  
   ref_image = cv2.imread(args.image_file)
   h, w = ref_image.shape[:2]
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, debug=args.debug)
+  ti.init(arch=ti.cuda, log_level=ti.INFO, 
+          debug=args.debug, device_memory_GB=0.1, kernel_profiler=args.profile)
 
   print(f'Image size: {w}x{h}')
-  cv2.namedWindow('rendered', cv2.WINDOW_FULLSCREEN)
+
+  if args.show:
+    cv2.namedWindow('rendered', cv2.WINDOW_FULLSCREEN)
 
   torch.manual_seed(args.seed)
 
@@ -101,24 +109,37 @@ def main():
 
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
 
+
+
   while True:
-  
-    opt.zero_grad()
+    if args.profile:
+      ti.profiler.clear_kernel_profiler_info()
 
-    image = render_gaussians(params, (w, h), tile_size=args.tile_size)
-    loss = torch.nn.functional.l1_loss(image, ref_image) 
+    start = time.time()
+
+    for _ in range(args.epoch):
+      opt.zero_grad()
+
+      image = render_gaussians(params, (w, h), tile_size=args.tile_size)
+      loss = torch.nn.functional.l1_loss(image, ref_image) 
+      
+      loss.backward()
+
+      check_finite(params)
+      opt.step()
+
+      with torch.no_grad():
+        params.log_scaling.clamp_(min=-1, max=6)
     
-    loss.backward()
+      if args.show:
+        display_image(image)
+      
+    end = time.time()
 
-    check_finite(params)
-    opt.step()
+    print(f'{args.epoch} iterations: {end - start:.3f}s at {args.epoch / (end - start):.1f} iters/sec')
 
-    with torch.no_grad():
-      params.log_scaling.clamp_(min=-1, max=6)
-  
-
-    display_image(image)
-    
+    if args.profile:
+      ti.profiler.print_kernel_profiler_info("count")
   
 
 if __name__ == '__main__':
