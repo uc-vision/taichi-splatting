@@ -1,24 +1,17 @@
 
-from dataclasses import dataclass
 from functools import cache
 import taichi as ti
 from taichi.math import ivec2
+from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
  
-@dataclass(frozen=True)
-class Config:
-  tile_size: int = 16
-  clamp_max_alpha: float = 0.99
-  alpha_threshold: float = 1. / 255.
-  saturate_threshold: float = 0.9999
-
-
-
-
 
 @cache
-def backward_kernel(config: Config, feature_size: int):
+def backward_kernel(config: RasterConfig,
+                    points_requires_grad: bool,
+                    features_requires_grad: bool, 
+                    feature_size: int):
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
@@ -148,20 +141,23 @@ def backward_kernel(config: Config, feature_size: int):
           w_i += feature * alpha * T_i
           alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
 
-          point_grad_feature = alpha * T_i * grad_pixel_feature            
-          grad_point = alpha_grad * Gaussian2D.to_vec(
-              point_alpha * dp_dmean, 
-              point_alpha * dp_dconic,
-              gaussian_alpha)
-
           # alpha_grad * point_alpha is dp
           # (2,) as the paper said, view space gradient is used for detect candidates for densification
 
           # Accumulating gradients in block shared memory does not appear to be faster
           point_offset = overlap_to_point[point_index]
 
-          grad_points[point_offset] += grad_point
-          grad_features[point_offset] += point_grad_feature
+          if ti.static(points_requires_grad):
+            grad_point = alpha_grad * Gaussian2D.to_vec(
+                point_alpha * dp_dmean, 
+                point_alpha * dp_dconic,
+                gaussian_alpha)
+
+            grad_points[point_offset] += grad_point
+          
+          if ti.static(features_requires_grad):
+            point_grad_feature = alpha * T_i * grad_pixel_feature            
+            grad_features[point_offset] += point_grad_feature
 
         # end of point group loop
       # end of point group id loop

@@ -12,9 +12,14 @@ import torch
 from beartype import beartype
 
 @cache
-def render_function(config:RasterConfig, num_features:int):
-  forward = forward_kernel(config, num_features)
-  backward = backward_kernel(config, num_features)
+def render_function(config:RasterConfig,
+                    points_requires_grad:bool,
+                    features_requires_grad:bool, 
+                    feature_size:int):
+    
+  forward = forward_kernel(config, feature_size=feature_size)
+  backward = backward_kernel(config, points_requires_grad,
+                             features_requires_grad, feature_size)
 
   class _module_function(torch.autograd.Function):
     @staticmethod
@@ -51,6 +56,7 @@ def render_function(config:RasterConfig, num_features:int):
         grad_gaussians = torch.zeros_like(gaussians)
         grad_features = torch.zeros_like(features)
 
+  
         with restore_grad(grad_gaussians, grad_features):
 
           backward(gaussians, features, 
@@ -88,7 +94,8 @@ def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
       image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
       alpha: (H, W) torch tensor, where H, W are the image height and width
   """
-  _module_function = render_function(config, features.shape[1])
+  _module_function = render_function(config, gaussians.requires_grad,
+                                      features.requires_grad, features.shape[1])
 
   return _module_function.apply(gaussians, features, 
           overlap_to_point, tile_overlap_ranges, 
