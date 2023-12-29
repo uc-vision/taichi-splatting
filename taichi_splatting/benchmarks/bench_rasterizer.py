@@ -11,7 +11,7 @@ from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
 
 import time
 
-from taichi_splatting.tile_mapper import map_to_tiles
+from taichi_splatting.tile_mapper import map_to_tiles, TileConfig
 
 
 def parse_args():
@@ -59,7 +59,7 @@ def main():
   conditions = [(scale_factor, n, tile_size)
                 for scale_factor in [1, 2, 4]
                 for n in [500000, 1000000]
-                for tile_size in [16, 32]]
+                for tile_size in [8, 16]]
   
      
   for i, (scale_factor, n, tile_size) in enumerate(conditions):
@@ -68,10 +68,12 @@ def main():
     gaussians = random_2d_gaussians(n, args.image_size, 
             scale_factor, alpha_range=(0.5, 1.0)).to(args.device)
     
+    tile_config = TileConfig(tile_size=tile_size)
     
     gaussians2d = project_gaussians2d(gaussians)
     tile_map = partial(map_to_tiles, gaussians2d, gaussians.depth, 
-      image_size=args.image_size, tile_size=tile_size)
+      image_size=args.image_size, 
+      config=tile_config)
     
     overlap_to_point, ranges = tile_map()
 

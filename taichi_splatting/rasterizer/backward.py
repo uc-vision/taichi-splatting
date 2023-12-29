@@ -63,14 +63,15 @@ def backward_kernel(config: Config, feature_size: int):
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
+  
 
-      tile_last_point = ti.simt.block.SharedArray((1,), dtype=ti.i32)
-      tile_last_point[0] = 0
+      shared_last_point = ti.simt.block.SharedArray((1,), dtype=ti.i32)
+      shared_last_point[0] = 0
       ti.simt.block.sync()
 
-      ti.atomic_max(tile_last_point[0], image_last_valid[pixel.y, pixel.x])
+      ti.atomic_max(shared_last_point[0], image_last_valid[pixel.y, pixel.x])
       ti.simt.block.sync()
-      end_offset = tile_last_point[0]
+      end_offset = shared_last_point[0]
 
       start_offset, _ = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset

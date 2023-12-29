@@ -1,17 +1,17 @@
+from dataclasses import dataclass
 from functools import cache
 import math
 from numbers import Integral
 from typing import Tuple
 from beartype import beartype
 import taichi as ti
-from taichi.math import ivec2, mat2
-
+from taichi.math import ivec2
 import torch
 
-from taichi_splatting.taichi_lib.f32 import (
-  Gaussian2D, conic_to_cov, cov_inv_basis, radii_from_cov, separates_bbox)
+from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
 
-from taichi.math import ivec4, vec2
+
+from taichi_splatting.taichi_lib.grid_query import make_grid_query
 
 def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
   def pad(x):
@@ -19,63 +19,24 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
  
   return tuple(pad(x) for x in image_size)
 
+@dataclass(frozen=True)
+class TileConfig:
+  tile_size: int = 16
+
+  # cutoff N standard deviations from mean
+  gaussian_scale: float = 3.0   
+  
+  # cull to an oriented box, otherwise an axis aligned bounding box
+  tight_culling: bool = True    
 
 @cache
-def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
+def tile_mapper(config:TileConfig):
 
-
-  @ti.dataclass
-  class GridQuery:
-    inv_basis: mat2
-    rel_min_bound: vec2
-
-    min_tile: ivec2
-    tile_span: ivec2
-
-    @ti.func
-    def test_tile(self, tile_uv: ivec2):
-      lower = self.rel_min_bound + tile_uv * tile_size
-      return not separates_bbox(self.inv_basis, lower, lower + tile_size)
-      
-  @ti.func 
-  def grid_query(v: Gaussian2D.vec, image_size:ivec2) -> GridQuery:
-      uv, uv_conic, _ = Gaussian2D.unpack(v)
-      uv_cov = conic_to_cov(uv_conic)
-
-      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
-      return GridQuery(
-        # Find tiles which intersect the oriented box
-        inv_basis = cov_inv_basis(uv_cov, gaussian_scale),
-        rel_min_bound = min_tile * tile_size - uv,
-
-        min_tile = min_tile,
-        tile_span = max_tile - min_tile)
-
-
-
-  @ti.func
-  def gaussian_tile_ranges(
-      uv: vec2,
-      uv_cov: mat2,
-      image_size: ti.math.ivec2,
-  ) -> ivec4:
-
-      # avoid zero radii, at least 1 pixel
-      radius = ti.max(radii_from_cov(uv_cov) * gaussian_scale, 1.0)  
-
-      min_bound = ti.max(0.0, uv - radius)
-      max_bound = uv + radius
-
-      max_tile = image_size // tile_size
-
-      min_tile_bound = ti.cast(min_bound // tile_size, ti.i32)
-      min_tile_bound = ti.min(min_tile_bound, max_tile)
-
-      max_tile_bound = ti.cast(max_bound // tile_size, ti.i32) + 1
-      max_tile_bound = ti.min(ti.max(max_tile_bound, min_tile_bound + 1),
-                          max_tile)
-
-      return min_tile_bound, max_tile_bound
+  tile_size = config.tile_size
+  grid_query = make_grid_query(
+    tile_size=tile_size, 
+    gaussian_scale=config.gaussian_scale, 
+    tight_culling=config.tight_culling)
   
 
   @ti.kernel
@@ -86,17 +47,10 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
       # outputs
       counts: ti.types.ndarray(ti.i32, ndim=1),
   ):
-
       counts[0] = 0
       for idx in range(gaussians.shape[0]):
           query = grid_query(gaussians[idx], image_size)
-          inside = 0
-          for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
-            if query.test_tile(tile_uv):
-              inside += 1
-
-          counts[idx + 1] = inside
-
+          counts[idx + 1] =  query.count_tiles()
 
 
   @ti.kernel
@@ -202,21 +156,23 @@ def tile_mapper(tile_size:int=16, gaussian_scale:float=3.0):
 
 @beartype
 def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor, 
-                 image_size:Tuple[Integral, Integral], tile_size:int=16
+                 image_size:Tuple[Integral, Integral],
+                 config:TileConfig
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
      gaussians: (N, 6) torch tensor of packed gaussians, N is the number of gaussians
      depths: (N, ) torch float tensor, where N is the number of gaussians
      image_size: (2, ) tuple of ints, (width, height)
-     tile_size: int, tile size in pixels
+     tile_config: configuration for tile mapper (tile_size etc.)
 
     Returns:
      overlap_to_point: (K, ) torch tensor, where K is the number of overlaps, maps overlap index to point index
      tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
   w, h = image_size
-  assert w % tile_size == 0 and h % tile_size == 0, f"image size ({w}x{h}) is not divisible by tile size {tile_size}"
+  assert w % config.tile_size == 0 and h % config.tile_size == 0,\
+      f"image size ({w}x{h}) is not divisible by tile size {config.tile_size}"
   
-  mapper = tile_mapper(tile_size=tile_size)
+  mapper = tile_mapper(config)
   return mapper(gaussians, depths, image_size)

@@ -6,7 +6,7 @@ import torch
 
 from taichi_splatting.culling import CameraParams, frustum_culling
 from taichi_splatting.data_types import Gaussians3D
-from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
+from taichi_splatting.tile_mapper import TileConfig, map_to_tiles, pad_to_tile
 from taichi_splatting.projection import project_to_image
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
@@ -49,7 +49,7 @@ def _render_with_features(gaussians2d:torch.Tensor, depths:torch.Tensor,
   # render with padding to tile_size, later crop back to original size
   padded_size = pad_to_tile(image_size, tile_size)
   overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
-    image_size=padded_size, tile_size=tile_size)
+    image_size=padded_size, config=TileConfig(tile_size=tile_size))
 
   n = features.shape[1]
   features_depth=torch.cat([features, depths.unsqueeze(1)], dim=1) 
