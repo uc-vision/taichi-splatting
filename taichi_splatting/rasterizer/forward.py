@@ -1,17 +1,11 @@
 
-from dataclasses import dataclass
 from functools import cache
 import taichi as ti
 from taichi.math import ivec2
+from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
 
-@dataclass(frozen=True)
-class RasterConfig:
-  tile_size: int = 16
-  clamp_max_alpha: float = 0.99
-  alpha_threshold: float = 1. / 255.
-  saturate_threshold: float = 0.9999
 
 
 @cache
@@ -82,6 +76,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
         # each thread in a block loads one point into shared memory
         # then all threads in the block process those points sequentially
         load_index = group_start_offset + thread_id
+
         if load_index < end_offset:
           point_idx = overlap_to_point[load_index]
 

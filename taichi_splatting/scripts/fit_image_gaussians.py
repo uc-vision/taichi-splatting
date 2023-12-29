@@ -4,6 +4,7 @@ import argparse
 
 import torch
 from torch.optim import Adam
+from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.renderer2d import render_gaussians, Gaussians2D
 import taichi as ti
@@ -109,7 +110,7 @@ def main():
 
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
 
-
+  config = RasterConfig(tile_size=args.tile_size)
 
   while True:
     if args.profile:
@@ -120,7 +121,7 @@ def main():
     for _ in range(args.epoch):
       opt.zero_grad()
 
-      image = render_gaussians(params, (w, h), tile_size=args.tile_size)
+      image = render_gaussians(params, (w, h), config)
       loss = torch.nn.functional.l1_loss(image, ref_image) 
       
       loss.backward()

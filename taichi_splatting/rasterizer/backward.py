@@ -89,7 +89,7 @@ def backward_kernel(config: Config, feature_size: int):
       #  w_{i-1} = w_i + c_i a_i T(i) \\
       #  \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i \\
 
-      w_i = ti.math.vec3(0.0)
+      w_i = feature_vec(0.0)
       grad_pixel_feature = grad_image_feature[pixel.y, pixel.x]
 
       num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area

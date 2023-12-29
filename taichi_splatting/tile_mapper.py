@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from functools import cache
 import math
 from numbers import Integral
@@ -7,6 +6,7 @@ from beartype import beartype
 import taichi as ti
 from taichi.math import ivec2
 import torch
+from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
 
@@ -19,18 +19,10 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
  
   return tuple(pad(x) for x in image_size)
 
-@dataclass(frozen=True)
-class TileConfig:
-  tile_size: int = 16
 
-  # cutoff N standard deviations from mean
-  gaussian_scale: float = 3.0   
-  
-  # cull to an oriented box, otherwise an axis aligned bounding box
-  tight_culling: bool = True    
 
 @cache
-def tile_mapper(config:TileConfig):
+def tile_mapper(config:RasterConfig):
 
   tile_size = config.tile_size
   grid_query = make_grid_query(
@@ -138,7 +130,10 @@ def tile_mapper(config:TileConfig):
        gaussians, image_size)
     
     num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
-    tile_ranges = torch.empty((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
+
+    # This needs to be initialised to zeros (not empty)
+    # as sometimes there are no overlaps for a tile
+    tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
 
     if total_overlap > 0:
       overlap_key, overlap_to_point = sort_tile_depths(
@@ -157,7 +152,7 @@ def tile_mapper(config:TileConfig):
 @beartype
 def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor, 
                  image_size:Tuple[Integral, Integral],
-                 config:TileConfig
+                 config:RasterConfig
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:

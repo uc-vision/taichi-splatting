@@ -5,6 +5,24 @@ from beartype import beartype
 from tensordict import tensorclass
 import torch
 
+  
+
+@dataclass(frozen=True)
+class RasterConfig:
+  tile_size: int = 16
+  margin_tiles: int = 3
+
+  # cutoff N standard deviations from mean
+  gaussian_scale: float = 3.0   
+  
+  # cull to an oriented box, otherwise an axis aligned bounding box
+  tight_culling: bool = True  
+
+  clamp_max_alpha: float = 0.99
+  alpha_threshold: float = 1. / 255.
+  saturate_threshold: float = 0.9999
+
+
 
 @tensorclass
 class Gaussians3D():
