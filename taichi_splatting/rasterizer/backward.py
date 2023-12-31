@@ -7,6 +7,7 @@ from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
  
 
+
 @cache
 def backward_kernel(config: RasterConfig,
                     points_requires_grad: bool,
