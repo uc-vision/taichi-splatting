@@ -1,6 +1,7 @@
 
 from functools import cache
 from typing import Tuple
+from beartype import beartype
 import taichi as ti
 import torch
 from taichi_splatting.autograd import restore_grad
@@ -87,15 +88,16 @@ def project_to_image_function(torch_dtype=torch.float32):
 
   return _module_function
 
-def apply(gaussians, T_image_camera, T_camera_world):
+@beartype
+def apply(gaussians:torch.Tensor, T_image_camera:torch.Tensor, T_camera_world:torch.Tensor):
   _module_function = project_to_image_function(gaussians.dtype)
   return _module_function.apply(gaussians.contiguous(), 
         T_image_camera.contiguous(), T_camera_world.contiguous())
 
+@beartype
 def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams) -> Tuple[torch.Tensor, torch.Tensor]:
   
-  gaussians3d = torch.concat([gaussians.position, 
-        gaussians.log_scaling, gaussians.rotation, gaussians.alpha_logit], dim=-1)
+  gaussians3d = gaussians.packed()
   return apply(
       gaussians3d, camera_params.T_image_camera, camera_params.T_camera_world,
   )

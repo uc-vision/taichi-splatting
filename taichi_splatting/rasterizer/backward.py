@@ -16,6 +16,9 @@ def backward_kernel(config: RasterConfig,
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
 
+  mask_all = 0xFFFFFFFF
+
+
   @ti.kernel
   def _backward_kernel(
       points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
@@ -46,7 +49,8 @@ def backward_kernel(config: RasterConfig,
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
-    for tile_v, tile_u, v, u in ti.ndrange(tiles_high, tiles_wide, tile_size, tile_size):
+    for tile_u, tile_v, u, v in ti.ndrange(tiles_wide, tiles_high, tile_size, tile_size):
+      
       
       pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
       tile_id = tile_u + tile_v * tiles_wide
@@ -54,6 +58,7 @@ def backward_kernel(config: RasterConfig,
 
 
       # open the shared memory
+      tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
   
@@ -102,6 +107,7 @@ def backward_kernel(config: RasterConfig,
         if load_index >= block_start_idx:
           point_idx = overlap_to_point[load_index]
 
+          tile_point_id[thread_id] = point_idx
           tile_point[thread_id] = points[point_idx]
           tile_feature[thread_id] = point_features[point_idx]
 
@@ -145,7 +151,7 @@ def backward_kernel(config: RasterConfig,
           # (2,) as the paper said, view space gradient is used for detect candidates for densification
 
           # Accumulating gradients in block shared memory does not appear to be faster
-          point_offset = overlap_to_point[point_index]
+          point_offset = tile_point_id[in_group_idx] 
 
           if ti.static(points_requires_grad):
             grad_point = alpha_grad * Gaussian2D.to_vec(
@@ -156,8 +162,18 @@ def backward_kernel(config: RasterConfig,
             grad_points[point_offset] += grad_point
           
           if ti.static(features_requires_grad):
-            point_grad_feature = alpha * T_i * grad_pixel_feature            
+            point_grad_feature = alpha * T_i * grad_pixel_feature    
+
+            # active = ti.simt.warp.active_mask()
+            # leader = ti.math.clz(active)
+
+
+            # if ti.math.popcnt(active) == 32:
+            #   print(active, leader)
+
             grad_features[point_offset] += point_grad_feature
+
+
 
         # end of point group loop
       # end of point group id loop

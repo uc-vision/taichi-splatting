@@ -3,7 +3,7 @@ import taichi as ti
 import torch
 from tqdm import tqdm
 
-def benchmarked(name, f, iters=10, warmup=1, profile=False):
+def benchmarked(name, f, iters=100, warmup=1, profile=False):
 
   for _ in range(warmup):
     f()

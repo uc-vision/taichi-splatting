@@ -27,6 +27,9 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]  # Optional
 fit_image_gaussians = "taichi_splatting.scripts.fit_image_gaussians:main"
+bench_projection = "taichi_splatting.benchmarks.bench_projection:main"
+bench_rasterizer = "taichi_splatting.benchmarks.bench_rasterizer:main"
+bench_sh = "taichi_splatting.benchmarks.bench_sh:main"
 
 [tool.ruff]
 indent-width = 2

@@ -5,6 +5,7 @@ import time
 import torch
 import taichi as ti
 from tqdm import tqdm
+from taichi_splatting.benchmarks.util import benchmarked
 
 from taichi_splatting.rasterizer.function import rasterize, RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
@@ -22,6 +23,7 @@ def parse_args():
   parser.add_argument('--scale_factor', type=int, default=2)
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--seed', type=int, default=0)
+  parser.add_argument('--iters', type=int, default=50)
 
   
 
@@ -29,27 +31,6 @@ def parse_args():
   args.image_size = tuple(map(int, args.image_size.split(',')))
   return args
 
-def benchmarked(name, f, iters=10, warmup=1, profile=False):
-
-  for _ in range(warmup):
-    f()
-
-  if profile:
-    ti.profiler.clear_kernel_profiler_info()
-
-  start = time.time()
-  for _ in tqdm(range(iters), desc=f"{name}"):
-    f()
-
-  torch.cuda.synchronize()
-  ti.sync()
-
-  end = time.time()
-
-  print(f'{name}  {iters} iterations: {end - start:.3f}s at {iters / (end - start):.1f} iters/sec')
-
-  if  profile:
-    ti.profiler.print_kernel_profiler_info("count")
 
 
 def main():
@@ -82,21 +63,32 @@ def main():
   print(f'scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={point_overlap:.2f} tile_points={points_per_tile:.2f}')
   
 
-  benchmarked('map_to_tiles', tile_map, profile=args.profile)  
+  benchmarked('map_to_tiles', tile_map, profile=args.profile, iters=args.iters)  
 
 
   forward = partial(rasterize, gaussians=gaussians2d, features=gaussians.feature, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=args.image_size, config=config)
   
-  benchmarked('forward', forward, profile=args.profile)  
+  benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
   gaussians2d.requires_grad_(True)
   def backward():
     image, alpha = forward()
     image.sum().backward()
 
-  benchmarked('backward', backward, profile=args.profile)  
+  benchmarked('backward (features)', backward, profile=args.profile, iters=args.iters)  
+
+  gaussians.feature.requires_grad_(False)
+  gaussians2d.requires_grad_(True)
+
+  benchmarked('backward (gaussians)', backward, profile=args.profile, iters=args.iters)  
+
+  gaussians.feature.requires_grad_(True)
+  gaussians2d.requires_grad_(True)
+
+  benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
+
 
 if __name__ == '__main__':
   main()

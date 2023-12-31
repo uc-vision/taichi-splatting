@@ -4,7 +4,9 @@ Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python 
 
 This work is largely derived off [Taichi 3D Gaussian Splatting](https://github.com/wanmeihuali/taichi_3d_gaussian_splatting)
 
-Key differences are the rendering algorithm is decomposed into separate operations (projection, shading functions, tile mapping and rasterization) which can be combined in different ways in order to facilitate a more flexible use. Using the Taichi autodiff for a simpler implementation where possible. 
+Key differences are the rendering algorithm is decomposed into separate operations (projection, shading functions, tile mapping and rasterization) which can be combined in different ways in order to facilitate a more flexible use, and gradients can be enabled on "all the things" as required for the application (and not when disabled, to save performance).
+
+Using the Taichi autodiff for a simpler implementation where possible (e.g. for projection, but not for the rasterization).
 
 Examples:
   * Projecting features for lifting 2D to 3D

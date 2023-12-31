@@ -40,7 +40,7 @@ class Gaussians3D():
     assert self.alpha_logit.shape[1] == 1, f"Expected shape (N, 1), got {self.alpha_logit.shape}"
 
 
-  def pack_gaussian3d(self):
+  def packed(self):
     return torch.cat([self.position, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
 
   @property

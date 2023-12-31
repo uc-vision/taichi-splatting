@@ -21,7 +21,7 @@ def parse_args():
   parser.add_argument('--device', type=str, default='cuda:0')
   parser.add_argument('--n', type=int, default=1000000)
   parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--iters', type=int, default=200)
+  parser.add_argument('--iters', type=int, default=1000)
   
 
   args = parser.parse_args()
@@ -44,26 +44,28 @@ def main():
     gaussians = random_3d_gaussians(args.n, camera_params)
 
     gaussians, camera_params = gaussians.to(args.device), camera_params.to(args.device)
+    packed = gaussians.packed()
+
+    project_forward = partial(projection.apply, packed, camera_params.T_image_camera, camera_params.T_camera_world)
+    benchmarked('forward', project_forward, profile=args.profile, iters=args.iters)  
 
 
-    # project_separate = partial(projection_separate.project_to_image, gaussians, camera_params)
-    project_forward = partial(projection.project_to_image, gaussians, camera_params)
-    benchmarked('project_to_image', project_forward, profile=args.profile, iters=args.iters)  
-    # benchmarked('project_to_image', project_separate, profile=args.profile, iters=args.iters)  
-
-
-  gaussians.apply(lambda x: x.requires_grad_(True))
-  # camera_params.T_camera_world.requires_grad_(True)
+  packed.requires_grad_(True)
 
   def project_backward():
-    points, depth = projection.project_to_image(gaussians, camera_params)
+    points, depth = projection.apply(packed, camera_params.T_image_camera, camera_params.T_camera_world)
     loss = points.sum() + depth.sum()
     loss.backward()
 
   
-  benchmarked('project_to_image', project_backward, profile=args.profile, iters=args.iters)  
+  benchmarked('backward (gaussians)', project_backward, profile=args.profile, iters=args.iters)  
 
-    
+
+  packed.requires_grad_(False)    
+  camera_params.T_camera_world.requires_grad_(True)
+  camera_params.T_image_camera.requires_grad_(True)
+  benchmarked('backward (camera)', project_backward, profile=args.profile, iters=args.iters)  
+
 
 
 if __name__ == '__main__':
