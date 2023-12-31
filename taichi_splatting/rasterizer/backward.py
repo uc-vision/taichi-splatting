@@ -18,9 +18,6 @@ def backward_kernel(config: RasterConfig,
   tile_area = tile_size * tile_size
 
 
-  mask_all = 0xFFFFFFFF
-
-
   @ti.kernel
   def _backward_kernel(
       points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
