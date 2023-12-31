@@ -15,6 +15,8 @@ def backward_kernel(config: RasterConfig,
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
+  tile_area = tile_size * tile_size
+
 
   mask_all = 0xFFFFFFFF
 
@@ -43,8 +45,6 @@ def backward_kernel(config: RasterConfig,
   ):
 
     camera_height, camera_width = image_feature.shape
-
-    tile_area = ti.static(tile_size * tile_size)
     tiles_wide, tiles_high = camera_width // tile_size, camera_height // tile_size
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
@@ -71,7 +71,7 @@ def backward_kernel(config: RasterConfig,
       ti.simt.block.sync()
       end_offset = shared_last_point[0]
 
-      start_offset, _ = tile_overlap_ranges[tile_id]
+      start_offset, end_offset = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
 
 
@@ -89,7 +89,6 @@ def backward_kernel(config: RasterConfig,
 
       w_i = feature_vec(0.0)
       grad_pixel_feature = grad_image_feature[pixel.y, pixel.x]
-
       num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
 
       # Loop through the range in groups of tile_area
@@ -117,10 +116,7 @@ def backward_kernel(config: RasterConfig,
           tile_area, tile_point_count - group_offset_base)
             
         for in_group_idx in range(point_group_size):
-          point_group_offset = group_offset_base + in_group_idx
-
-          point_index = end_offset - point_group_offset - 1
-          if point_index >= last_point_idx :
+          if (block_end_idx - in_group_idx) > last_point_idx:
               continue
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
@@ -163,14 +159,6 @@ def backward_kernel(config: RasterConfig,
           
           if ti.static(features_requires_grad):
             point_grad_feature = alpha * T_i * grad_pixel_feature    
-
-            # active = ti.simt.warp.active_mask()
-            # leader = ti.math.clz(active)
-
-
-            # if ti.math.popcnt(active) == 32:
-            #   print(active, leader)
-
             grad_features[point_offset] += point_grad_feature
 
 
