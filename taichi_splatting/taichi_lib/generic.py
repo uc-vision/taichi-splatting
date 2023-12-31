@@ -371,18 +371,7 @@ def make_library(dtype=ti.f32):
 
 
 
-  @ti.func
-  def interleave(x:ti.i32):
-      # x = ( x | ( x << 8 ) ) & 0x00FF00FF
-      # x = ( x | ( x << 4 ) ) & 0x0F0F0F0F
-      x = ( x | ( x << 2 ) ) & 0x33333333
-      x = ( x | ( x << 1 ) ) & 0x55555555
-      return x
 
-  @ti.func
-  def morton_tile(x:ti.i32, y:ti.i32, tile_size):
-      order = interleave(x) | ( interleave(y) << 1 )
-      return order // tile_size, order % tile_size
   
 
   return SimpleNamespace(**locals())

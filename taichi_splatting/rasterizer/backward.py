@@ -3,6 +3,7 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
+from taichi_splatting.taichi_lib.concurrent import warp_sum_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
  
@@ -15,8 +16,6 @@ def backward_kernel(config: RasterConfig,
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
-
-  mask_all = 0xFFFFFFFF
 
 
   @ti.kernel
@@ -61,6 +60,8 @@ def backward_kernel(config: RasterConfig,
       tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
+
+      tile_grad_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
   
 
       shared_last_point = ti.simt.block.SharedArray((1,), dtype=ti.i32)
@@ -115,63 +116,66 @@ def backward_kernel(config: RasterConfig,
 
         point_group_size = ti.min(
           tile_area, tile_point_count - group_offset_base)
+        
+        grad_point = Gaussian2D.vec(0)
+        point_grad_feature = feature_vec(0)
+        has_grad = 0
             
         for in_group_idx in range(point_group_size):
-          point_group_offset = group_offset_base + in_group_idx
+          point_index = end_offset - (group_offset_base + in_group_idx)
 
-          point_index = end_offset - point_group_offset - 1
-          if point_index >= last_point_idx :
-              continue
+          if point_index <= last_point_idx:
 
-          uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          feature = tile_feature[in_group_idx]
+            uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
+            feature = tile_feature[in_group_idx]
 
-          gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
-            ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
-          
-          alpha = point_alpha * gaussian_alpha
-          
-          # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
-          # 255 ) and also clamp 𝛼 with 0.99 from above.
-          if alpha < ti.static(config.alpha_threshold):
-            continue
+            gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
+              ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
+            
+            alpha = point_alpha * gaussian_alpha
+            
+            # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
+            # 255 ) and also clamp 𝛼 with 0.99 from above.
+            if alpha >= ti.static(config.alpha_threshold):
+              
 
-          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-          T_i = T_i / (1. - alpha)
+              alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+              T_i = T_i / (1. - alpha)
 
-          # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
-          alpha_grad_from_feature = (feature * T_i - w_i / (1. - alpha)
-                                     ) * grad_pixel_feature
+              # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
+              alpha_grad_from_feature = (feature * T_i - w_i / (1. - alpha)
+                                        ) * grad_pixel_feature
 
-          # w_{i-1} = w_i + c_i a_i T(i)
-          w_i += feature * alpha * T_i
-          alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
+              # w_{i-1} = w_i + c_i a_i T(i)
+              w_i += feature * alpha * T_i
+              alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
 
-          # alpha_grad * point_alpha is dp
-          # (2,) as the paper said, view space gradient is used for detect candidates for densification
+              # alpha_grad * point_alpha is dp
+              # (2,) as the paper said, view space gradient is used for detect candidates for densification
 
-          # Accumulating gradients in block shared memory does not appear to be faster
-          point_offset = tile_point_id[in_group_idx] 
+              grad_point = alpha_grad * Gaussian2D.to_vec(
+                  point_alpha * dp_dmean, 
+                  point_alpha * dp_dconic,
+                  gaussian_alpha)
 
-          if ti.static(points_requires_grad):
-            grad_point = alpha_grad * Gaussian2D.to_vec(
-                point_alpha * dp_dmean, 
-                point_alpha * dp_dconic,
-                gaussian_alpha)
-
-            grad_points[point_offset] += grad_point
-          
-          if ti.static(features_requires_grad):
-            point_grad_feature = alpha * T_i * grad_pixel_feature    
-
-            # active = ti.simt.warp.active_mask()
-            # leader = ti.math.clz(active)
+              point_grad_feature = alpha * T_i * grad_pixel_feature    
+              has_grad = 1
 
 
-            # if ti.math.popcnt(active) == 32:
-            #   print(active, leader)
+          if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), has_grad):
+            point_offset = tile_point_id[in_group_idx] 
 
-            grad_features[point_offset] += point_grad_feature
+            # Accumulating gradients in block shared memory does not appear to be faster
+            # if ti.static(points_requires_grad):
+            #   if warp_sum_vector(grad_point):
+            #     for i in ti.static(range(6)):
+            #       ti.atomic_add(tile_grad_point[in_group_idx][i], grad_point[i])
+            
+            if ti.static(features_requires_grad):
+              if warp_sum_vector(point_grad_feature):
+                ti.atomic_add(grad_features[point_offset], point_grad_feature)
+
+
 
 
 
