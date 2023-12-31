@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Tuple
+from typing import Optional, Tuple
 from beartype import beartype
 from tensordict import tensorclass
 import torch
@@ -31,6 +31,7 @@ class Gaussians3D():
   rotation      : torch.Tensor # 4  - quaternion wxyz
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
   feature      : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
+
 
   def __post_init__(self):
     assert self.position.shape[1] == 3, f"Expected shape (N, 3), got {self.position.shape}"

@@ -50,9 +50,9 @@ def _render_with_features(gaussians2d:torch.Tensor, depths:torch.Tensor,
     image_size=padded_size, config=config)
 
   n = features.shape[1]
-  features_depth=torch.cat([features, depths.unsqueeze(1)], dim=1) 
+  features=torch.cat([features, depths.unsqueeze(1)], dim=1) 
 
-  image, alpha = rasterize(gaussians=gaussians2d, features=features_depth, 
+  image, alpha = rasterize(gaussians=gaussians2d, features=features, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=padded_size, config=config)
 

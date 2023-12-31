@@ -9,7 +9,6 @@ from taichi_splatting.taichi_lib.f32 import (Gaussian2D,
 
 @ti.func
 def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
-  separates = False
   rel_points = ti.Matrix.cols(
       [lower, vec2(upper.x, lower.y), upper, vec2(lower.x, upper.y)])
   local_points = (inv_basis @ rel_points)

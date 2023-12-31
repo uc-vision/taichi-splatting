@@ -16,6 +16,8 @@ def forward_kernel(config: RasterConfig, feature_size: int):
   tile_area = tile_size * tile_size
 
 
+
+
   @ti.kernel
   def _forward_kernel(
       points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
@@ -38,7 +40,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
-    for tile_v, tile_u, v, u in ti.ndrange(tiles_high, tiles_wide, tile_size, tile_size):
+    for tile_u, tile_v, u, v in ti.ndrange(tiles_wide, tiles_high, tile_size, tile_size):
 
       pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
       tile_id = tile_u + tile_v * tiles_wide
@@ -61,12 +63,6 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
-        # The original implementation uses a predicate block the next update for shared memory until all threads finish the current update
-        # but it is not supported by Taichi yet, and experiments show that it does not affect the performance
-        tile_saturated = ti.simt.block.sync_all_nonzero(predicate=ti.cast(
-            pixel_saturated, ti.i32))
-        if tile_saturated != 0:
-          continue
 
         ti.simt.block.sync()
 
@@ -80,6 +76,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
         if load_index < end_offset:
           point_idx = overlap_to_point[load_index]
 
+  
           tile_point[thread_id] = points[point_idx]
           tile_feature[thread_id] = point_features[point_idx]
 
@@ -117,6 +114,9 @@ def forward_kernel(config: RasterConfig, feature_size: int):
           # weight = alpha * T_i
           accum_feature += tile_feature[in_group_idx] * alpha * T_i
           T_i = next_T_i
+
+          # active = ti.simt.warp.active_mask()
+          # print(ti.math.popcnt(active))
         # end of point group loop
       # end of point group id loop
 

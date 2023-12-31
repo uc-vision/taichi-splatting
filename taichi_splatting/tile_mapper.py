@@ -50,7 +50,7 @@ def tile_mapper(config:RasterConfig):
       sorted_keys: ti.types.ndarray(ti.i64, ndim=1),  # (M)
       # output tile_ranges (tile id -> start, end)
       tile_ranges: ti.types.ndarray(ti.math.ivec2, ndim=1),   
-  ):
+  ):  
     for idx in range(sorted_keys.shape[0] - 1):
         # tile id is in the 32 high bits of the 64 bit key
         tile_id = ti.cast(sorted_keys[idx] >> 32, ti.i32)

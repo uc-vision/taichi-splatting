@@ -1,17 +1,15 @@
 import argparse
 from functools import partial
-
-import torch
-from tqdm import tqdm
-from taichi_splatting.rasterizer.function import rasterize, RasterConfig
-
-from taichi_splatting.renderer2d import project_gaussians2d
-import taichi as ti
-from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
-
 import time
 
-from taichi_splatting.tile_mapper import map_to_tiles, TileConfig
+import torch
+import taichi as ti
+from tqdm import tqdm
+
+from taichi_splatting.rasterizer.function import rasterize, RasterConfig
+from taichi_splatting.renderer2d import project_gaussians2d
+from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
+from taichi_splatting.tile_mapper import map_to_tiles
 
 
 def parse_args():
@@ -20,6 +18,11 @@ def parse_args():
 
   parser.add_argument('--image_size', type=str, default='1024,768')
   parser.add_argument('--device', type=str, default='cuda:0')
+  parser.add_argument('--n', type=int, default=1000000)
+  parser.add_argument('--scale_factor', type=int, default=2)
+  parser.add_argument('--tile_size', type=int, default=16)
+  parser.add_argument('--seed', type=int, default=0)
+
   
 
   args = parser.parse_args()
@@ -55,52 +58,45 @@ def main():
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
         device_memory_GB=0.1, kernel_profiler=True)
-
-  conditions = [(scale_factor, n, tile_size)
-                for scale_factor in [1, 2, 4]
-                for n in [500000, 1000000]
-                for tile_size in [8, 16]]
   
      
-  for i, (scale_factor, n, tile_size) in enumerate(conditions):
-    torch.manual_seed(i)
+  torch.manual_seed(args.seed)
 
-    gaussians = random_2d_gaussians(n, args.image_size, 
-            scale_factor, alpha_range=(0.5, 1.0)).to(args.device)
-    
-    tile_config = TileConfig(tile_size=tile_size)
-    
-    gaussians2d = project_gaussians2d(gaussians)
-    tile_map = partial(map_to_tiles, gaussians2d, gaussians.depth, 
-      image_size=args.image_size, 
-      config=tile_config)
-    
-    overlap_to_point, ranges = tile_map()
+  gaussians = random_2d_gaussians(args.n, args.image_size, 
+          args.scale_factor, alpha_range=(0.5, 1.0)).to(args.device)
+  config = RasterConfig(tile_size=args.tile_size)
 
-    points_per_tile = (ranges[1] - ranges[0]).float().mean()
-    point_overlap = overlap_to_point.shape[0] / n 
-    
+  
+  gaussians2d = project_gaussians2d(gaussians)
+  tile_map = partial(map_to_tiles, gaussians2d, gaussians.depth, 
+    image_size=args.image_size, 
+    config=config)
+  
+  overlap_to_point, ranges = tile_map()
 
-    print('----------------------------------------------------------')
-    print(f'scale_factor={scale_factor}, n={n}, tile_size={tile_size} point_overlap={point_overlap:.2f} tile_points={points_per_tile:.2f}')
-    
+  points_per_tile = (ranges[1] - ranges[0]).float().mean()
+  point_overlap = overlap_to_point.shape[0] / args.n 
+  
 
-    benchmarked('map_to_tiles', tile_map, profile=args.profile)  
+  print('----------------------------------------------------------')
+  print(f'scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={point_overlap:.2f} tile_points={points_per_tile:.2f}')
+  
 
-    raster_config = RasterConfig(tile_size=tile_size)
+  benchmarked('map_to_tiles', tile_map, profile=args.profile)  
 
-    forward = partial(rasterize, gaussians=gaussians2d, features=gaussians.feature, 
-      tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
-      image_size=args.image_size, config=raster_config)
-    
-    benchmarked('forward', forward, profile=args.profile)  
 
-    gaussians2d.requires_grad_(True)
-    def backward():
-      image, alpha = forward()
-      image.sum().backward()
+  forward = partial(rasterize, gaussians=gaussians2d, features=gaussians.feature, 
+    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
+    image_size=args.image_size, config=config)
+  
+  benchmarked('forward', forward, profile=args.profile)  
 
-    benchmarked('backward', backward, profile=args.profile)  
+  gaussians2d.requires_grad_(True)
+  def backward():
+    image, alpha = forward()
+    image.sum().backward()
+
+  benchmarked('backward', backward, profile=args.profile)  
 
 if __name__ == '__main__':
   main()

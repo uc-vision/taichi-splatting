@@ -1,44 +1,18 @@
-import math
 import cv2
 import argparse
+import taichi as ti
 
 import torch
 from torch.optim import Adam
 from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.renderer2d import render_gaussians, Gaussians2D
-import taichi as ti
+from taichi_splatting.tests.random_data import random_2d_gaussians
 
-from taichi_splatting.torch_ops.projection import inverse_sigmoid
 from taichi_splatting.torch_ops.util import check_finite
 
 import time
 
-def random_2d_gaussians(n, image_size, scale_factor=0.5, alpha_range=(0.1, 0.6)):
-  
-  w, h = image_size
-
-  position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
-  depth = torch.rand(n)  
-  
-  density_scale = scale_factor * w / math.sqrt(n) 
-  scaling = (torch.rand(n, 2) + 0.2) * density_scale 
-
-  rotation = torch.randn(n, 2) 
-  rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)
-
-  low, high = alpha_range
-  alpha = torch.rand(n) * (high - low) + low
-
-  return Gaussians2D(
-    position=position,
-    depth=depth,
-    log_scaling=torch.log(scaling),
-    rotation=rotation,
-    alpha_logit=inverse_sigmoid(alpha),
-    feature=torch.rand(n, 3),
-    batch_size=(n,)
-  )
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -68,8 +42,6 @@ def optimizer(gaussians: Gaussians2D, base_lr=1.0):
   params = {k: torch.nn.Parameter(x, requires_grad=True) 
                            if k in learning_rates else x
                            for k, x in gaussians.items()}
-
-
   param_groups = [
     dict(params=[params[name]], lr=lr * base_lr, name=name)
       for name, lr in learning_rates.items()
@@ -107,7 +79,6 @@ def main():
 
   gaussians = random_2d_gaussians(args.n, (w, h)).to(torch.device('cuda:0'))
   opt, params = optimizer(gaussians, base_lr=1.0)
-
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
 
   config = RasterConfig(tile_size=args.tile_size)
