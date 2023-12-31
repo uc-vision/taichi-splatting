@@ -5,7 +5,6 @@ from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
- 
 
 
 @cache

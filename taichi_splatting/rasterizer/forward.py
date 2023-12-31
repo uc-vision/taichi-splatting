@@ -4,7 +4,7 @@ import taichi as ti
 from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
 
-from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D, morton_tile
+from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
 
 
 
@@ -14,8 +14,6 @@ def forward_kernel(config: RasterConfig, feature_size: int):
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
   tile_area = tile_size * tile_size
-
-  mask_all = 0xFFFFFFFF
 
 
   @ti.kernel
