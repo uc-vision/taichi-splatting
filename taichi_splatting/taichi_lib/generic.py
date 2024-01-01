@@ -71,6 +71,9 @@ def make_library(dtype=ti.f32):
   def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
     return vec[0:2], vec[2:5], vec[5]
 
+  @ti.func
+  def get_position_g3d(vec:vec_g3d) -> vec3:
+    return vec[0:3]
 
 
   @ti.func
@@ -99,6 +102,7 @@ def make_library(dtype=ti.f32):
   Gaussian3D.from_vec = from_vec_g3d
   Gaussian3D.unpack = unpack_vec_g3d
   Gaussian3D.unpack_activate = unpack_activate_g3d
+  Gaussian3D.get_position = get_position_g3d
 
 
 

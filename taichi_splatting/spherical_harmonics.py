@@ -139,7 +139,7 @@ def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
     @staticmethod
     def forward(ctx, params:torch.Tensor, points:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
-        out = torch.zeros(points.shape[0], params.shape[1], dtype=dtype, device=params.device)
+        out = torch.empty(points.shape[0], params.shape[1], dtype=dtype, device=params.device)
         evaluate_sh_at_kernel(params, points, camera_pos, out)
 
         ctx.save_for_backward(params, points, camera_pos, out)

@@ -40,9 +40,8 @@ def render_gaussians(
 
   image, alpha = rasterize(gaussians=gaussians2d, features=gaussians.feature, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
-    image_size=padded_size, config=raster_config)
+    image_size=image_size, config=raster_config)
   
-  w, h = image_size
-  return image[:h, :w]
+  return image
 
 

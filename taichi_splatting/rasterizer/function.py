@@ -29,10 +29,10 @@ def render_function(config:RasterConfig,
                 ) -> torch.Tensor:
         
       shape = (image_size[1], image_size[0])
-      image_feature = torch.zeros((*shape, features.shape[1]),
+      image_feature = torch.empty((*shape, features.shape[1]),
                                   dtype=torch.float32, device=features.device)
-      image_alpha = torch.zeros(shape, dtype=torch.float32, device=features.device)
-      image_last_valid = torch.zeros(shape, dtype=torch.int32, device=features.device)
+      image_alpha = torch.empty(shape, dtype=torch.float32, device=features.device)
+      image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,
@@ -43,6 +43,7 @@ def render_function(config:RasterConfig,
       ctx.tile_overlap_ranges = tile_overlap_ranges
       ctx.image_last_valid = image_last_valid
       ctx.image_alpha = image_alpha
+      ctx.image_size = image_size
 
       ctx.mark_non_differentiable(image_alpha, image_last_valid)
       ctx.save_for_backward(gaussians, features, image_feature)
@@ -55,7 +56,6 @@ def render_function(config:RasterConfig,
 
         grad_gaussians = torch.zeros_like(gaussians)
         grad_features = torch.zeros_like(features)
-
   
         with restore_grad(grad_gaussians, grad_features):
 

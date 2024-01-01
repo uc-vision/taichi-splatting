@@ -40,6 +40,7 @@ Examples:
 
 * 3D training code (likely different repository)
 * 3D viewer (extract from private codebase)
+* Backward projection autograd takes a while to compile and is not cached properly
 
 ### Improvements
 
@@ -47,6 +48,7 @@ Examples:
 * Switched to matrices as inputs instead of quaternions
 * Tile mapping tighter culling for tile overlaps (~30% less rendered splats!)
 * All configuration parameters exposed (e.g. tile_size, saturation threshold etc.)
+* Warp reduction based backward pass for rasterizer, a decent boost in performance
 
 
 ## Conventions

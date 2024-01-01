@@ -35,7 +35,10 @@ def forward_kernel(config: RasterConfig, feature_size: int):
   ):
 
     camera_height, camera_width = image_feature.shape
-    tiles_wide, tiles_high = camera_width // tile_size, camera_height // tile_size
+
+    # round up
+    tiles_wide = (camera_width + tile_size - 1) // tile_size 
+    tiles_high = (camera_height + tile_size - 1) // tile_size
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
@@ -119,11 +122,12 @@ def forward_kernel(config: RasterConfig, feature_size: int):
         # end of point group loop
       # end of point group id loop
 
-      image_feature[pixel.y, pixel.x] = accum_feature
+      if pixel.x < camera_width and pixel.y < camera_height:
+        image_feature[pixel.y, pixel.x] = accum_feature
 
-      # No need to accumulate a normalisation factor as it is exactly 1 - T_i
-      image_alpha[pixel.y, pixel.x] = 1. - T_i    
-      image_last_valid[pixel.y, pixel.x] = last_point_idx
+        # No need to accumulate a normalisation factor as it is exactly 1 - T_i
+        image_alpha[pixel.y, pixel.x] = 1. - T_i    
+        image_last_valid[pixel.y, pixel.x] = last_point_idx
 
     # end of pixel loop
 

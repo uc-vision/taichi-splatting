@@ -43,12 +43,17 @@ def backward_kernel(config: RasterConfig,
   ):
 
     camera_height, camera_width = image_feature.shape
-    tiles_wide, tiles_high = camera_width // tile_size, camera_height // tile_size
+
+    # round up
+    tiles_wide = (camera_width + tile_size - 1) // tile_size 
+    tiles_high = (camera_height + tile_size - 1) // tile_size
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
     for tile_u, tile_v, i in ti.ndrange(tiles_wide, tiles_high, tile_area):
       
+      # use morton z-ordering for the threads mapping to pixel values
+      # helps a little with grouping warps on the same gaussians
       u, v = morton_tile_inv(i)
       
       pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
@@ -64,15 +69,17 @@ def backward_kernel(config: RasterConfig,
       tile_grad_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_grad_feature = ti.simt.block.SharedArray((tile_area,), dtype=feature_vec)
       
+      last_point_idx = 0
+      accumulated_alpha: ti.f32 = 0.0
+      grad_pixel_feature = feature_vec(0.0)
 
-      last_point_idx = image_last_valid[pixel.y, pixel.x]
-      end_offset = block_reduce_i32(last_point_idx, ti.max, ti.atomic_max, 0)
+      if pixel.y < camera_height and pixel.x < camera_width:
+        last_point_idx = image_last_valid[pixel.y, pixel.x]
+        accumulated_alpha: ti.f32 = image_alpha[pixel.y, pixel.x]
+        grad_pixel_feature = grad_image_feature[pixel.y, pixel.x]
 
-      start_offset, end_offset = tile_overlap_ranges[tile_id]
-      tile_point_count = end_offset - start_offset
-
-      accumulated_alpha: ti.f32 = image_alpha[pixel.y, pixel.x]
       T_i = 1.0 - accumulated_alpha  
+      w_i = feature_vec(0.0)
 
       #  T_i = \prod_{j=1}^{i-1} (1 - a_j) \\
       #  \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} \\
@@ -82,8 +89,12 @@ def backward_kernel(config: RasterConfig,
       #  w_{i-1} = w_i + c_i a_i T(i) \\
       #  \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i \\
 
-      w_i = feature_vec(0.0)
-      grad_pixel_feature = grad_image_feature[pixel.y, pixel.x]
+      # fine tune the end offset to the actual number of points renderered
+      end_offset = block_reduce_i32(last_point_idx, ti.max, ti.atomic_max, 0)
+
+      start_offset, _ = tile_overlap_ranges[tile_id]
+      tile_point_count = end_offset - start_offset
+
       num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
 
       # Loop through the range in groups of tile_area
@@ -150,7 +161,6 @@ def backward_kernel(config: RasterConfig,
                 gaussian_alpha)
 
             grad_feature = alpha * T_i * grad_pixel_feature    
-
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
 

@@ -10,7 +10,6 @@ from taichi_splatting.culling import CameraParams
 from taichi_splatting.taichi_lib.generic import make_library
 from taichi_splatting.taichi_lib.conversions import torch_taichi
 
-from taichi_splatting.data_types import Gaussians3D
 
 @cache
 def project_to_image_function(torch_dtype=torch.float32):
@@ -95,10 +94,9 @@ def apply(gaussians:torch.Tensor, T_image_camera:torch.Tensor, T_camera_world:to
         T_image_camera.contiguous(), T_camera_world.contiguous())
 
 @beartype
-def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams) -> Tuple[torch.Tensor, torch.Tensor]:
+def project_to_image(gaussians:torch.Tensor, camera_params: CameraParams) -> Tuple[torch.Tensor, torch.Tensor]:
   
-  gaussians3d = gaussians.packed()
   return apply(
-      gaussians3d, camera_params.T_image_camera, camera_params.T_camera_world,
+      gaussians, camera_params.T_image_camera, camera_params.T_camera_world,
   )
 
