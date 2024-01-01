@@ -3,6 +3,7 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
+from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, block_reduce_i32, morton_tile_inv, warp_add_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
 
@@ -46,8 +47,9 @@ def backward_kernel(config: RasterConfig,
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
-    for tile_u, tile_v, u, v in ti.ndrange(tiles_wide, tiles_high, tile_size, tile_size):
+    for tile_u, tile_v, i in ti.ndrange(tiles_wide, tiles_high, tile_area):
       
+      u, v = morton_tile_inv(i)
       
       pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
       tile_id = tile_u + tile_v * tiles_wide
@@ -58,21 +60,17 @@ def backward_kernel(config: RasterConfig,
       tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
-  
 
-      shared_last_point = ti.simt.block.SharedArray((1,), dtype=ti.i32)
-      shared_last_point[0] = 0
-      ti.simt.block.sync()
+      tile_grad_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
+      tile_grad_feature = ti.simt.block.SharedArray((tile_area,), dtype=feature_vec)
+      
 
-      ti.atomic_max(shared_last_point[0], image_last_valid[pixel.y, pixel.x])
-      ti.simt.block.sync()
-      end_offset = shared_last_point[0]
+      last_point_idx = image_last_valid[pixel.y, pixel.x]
+      end_offset = block_reduce_i32(last_point_idx, ti.max, ti.atomic_max, 0)
 
       start_offset, end_offset = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
 
-
-      last_point_idx = image_last_valid[pixel.y, pixel.x]
       accumulated_alpha: ti.f32 = image_alpha[pixel.y, pixel.x]
       T_i = 1.0 - accumulated_alpha  
 
@@ -107,62 +105,76 @@ def backward_kernel(config: RasterConfig,
           tile_point[thread_id] = points[point_idx]
           tile_feature[thread_id] = point_features[point_idx]
 
+          tile_grad_point[thread_id] = Gaussian2D.vec(0.0)
+          tile_grad_feature[thread_id] = feature_vec(0.0)
+
         ti.simt.block.sync()
 
         point_group_size = ti.min(
           tile_area, tile_point_count - group_offset_base)
-            
+                    
         for in_group_idx in range(point_group_size):
-          if (block_end_idx - in_group_idx) > last_point_idx:
-              continue
+          point_index = end_offset - (group_offset_base + in_group_idx)
+
+          if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_idx)):
+            continue
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          feature = tile_feature[in_group_idx]
 
           gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
             ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
           
           alpha = point_alpha * gaussian_alpha
-          
-          # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
-          # 255 ) and also clamp 𝛼 with 0.99 from above.
-          if alpha < ti.static(config.alpha_threshold):
-            continue
+          has_grad = (alpha >= ti.static(config.alpha_threshold)) and (point_index <= last_point_idx)      
 
-          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-          T_i = T_i / (1. - alpha)
+          grad_point = Gaussian2D.vec(0.0)
+          grad_feature = feature_vec(0.0)
 
-          # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
-          alpha_grad_from_feature = (feature * T_i - w_i / (1. - alpha)
-                                     ) * grad_pixel_feature
+          if has_grad:
+            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+            T_i = T_i / (1. - alpha)
 
-          # w_{i-1} = w_i + c_i a_i T(i)
-          w_i += feature * alpha * T_i
-          alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
+            feature = tile_feature[in_group_idx]
 
-          # alpha_grad * point_alpha is dp
-          # (2,) as the paper said, view space gradient is used for detect candidates for densification
+            # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
+            alpha_grad_from_feature = (feature * T_i - w_i / (1. - alpha)
+                                      ) * grad_pixel_feature
 
-          # Accumulating gradients in block shared memory does not appear to be faster
-          point_offset = tile_point_id[in_group_idx] 
+            # w_{i-1} = w_i + c_i a_i T(i)
+            w_i += feature * alpha * T_i
+            alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
 
-          if ti.static(points_requires_grad):
             grad_point = alpha_grad * Gaussian2D.to_vec(
                 point_alpha * dp_dmean, 
                 point_alpha * dp_dconic,
                 gaussian_alpha)
 
-            grad_points[point_offset] += grad_point
-          
-          if ti.static(features_requires_grad):
-            point_grad_feature = alpha * T_i * grad_pixel_feature    
-            grad_features[point_offset] += point_grad_feature
+            grad_feature = alpha * T_i * grad_pixel_feature    
 
 
+          if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
 
+            # Accumulating gradients in block shared memory does not appear to be faster
+            # on it's own, but combined with warp sums it seems to be fast
+            if ti.static(points_requires_grad):
+              warp_add_vector(tile_grad_point[in_group_idx], grad_point)
+            
+            if ti.static(features_requires_grad):
+              warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
         # end of point group loop
-      # end of point group id loop
 
+        ti.simt.block.sync()
+
+        # finally accumulate gradients in global memory
+        if load_index >= block_start_idx:
+          point_offset = tile_point_id[thread_id] 
+          if ti.static(points_requires_grad):
+            atomic_add_vector(grad_points[point_offset], tile_grad_point[thread_id])
+
+          if ti.static(features_requires_grad):
+            atomic_add_vector(grad_features[point_offset], tile_grad_feature[thread_id])
+
+      # end of point group id loop
     # end of pixel loop
 
   return _backward_kernel

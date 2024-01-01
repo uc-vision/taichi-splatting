@@ -126,26 +126,28 @@ def tile_mapper(config:RasterConfig):
 
 
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
-    cum_overlap_counts, total_overlap = generate_tile_overlaps(
-       gaussians, image_size)
-    
-    num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
 
-    # This needs to be initialised to zeros (not empty)
-    # as sometimes there are no overlaps for a tile
-    tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
+    with torch.no_grad():
+      cum_overlap_counts, total_overlap = generate_tile_overlaps(
+        gaussians, image_size)
+      
+      num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
 
-    if total_overlap > 0:
-      overlap_key, overlap_to_point = sort_tile_depths(
-        depths, gaussians, cum_overlap_counts, total_overlap, image_size)
+      # This needs to be initialised to zeros (not empty)
+      # as sometimes there are no overlaps for a tile
+      tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
+
+      if total_overlap > 0:
+        overlap_key, overlap_to_point = sort_tile_depths(
+          depths, gaussians, cum_overlap_counts, total_overlap, image_size)
 
 
-      find_ranges_kernel(overlap_key, tile_ranges)
-    else:
-      overlap_to_point = torch.empty((0, ), dtype=torch.int32, device=gaussians.device)
+        find_ranges_kernel(overlap_key, tile_ranges)
+      else:
+        overlap_to_point = torch.empty((0, ), dtype=torch.int32, device=gaussians.device)
 
-    return overlap_to_point, tile_ranges
-    
+      return overlap_to_point, tile_ranges
+      
   return f
 
 

@@ -1,10 +1,8 @@
 import argparse
 from functools import partial
-import time
 
 import torch
 import taichi as ti
-from tqdm import tqdm
 from taichi_splatting.benchmarks.util import benchmarked
 
 from taichi_splatting.rasterizer.function import rasterize, RasterConfig
@@ -30,7 +28,6 @@ def parse_args():
   args = parser.parse_args()
   args.image_size = tuple(map(int, args.image_size.split(',')))
   return args
-
 
 
 def main():
@@ -62,7 +59,6 @@ def main():
   print('----------------------------------------------------------')
   print(f'scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={point_overlap:.2f} tile_points={points_per_tile:.2f}')
   
-
   benchmarked('map_to_tiles', tile_map, profile=args.profile, iters=args.iters)  
 
 
@@ -72,7 +68,7 @@ def main():
   
   benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
-  gaussians2d.requires_grad_(True)
+  gaussians.feature.requires_grad_(True)
   def backward():
     image, alpha = forward()
     image.sum().backward()

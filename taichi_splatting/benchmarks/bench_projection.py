@@ -5,7 +5,7 @@ import torch
 from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting import projection
-# from taichi_splatting import projection_separate
+# from taichi_splatting import projection
 
 
 import taichi as ti
