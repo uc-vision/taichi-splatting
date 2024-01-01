@@ -72,7 +72,7 @@ def main():
   
   benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
-  gaussians2d.requires_grad_(True)
+  gaussians.feature.requires_grad_(True)
   def backward():
     image, alpha = forward()
     image.sum().backward()

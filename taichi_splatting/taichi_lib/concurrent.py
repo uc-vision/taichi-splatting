@@ -40,3 +40,16 @@ def warp_sum_vector(val: ti.template()):
   global_tid = block.global_thread_idx()
   return (global_tid % warp_size) == 0
 
+@ti.func
+def atomic_add_vector(dest:ti.template(), val: ti.template()):
+  # work around taichi bug for atomic_add with shared memory
+  for i in ti.static(range(dest.n)):
+    ti.atomic_add(dest[i], val[i])
+
+
+@ti.func
+def warp_add_vector(dest:ti.template(), val: ti.template()):
+  if warp_sum_vector(val):
+    # ti.atomic_add(dest, val) 
+    # taichi bug makes this spit out a compiler error when using shared memory
+    atomic_add_vector(dest, val)
