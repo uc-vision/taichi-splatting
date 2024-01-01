@@ -4,7 +4,7 @@ from functools import partial
 import torch
 from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting import spherical_harmonics
-# from taichi_splatting import projection_separate
+# from taichi_splatting import projection
 
 
 import taichi as ti

@@ -3,7 +3,7 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
-from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, warp_add_vector, warp_sum_vector
+from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, block_reduce_i32, morton_tile_inv, warp_add_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
  
@@ -16,8 +16,6 @@ def backward_kernel(config: RasterConfig,
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
-
-  print(points_requires_grad, features_requires_grad)
 
   @ti.kernel
   def _backward_kernel(
@@ -49,8 +47,9 @@ def backward_kernel(config: RasterConfig,
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
-    for tile_u, tile_v, u, v in ti.ndrange(tiles_wide, tiles_high, tile_size, tile_size):
+    for tile_u, tile_v, i in ti.ndrange(tiles_wide, tiles_high, tile_area):
       
+      u, v = morton_tile_inv(i)
       
       pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
       tile_id = tile_u + tile_v * tiles_wide
@@ -64,21 +63,14 @@ def backward_kernel(config: RasterConfig,
 
       tile_grad_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_grad_feature = ti.simt.block.SharedArray((tile_area,), dtype=feature_vec)
+      
 
-
-      shared_last_point = ti.simt.block.SharedArray((1,), dtype=ti.i32)
-      shared_last_point[0] = 0
-      ti.simt.block.sync()
-
-      ti.atomic_max(shared_last_point[0], image_last_valid[pixel.y, pixel.x])
-      ti.simt.block.sync()
-      end_offset = shared_last_point[0]
+      last_point_idx = image_last_valid[pixel.y, pixel.x]
+      end_offset = block_reduce_i32(last_point_idx, ti.max, ti.atomic_max, 0)
 
       start_offset, _ = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
 
-
-      last_point_idx = image_last_valid[pixel.y, pixel.x]
       accumulated_alpha: ti.f32 = image_alpha[pixel.y, pixel.x]
       T_i = 1.0 - accumulated_alpha  
 
@@ -129,17 +121,12 @@ def backward_kernel(config: RasterConfig,
             continue
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          feature = tile_feature[in_group_idx]
 
           gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
             ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
           
           alpha = point_alpha * gaussian_alpha
-          
-          # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
-          # 255 ) and also clamp 𝛼 with 0.99 from above.
           has_grad = (alpha >= ti.static(config.alpha_threshold)) and (point_index <= last_point_idx)      
-
 
           grad_point = Gaussian2D.vec(0.0)
           grad_feature = feature_vec(0.0)
@@ -147,6 +134,8 @@ def backward_kernel(config: RasterConfig,
           if has_grad:
             alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
             T_i = T_i / (1. - alpha)
+
+            feature = tile_feature[in_group_idx]
 
             # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
             alpha_grad_from_feature = (feature * T_i - w_i / (1. - alpha)

@@ -299,6 +299,24 @@ def make_library(dtype=ti.f32):
 
 
   @ti.func
+  def conic_grad(p: ti.f32, xy: vec2, uv: vec2, uv_conic: vec3):
+      d = xy - uv
+      a, b, c = uv_conic
+
+      dx2 = d.x**2
+      dy2 = d.y**2
+      dxdy = d.x * d.y
+      
+      dp_duv = vec2(
+          (b * d.y - 0.5 * a * (2 * uv.x - 2 * xy.x)) * p,
+          (b * d.x - 0.5 * c * (2 * uv.y - 2 * xy.y)) * p
+      )
+      dp_dconic = vec3(-0.5 * dx2 * p, -dxdy * p, -0.5 * dy2 * p)
+
+      return dp_duv, dp_dconic
+
+
+  @ti.func
   def cov_inv_basis(uv_cov: mat2, scale: dtype) -> mat2:
       basis = ti.Matrix.cols(cov_axes(uv_cov))
       return (basis * scale).inverse()

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Optional, Tuple
+from typing import Tuple
 from beartype import beartype
 from tensordict import tensorclass
 import torch

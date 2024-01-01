@@ -3,6 +3,7 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
+from taichi_splatting.taichi_lib.concurrent import morton_tile_inv
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
 
@@ -39,8 +40,8 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
     ti.loop_config(block_dim=(tile_area))
-    for tile_u, tile_v, u, v in ti.ndrange(tiles_wide, tiles_high, tile_size, tile_size):
-
+    for tile_u, tile_v, i in ti.ndrange(tiles_wide, tiles_high, tile_area):
+      u, v = morton_tile_inv(i)
 
       pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
       tile_id = tile_u + tile_v * tiles_wide
