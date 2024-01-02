@@ -1,9 +1,8 @@
-
 from functools import cache
 import taichi as ti
-from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
-from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, block_reduce_i32, morton_tile_inv, warp_add_vector
+from taichi_splatting.rasterizer import tiling
+from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, block_reduce_i32, warp_add_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
 
@@ -48,18 +47,10 @@ def backward_kernel(config: RasterConfig,
     tiles_wide = (camera_width + tile_size - 1) // tile_size 
     tiles_high = (camera_height + tile_size - 1) // tile_size
 
-    # put each tile_size * tile_size tile in the same CUDA thread group (block)
+    # see forward.py for explanation of tile_id and tile_idx and blocking
     ti.loop_config(block_dim=(tile_area))
-    for tile_u, tile_v, i in ti.ndrange(tiles_wide, tiles_high, tile_area):
-      
-      # use morton z-ordering for the threads mapping to pixel values
-      # helps a little with grouping warps on the same gaussians
-      u, v = morton_tile_inv(i)
-      
-      pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
-      tile_id = tile_u + tile_v * tiles_wide
-      thread_id = u + v * tile_size
-
+    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
+      pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, tiles_wide)
 
       # open the shared memory
       tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
@@ -108,16 +99,16 @@ def backward_kernel(config: RasterConfig,
         block_end_idx = end_offset - group_offset_base
         block_start_idx = ti.max(block_end_idx - tile_area, 0)
 
-        load_index = block_end_idx - thread_id - 1
+        load_index = block_end_idx - tile_idx - 1
         if load_index >= block_start_idx:
           point_idx = overlap_to_point[load_index]
 
-          tile_point_id[thread_id] = point_idx
-          tile_point[thread_id] = points[point_idx]
-          tile_feature[thread_id] = point_features[point_idx]
+          tile_point_id[tile_idx] = point_idx
+          tile_point[tile_idx] = points[point_idx]
+          tile_feature[tile_idx] = point_features[point_idx]
 
-          tile_grad_point[thread_id] = Gaussian2D.vec(0.0)
-          tile_grad_feature[thread_id] = feature_vec(0.0)
+          tile_grad_point[tile_idx] = Gaussian2D.vec(0.0)
+          tile_grad_feature[tile_idx] = feature_vec(0.0)
 
         ti.simt.block.sync()
 
@@ -177,12 +168,12 @@ def backward_kernel(config: RasterConfig,
 
         # finally accumulate gradients in global memory
         if load_index >= block_start_idx:
-          point_offset = tile_point_id[thread_id] 
+          point_offset = tile_point_id[tile_idx] 
           if ti.static(points_requires_grad):
-            atomic_add_vector(grad_points[point_offset], tile_grad_point[thread_id])
+            atomic_add_vector(grad_points[point_offset], tile_grad_point[tile_idx])
 
           if ti.static(features_requires_grad):
-            atomic_add_vector(grad_features[point_offset], tile_grad_feature[thread_id])
+            atomic_add_vector(grad_features[point_offset], tile_grad_feature[tile_idx])
 
       # end of point group id loop
     # end of pixel loop

@@ -20,8 +20,26 @@ def check_sh_degree(sh_features):
   return (n - 1)
 
 @cache
-def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
+def sh_function(degree:int=3, dimension:int=3, 
+                input_size:int=3,
+                dtype=torch.float32):
+  
   ti_dtype = torch_taichi[dtype]
+
+  if input_size == 3:
+    point_vec = ti.types.vector(3, ti_dtype)
+
+    @ti.func 
+    def get_position(point:point_vec) -> point_vec:
+      return point
+    
+  elif input_size == 11:
+    point_vec = ti.types.vector(11, ti_dtype)
+
+    @ti.func 
+    def get_position(point:point_vec) -> point_vec:
+      return point[0:3]
+
 
 
   vec16 = ti.types.vector(16, ti_dtype)
@@ -119,14 +137,15 @@ def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
 
   @ti.kernel    
   def evaluate_sh_at_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
-                          points:ti.types.ndarray(vec3, ndim=1), 
+                          points:ti.types.ndarray(point_vec, ndim=1), 
                           camera_pos:ti.types.ndarray(ti_dtype, ndim=1),
                           out:ti.types.ndarray(vec, ndim=1)):
       
       for i in range(params.shape[0]):
-          pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
+          cam_pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
+          pos = get_position(points[i])
 
-          coeffs = rsh_cart(ti.math.normalize(pos - points[i]))
+          coeffs = rsh_cart(ti.math.normalize(cam_pos - pos))
           params_i = params[i]
 
           for d in ti.static(range(dimension)):
@@ -160,14 +179,16 @@ def sh_function(degree:int=3, dimension:int=3, dtype=torch.float32):
 
 @beartype
 def evaluate_sh_at(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
-                points:torch.Tensor,     # N, 3
+                gaussians:torch.Tensor,     # N, 11 or N, 3 (packed gaussian or xyz)
                 camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
     degree = check_sh_degree(params)
 
     _module_function = sh_function(degree=degree, 
-                                   dimension=params.shape[1], dtype=params.dtype)
-    return _module_function.apply(params.contiguous(), points.contiguous(), camera_pos.contiguous())
+                                   dimension=params.shape[1], 
+                                   input_size=gaussians.shape[1],
+                                   dtype=params.dtype)
+    return _module_function.apply(params.contiguous(), gaussians.contiguous(), camera_pos.contiguous())
 
 
 

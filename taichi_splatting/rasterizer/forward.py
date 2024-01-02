@@ -3,8 +3,7 @@ from functools import cache
 import taichi as ti
 from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
-from taichi_splatting.taichi_lib.concurrent import morton_tile_inv
-
+from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
 
 
@@ -41,13 +40,13 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     tiles_high = (camera_height + tile_size - 1) // tile_size
 
     # put each tile_size * tile_size tile in the same CUDA thread group (block)
+    # tile_id is the index of the tile in the (tiles_wide x tiles_high) grid
+    # tile_idx is the index of the pixel in the tile
+    # pixels are blocked first by tile_id, then by tile_idx into (8x4) warps
+    
     ti.loop_config(block_dim=(tile_area))
-    for tile_u, tile_v, i in ti.ndrange(tiles_wide, tiles_high, tile_area):
-      u, v = morton_tile_inv(i)
-
-      pixel = ivec2(tile_u, tile_v) * tile_size + ivec2(u, v) 
-      tile_id = tile_u + tile_v * tiles_wide
-      thread_id = u + v * tile_size
+    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
+      pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, tiles_wide)
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
       T_i = 1.0
@@ -74,14 +73,14 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
         # each thread in a block loads one point into shared memory
         # then all threads in the block process those points sequentially
-        load_index = group_start_offset + thread_id
+        load_index = group_start_offset + tile_idx
 
         if load_index < end_offset:
           point_idx = overlap_to_point[load_index]
 
   
-          tile_point[thread_id] = points[point_idx]
-          tile_feature[thread_id] = point_features[point_idx]
+          tile_point[tile_idx] = points[point_idx]
+          tile_feature[tile_idx] = point_features[point_idx]
 
 
         ti.simt.block.sync()

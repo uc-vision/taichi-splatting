@@ -19,7 +19,7 @@ def render_sh_gaussians(
       
   gaussians, sh_features = cull_gaussians(packed_gaussians, sh_features, camera_params, config.tile_size, config.margin_tiles)
 
-  features = evaluate_sh_at(sh_features, gaussians, camera_params.camera_position)
+  features = evaluate_sh_at(sh_features, gaussians.detach(), camera_params.camera_position)
   gaussians2d, depths = project_to_image(gaussians, camera_params)
 
   return _render_with_features(gaussians2d, depths, features,
