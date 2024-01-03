@@ -22,6 +22,32 @@ def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
 
   return separates
 
+@ti.func
+def gaussian_tile_ranges(
+    uv: vec2,
+    uv_cov: mat2,
+    image_size: ti.math.ivec2,
+    gaussian_scale: ti.template(),
+    tile_size: ti.template()
+):
+
+    # avoid zero radii, at least 1 pixel
+    radius = ti.max(radii_from_cov(uv_cov) * gaussian_scale, 1.0)  
+
+    min_bound = ti.max(0.0, uv - radius)
+    max_bound = uv + radius
+
+    max_tile = image_size // tile_size
+
+    min_tile_bound = ti.cast(min_bound // tile_size, ti.i32)
+    min_tile_bound = ti.min(min_tile_bound, max_tile)
+
+    max_tile_bound = ti.cast(max_bound // tile_size, ti.i32) + 1
+    max_tile_bound = ti.min(ti.max(max_tile_bound, min_tile_bound + 1),
+                        max_tile)
+
+    return min_tile_bound, max_tile_bound
+
 def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bool=True):
 
   @ti.dataclass
@@ -44,13 +70,19 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
         if self.test_tile(tile_uv):
           count += 1
       return count
+    
+    @ti.func 
+    def range_count(self) -> ti.i32:
+      return self.tile_span.x * self.tile_span.y
 
   @ti.func 
   def obb_grid_query(v: Gaussian2D.vec, image_size:ivec2) -> OBBGridQuery:
       uv, uv_conic, _ = Gaussian2D.unpack(v)
       uv_cov = conic_to_cov(uv_conic)
 
-      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
+      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, 
+          image_size, gaussian_scale, tile_size)
+      
       return OBBGridQuery(
         # Find tiles which intersect the oriented box
         inv_basis = cov_inv_basis(uv_cov, gaussian_scale),
@@ -73,40 +105,24 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
     @ti.func 
     def count_tiles(self) -> ti.i32:
       return self.tile_span.x * self.tile_span.y
+    
+    @ti.func 
+    def range_count(self) -> ti.i32:
+      return self.tile_span.x * self.tile_span.y
           
   @ti.func 
   def range_grid_query(v: Gaussian2D.vec, image_size:ivec2) -> RangeGridQuery:
       uv, uv_conic, _ = Gaussian2D.unpack(v)
       uv_cov = conic_to_cov(uv_conic)
 
-      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
+      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, 
+          image_size, gaussian_scale, tile_size)
+      
       return RangeGridQuery(
         min_tile = min_tile,
         tile_span = max_tile - min_tile)
 
 
-  @ti.func
-  def gaussian_tile_ranges(
-      uv: vec2,
-      uv_cov: mat2,
-      image_size: ti.math.ivec2,
-  ):
 
-      # avoid zero radii, at least 1 pixel
-      radius = ti.max(radii_from_cov(uv_cov) * gaussian_scale, 1.0)  
-
-      min_bound = ti.max(0.0, uv - radius)
-      max_bound = uv + radius
-
-      max_tile = image_size // tile_size
-
-      min_tile_bound = ti.cast(min_bound // tile_size, ti.i32)
-      min_tile_bound = ti.min(min_tile_bound, max_tile)
-
-      max_tile_bound = ti.cast(max_bound // tile_size, ti.i32) + 1
-      max_tile_bound = ti.min(ti.max(max_tile_bound, min_tile_bound + 1),
-                          max_tile)
-
-      return min_tile_bound, max_tile_bound
   
   return obb_grid_query if tight_culling else range_grid_query

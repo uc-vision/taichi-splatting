@@ -8,10 +8,11 @@ from taichi.math import ivec2
 import torch
 from taichi_splatting.data_types import RasterConfig
 
-from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
+from taichi_splatting.taichi_lib.f32 import (
+  Gaussian2D, conic_to_cov)
 
-
-from taichi_splatting.taichi_lib.grid_query import make_grid_query
+from taichi_splatting.taichi_lib.grid_query import (
+  make_grid_query, gaussian_tile_ranges)
 
 def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
   def pad(x):
@@ -32,18 +33,22 @@ def tile_mapper(config:RasterConfig):
   
 
   @ti.kernel
-  def tile_overlaps_kernel(
+  def upper_overlaps_kernel(
       gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1),  
       image_size: ivec2,
+  ) -> ti.i32:
 
-      # outputs
-      counts: ti.types.ndarray(ti.i32, ndim=1),
-  ):
-      counts[0] = 0
+      total = 0
       for idx in range(gaussians.shape[0]):
-          query = grid_query(gaussians[idx], image_size)
-          counts[idx + 1] =  query.count_tiles()
+          uv, uv_conic, _ = Gaussian2D.unpack(gaussians[idx])
+          uv_cov = conic_to_cov(uv_conic)
 
+          min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size, 
+            config.gaussian_scale, tile_size)
+          tile_range = max_tile - min_tile
+
+          total += tile_range.x * tile_range.y
+      return total
 
   @ti.kernel
   def find_ranges_kernel(
@@ -68,27 +73,26 @@ def tile_mapper(config:RasterConfig):
   def generate_sort_keys_kernel(
       depth: ti.types.ndarray(ti.f32, ndim=1),  # (M)
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
-      cumulative_overlap_counts: ti.types.ndarray(ti.i64, ndim=1),  # (M)
       # (K), K = sum(num_overlap_tiles)
       image_size: ivec2,
 
       # outputs
       overlap_sort_key: ti.types.ndarray(ti.i64, ndim=1),
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
-
-  ):
+  ) -> ti.i32:
     tiles_wide = image_size.x // tile_size
+    total : ti.i32 = 0
 
-    for idx in range(cumulative_overlap_counts.shape[0]):
+    for idx in range(gaussians.shape[0]):
       encoded_depth_key = ti.bit_cast(depth[idx], ti.i32)
       query = grid_query(gaussians[idx], image_size)
 
-      overlap_idx = 0
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
         if query.test_tile(tile_uv):
           tile = tile_uv + query.min_tile
 
-          key_idx = cumulative_overlap_counts[idx] + overlap_idx
+          key_idx = ti.atomic_add(total, 1)
+
           encoded_tile_id = ti.cast(tile.x + tile.y * tiles_wide, ti.i32)
           
           sort_key = ti.cast(encoded_depth_key, ti.i64) + (
@@ -96,51 +100,35 @@ def tile_mapper(config:RasterConfig):
       
           overlap_sort_key[key_idx] = sort_key # sort based on tile_id, depth
           overlap_to_point[key_idx] = idx # map overlap index back to point index
-          overlap_idx += 1
+    return total
 
-  def sort_tile_depths(depths:torch.Tensor, tile_overlap_ranges:torch.Tensor, cum_overlap_counts:torch.Tensor, total_overlap:int, image_size):
+  def sort_tile_depths(depths:torch.Tensor, tile_overlap_ranges:torch.Tensor,  upper_overlap:int, image_size):
 
-    overlap_key = torch.empty((total_overlap, ), dtype=torch.int64, device=cum_overlap_counts.device)
-    overlap_to_point = torch.empty((total_overlap, ), dtype=torch.int32, device=cum_overlap_counts.device)
+    overlap_key = torch.empty((upper_overlap, ), dtype=torch.int64, device=tile_overlap_ranges.device)
+    overlap_to_point = torch.empty((upper_overlap, ), dtype=torch.int32, device=tile_overlap_ranges.device)
 
-    generate_sort_keys_kernel(depths, tile_overlap_ranges, cum_overlap_counts, image_size,
+    total_overlaps = generate_sort_keys_kernel(depths, tile_overlap_ranges, image_size,
                               overlap_key, overlap_to_point)
     
-
-    overlap_key, permutation = torch.sort(overlap_key)
+    overlap_key, permutation = torch.sort(overlap_key[:total_overlaps])
     overlap_to_point = overlap_to_point[permutation]
     return overlap_key, overlap_to_point
   
 
 
-  def generate_tile_overlaps(gaussians, image_size):
-    overlap_counts = torch.empty( (1 + gaussians.shape[0], ), dtype=torch.int32, device=gaussians.device)
-
-    tile_overlaps_kernel(gaussians, ivec2(image_size), overlap_counts)
-
-    cum_overlap_counts = overlap_counts.cumsum(dim=0)
-    total_overlap = cum_overlap_counts[-1].item()
-    
-
-    return cum_overlap_counts[:-1], total_overlap
-
-
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
 
     with torch.no_grad():
-      cum_overlap_counts, total_overlap = generate_tile_overlaps(
-        gaussians, image_size)
-      
+      max_overlaps = upper_overlaps_kernel(gaussians, ivec2(image_size))
       num_tiles = (image_size[0] // tile_size) * (image_size[1] // tile_size)
 
       # This needs to be initialised to zeros (not empty)
       # as sometimes there are no overlaps for a tile
       tile_ranges = torch.zeros((num_tiles, 2), dtype=torch.int32, device=gaussians.device)
 
-      if total_overlap > 0:
+      if max_overlaps > 0:
         overlap_key, overlap_to_point = sort_tile_depths(
-          depths, gaussians, cum_overlap_counts, total_overlap, image_size)
-
+          depths, gaussians, max_overlaps, image_size)
 
         find_ranges_kernel(overlap_key, tile_ranges)
       else:

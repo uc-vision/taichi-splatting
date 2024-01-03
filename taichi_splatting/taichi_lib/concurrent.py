@@ -85,3 +85,20 @@ def warp_add_vector(dest:ti.template(), val: ti.template()):
     # ti.atomic_add(dest, val) 
     # taichi spits out a LLVM assertion when using shared memory
     atomic_add_vector(dest, val)
+
+
+@ti.func
+def atomic_inc_active(val: ti.template()):
+  global_id = block.global_thread_idx() 
+  lane_id = global_id % WARP_SIZE
+
+  mask = ti.simt.warp.active_mask()
+  leader = ti.i32(WARP_SIZE - ti.math.clz(mask) - 1)
+
+  i = 0
+  if lane_id == leader:
+    i = ti.atomic_add(val, ti.i32(ti.math.popcnt(mask)))
+  i = ti.simt.warp.shfl_sync_i32(mask, i, leader)
+
+  index = ti.math.popcnt(ti.bit_cast(mask, ti.u32) >> (lane_id + 1))
+  return i + index
