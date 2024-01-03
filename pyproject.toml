@@ -12,7 +12,7 @@ maintainers = [
 
 dependencies = [
   "beartype", 
-  "taichi", 
+  "taichi-nightly", 
   "tqdm", 
   "tensordict"
 ]
@@ -24,6 +24,9 @@ dependencies = [
 requires = ["setuptools>=43.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+
+[options]
+dependency_links = ["https://pypi.taichi.graphics/simple/"]
 
 [project.scripts]  # Optional
 fit_image_gaussians = "taichi_splatting.scripts.fit_image_gaussians:main"

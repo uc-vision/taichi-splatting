@@ -16,13 +16,42 @@ Examples:
 
 ## Major dependencies
 
-* Taichi >= 1.7.0
-* Torch >= 1.8 (probably works with earlier versions, too)
+* taichi-nightly
+
+Some bug fixes which have occurred after the 1.7.0 release:
+`pip install --upgrade -i https://pypi.taichi.graphics/simple/ taichi-nightly`
+
+* torch >= 1.8 (probably works with earlier versions, too)
 
 ## Installing
 
+* Install taichi-nightly as above (note that the external repo cannot be listed in the pyproject.toml)
 * Clone down with `git clone` and install with `pip install ./taichi-spatting`
 * `pip install taichi-splatting`
+
+
+## Executables
+
+### fit_image_gaussians
+
+There exists a toy optimizer for 2D images `fit_image_gaussians` - useful for testing rasterization without the rest of the dependencies.
+
+### benchmarks
+
+There exist benchmarks to evaluate performance on individual components in isolation under `taichi_splatting/benchmarks/`
+
+### tests 
+
+Tests (gradient tests and tests comparing to torch-based reference implementations) can be run with pytest, or individually under 
+`taichi_splatting/tests/`
+
+### splat-viewer
+
+A viewer for reconstructions created with the original gaussian-splatting repository can be found [here](https://github.com/uc-vision/splat-viewer) or installed with pip. Has dependencies on open3d and Qt. 
+
+### splat-benchmark
+
+A benchmark for a full rendererer (in the same repository as above) with real reconstructions (rendering the original camera viewpoints).  Options exist for tweaking all the renderer parameters, benchmarking backward pass etc.
 
 
 ## Progress
@@ -39,7 +68,6 @@ Examples:
 ### Todo
 
 * 3D training code (likely different repository)
-* 3D viewer (extract from private codebase)
 * Backward projection autograd takes a while to compile and is not cached properly
 
 ### Improvements

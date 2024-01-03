@@ -101,8 +101,8 @@ class CameraParams:
 
   def to(self, device=None, dtype=None):
     return CameraParams(
-      T_image_camera=self.T_image_camera.to(device=device, dtype=dtype).contiguous(),
-      T_camera_world=self.T_camera_world.to(device=device, dtype=dtype).contiguous(),
+      T_image_camera=self.T_image_camera.to(device=device, dtype=dtype),
+      T_camera_world=self.T_camera_world.to(device=device, dtype=dtype),
       near_plane=self.near_plane,
       far_plane=self.far_plane,
       image_size=self.image_size
