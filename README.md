@@ -34,7 +34,7 @@ Some bug fixes which have occurred after the 1.7.0 release:
 
 ### fit_image_gaussians
 
-There exists a toy optimizer for 2D images `fit_image_gaussians` - useful for testing rasterization without the rest of the dependencies.
+There exists a toy optimizer for fitting a set of randomly initialized gaussians to some 2D images `fit_image_gaussians` - useful for testing rasterization without the rest of the dependencies.
 
 ### benchmarks
 

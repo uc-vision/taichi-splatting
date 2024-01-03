@@ -4,10 +4,13 @@ from typing import Tuple
 import torch
 
 from taichi_splatting.culling import CameraParams, frustum_culling
+from taichi_splatting.data_types import check_packed3d
 from taichi_splatting.tile_mapper import  map_to_tiles, pad_to_tile
 from taichi_splatting.projection import project_to_image
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
+
+
 
 
 def render_sh_gaussians(
@@ -16,6 +19,8 @@ def render_sh_gaussians(
   camera_params: CameraParams,
   config:RasterConfig
 ):
+  check_packed3d(packed_gaussians)      
+
       
   gaussians, sh_features = cull_gaussians(packed_gaussians, sh_features, camera_params, config.tile_size, config.margin_tiles)
 
@@ -32,7 +37,8 @@ def render_gaussians(
       camera_params: CameraParams,
       config:RasterConfig
     ):
-  
+  check_packed3d(packed_gaussians)      
+
   
   gaussians, features = cull_gaussians(packed_gaussians, features, camera_params, config.tile_size, config.margin_tiles)
   gaussians2d, depths = project_to_image(gaussians, camera_params)
