@@ -119,13 +119,6 @@ def sh_function(degree:int=3, dimension:int=3,
       )        
 
 
-  def check_sh_degree(sh_features):
-    n_sh = sh_features.shape[2]
-    n = int(math.sqrt(n_sh))
-
-    assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({sh_features.shape})"
-    return (n - 1)
-
 
   assert degree >= 0 and degree <= 3
 

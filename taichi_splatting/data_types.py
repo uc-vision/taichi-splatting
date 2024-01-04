@@ -31,7 +31,6 @@ def check_packed2d(packed_gaussians: torch.Tensor):
 
 
 
-
 @tensorclass
 class Gaussians3D():
   position     : torch.Tensor # 3  - xyz
@@ -80,6 +79,10 @@ class Gaussians2D():
 class CameraParams:
   T_image_camera: torch.Tensor # (3, 3) camera projection matrix
   T_camera_world  : torch.Tensor # (4, 4) camera view matrix
+
+  @property
+  def device(self):
+    return self.T_image_camera.device
 
   @property
   def T_image_world(self):

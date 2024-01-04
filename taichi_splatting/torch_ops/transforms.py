@@ -34,8 +34,8 @@ def make_homog(points):
 
 def transform44(transform, points):
 
-  homog = points.reshape([-1, 4, 1])
-  transformed = transform.reshape([1, 4, 4]) @ homog
+  points = points.reshape([-1, 4, 1])
+  transformed = transform.reshape([1, 4, 4]) @ points
   return transformed[..., 0].reshape(-1, 4)
 
 

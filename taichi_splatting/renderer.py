@@ -62,8 +62,8 @@ def _render_with_features(gaussians2d:torch.Tensor, depths:torch.Tensor,
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=image_size, config=config)
 
-
-  return image[..., :n], image[..., n]
+  depth = image[..., n] / (alpha + 1e-6)
+  return image[..., :n], depth
 
 
 def cull_gaussians(

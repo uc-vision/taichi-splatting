@@ -90,6 +90,12 @@ def make_library(dtype=ti.f32):
     position, log_scaling, rotation, alpha_logit = unpack_vec_g3d(vec)
     return position, ti.exp(log_scaling), ti.math.normalize(rotation), sigmoid(alpha_logit)
 
+
+  @ti.func
+  def bounding_sphere(vec:vec_g3d, gaussian_scale: ti.template()):
+    position, log_scaling = vec[0:3], vec[3:6]
+    return position, ti.exp(log_scaling).max() * gaussian_scale
+
   # Taichi structs don't have static methods, but they can be added afterward
   Gaussian2D.vec = vec_g2d
   Gaussian2D.to_vec = to_vec_g2d
@@ -103,6 +109,7 @@ def make_library(dtype=ti.f32):
   Gaussian3D.unpack = unpack_vec_g3d
   Gaussian3D.unpack_activate = unpack_activate_g3d
   Gaussian3D.get_position = get_position_g3d
+  Gaussian3D.bounding_sphere = bounding_sphere
 
 
 
