@@ -8,7 +8,7 @@ from taichi.math import ivec2
 import torch
 from taichi_splatting.data_types import RasterConfig
 
-from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
+from taichi_splatting.taichi_lib.f32 import (Gaussian2D, vec3)
 
 
 from taichi_splatting.taichi_lib.grid_query import make_grid_query
@@ -66,7 +66,7 @@ def tile_mapper(config:RasterConfig):
 
   @ti.kernel
   def generate_sort_keys_kernel(
-      depth: ti.types.ndarray(ti.f32, ndim=1),  # (M)
+      depth: ti.types.ndarray(ti.f32, ndim=2),  # (M, >= 1)
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
       cumulative_overlap_counts: ti.types.ndarray(ti.i64, ndim=1),  # (M)
       # (K), K = sum(num_overlap_tiles)
@@ -80,7 +80,7 @@ def tile_mapper(config:RasterConfig):
     tiles_wide = image_size.x // tile_size
 
     for idx in range(cumulative_overlap_counts.shape[0]):
-      encoded_depth_key = ti.bit_cast(depth[idx], ti.i32)
+      encoded_depth_key = ti.bit_cast(depth[idx, 0], ti.i32)
       query = grid_query(gaussians[idx], image_size)
 
       overlap_idx = 0
@@ -158,8 +158,8 @@ def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor,
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
-     gaussians: (N, 6) torch tensor of packed gaussians, N is the number of gaussians
-     depths: (N, ) torch float tensor, where N is the number of gaussians
+     gaussians: (N, 6) torch.Tensor of packed gaussians, N is the number of gaussians
+     depths: (N, >= 1)  torch.Tensor of depths or depth + depth variance + depth^2
      image_size: (2, ) tuple of ints, (width, height)
      tile_config: configuration for tile mapper (tile_size etc.)
 

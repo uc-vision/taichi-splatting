@@ -7,7 +7,7 @@ from taichi_splatting.data_types import CameraParams, check_packed3d
 from taichi_splatting.taichi_lib.f32 import Gaussian3D
 from taichi_splatting.torch_ops.transforms import transform44
 
-from taichi_splatting.taichi_lib.f32 import point_to_image
+from taichi_splatting.taichi_lib.f32 import project_perspective
  
 
 @ti.kernel
@@ -25,7 +25,7 @@ def frustum_culling_kernel(
 ):    
     # filter points in camera
     for point_id in range(gaussians.shape[0]):
-        pixel, depth = point_to_image(
+        pixel, depth = project_perspective(
             position=Gaussian3D.get_position(gaussians[point_id]),
             T_image_world=T_image_world[0],
         )

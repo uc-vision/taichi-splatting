@@ -54,7 +54,7 @@ def get_projective_transform_jacobian(
       zero, fy / z, -(fy * y) / (z * z)
     ], dim=1).reshape(-1, 2, 3)
 
-def project_gaussian_to_image(
+def project_perspective_gaussian(
     projective_transform: torch.Tensor, # 3, 3
     point_in_camera: torch.Tensor,      # N, 3
     cov_in_camera: torch.Tensor         # N, 3, 3
@@ -101,7 +101,7 @@ def apply(gaussians, T_image_camera, T_camera_world):
   point_in_camera = transform44(T_camera_world,  make_homog(position))[:, :3]
   uv = transform33(T_image_camera, point_in_camera) / point_in_camera[:, 2:3]
   cov_in_camera = covariance_in_camera(T_camera_world, rotation, scale)
-  uv_cov = project_gaussian_to_image(T_image_camera, point_in_camera, cov_in_camera)
+  uv_cov = project_perspective_gaussian(T_image_camera, point_in_camera, cov_in_camera)
 
   points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha], axis=-1)
   depths = point_in_camera[:, 2]

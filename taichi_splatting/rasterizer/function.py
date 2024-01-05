@@ -1,6 +1,7 @@
 from functools import cache
 
 from taichi_splatting.autograd import restore_grad
+from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
 
 from .forward import RasterConfig, forward_kernel
 from .backward import backward_kernel
@@ -73,13 +74,16 @@ def render_function(config:RasterConfig,
 
 
 @beartype
-def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
+def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
               overlap_to_point: torch.Tensor, tile_overlap_ranges: torch.Tensor,
               image_size: Tuple[Integral, Integral], config: RasterConfig
               ) -> Tuple[torch.Tensor, torch.Tensor]:
   """
+  Rasterize an image given 2d gaussians, features and tile overlap information.
+  Consider using rasterize instead to also compute tile overlap information.
+
   Parameters:
-      gaussians: (N, 6)  packed gaussians, N is the number of gaussians
+      gaussians2d: (N, 6)  packed gaussians, N is the number of gaussians
       features: (N, F)   features, F is the number of features
 
       tile_overlap_ranges: (TH, TW, 2) M is the number of tiles, 
@@ -94,9 +98,41 @@ def rasterize(gaussians: torch.Tensor, features: torch.Tensor,
       image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
       alpha: (H, W) torch tensor, where H, W are the image height and width
   """
-  _module_function = render_function(config, gaussians.requires_grad,
+  _module_function = render_function(config, gaussians2d.requires_grad,
                                       features.requires_grad, features.shape[1])
 
-  return _module_function.apply(gaussians, features, 
+  return _module_function.apply(gaussians2d, features, 
           overlap_to_point, tile_overlap_ranges, 
           image_size)
+
+
+def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor, 
+                          features:torch.Tensor, image_size:Tuple[Integral, Integral],
+                          config:RasterConfig):
+    
+    
+  """
+  Rasterize an image given 2d gaussians, features. 
+
+  Parameters:
+      gaussians2d: (N, 6)  packed gaussians, N is the number of gaussians
+      features: (N, F)   features, F is the number of features
+
+      image_size: (2, ) tuple of ints, (width, height)
+      config: Config - configuration parameters for rasterization
+
+    Returns:
+      image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
+      alpha: (H, W) torch tensor, where H, W are the image height and width
+  """
+
+  # render with padding to tile_size, later crop back to original size
+  padded_size = pad_to_tile(image_size, config.tile_size)
+  overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
+    image_size=padded_size, config=config)
+
+  image, alpha = rasterize_with_tiles(gaussians2d, features, 
+    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
+    image_size=image_size, config=config)
+
+  return image, alpha

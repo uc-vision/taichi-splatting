@@ -120,7 +120,7 @@ def make_library(dtype=ti.f32):
   mat2x3f = ti.types.matrix(n=2, m=3, dtype=dtype)
 
   @ti.func
-  def point_to_camera(
+  def project_perspective_camera_image(
       position: vec3,
       T_camera_world: mat4,
       projective_transform: mat3,
@@ -131,7 +131,7 @@ def make_library(dtype=ti.f32):
 
 
   @ti.func
-  def point_to_image(
+  def project_perspective(
       position: vec3,
       T_image_world: mat4,
   ):
@@ -189,7 +189,7 @@ def make_library(dtype=ti.f32):
       ])
 
   @ti.func
-  def project_gaussian_to_image(
+  def project_perspective_gaussian(
       projective_transform: mat3,
       point_in_camera: vec3,
       cov_in_camera: mat3) -> mat2:

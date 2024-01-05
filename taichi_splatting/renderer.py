@@ -1,69 +1,72 @@
 
-from numbers import Integral
-from typing import Tuple
+
+from dataclasses import dataclass
+from typing import Optional
 import torch
 
 from taichi_splatting.culling import CameraParams, frustum_culling
 from taichi_splatting.data_types import check_packed3d
-from taichi_splatting.tile_mapper import  map_to_tiles, pad_to_tile
-from taichi_splatting.projection import project_to_image
+from taichi_splatting.projection import compute_depth_var, project_to_image
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
 
+@dataclass 
+class Rendering:
+  image: torch.Tensor  # (H, W, C)
+  depth: Optional[torch.Tensor] = None  # (H, W)
+  depth_var: Optional[torch.Tensor] = None # (H, W)
 
-
-def render_sh_gaussians(
-  packed_gaussians: torch.Tensor,
-  sh_features: torch.Tensor,
-  camera_params: CameraParams,
-  config:RasterConfig
-):
-  check_packed3d(packed_gaussians)      
-
-      
-  gaussians, sh_features = cull_gaussians(packed_gaussians, sh_features, camera_params, config.tile_size, config.margin_tiles)
-
-  features = evaluate_sh_at(sh_features, gaussians.detach(), camera_params.camera_position)
-  gaussians2d, depths = project_to_image(gaussians, camera_params)
-
-  return _render_with_features(gaussians2d, depths, features,
-    image_size=camera_params.image_size, config=config)
 
 
 def render_gaussians(
-      packed_gaussians: torch.Tensor,
-      features : torch.Tensor,
-      camera_params: CameraParams,
-      config:RasterConfig
-    ):
+  packed_gaussians: torch.Tensor,
+  features: torch.Tensor,
+  camera_params: CameraParams, 
+  config:RasterConfig,      
+  use_sh:bool = False,      
+  render_depth:bool = False 
+) -> Rendering:
+  """
+  A complete renderer for 3D gaussians. 
+  Parameters:
+    packed_gaussians: torch.Tensor (N, 11) - packed 3D gaussians
+    features: torch.Tensor (N, C) | torch.Tensor(N, 3, (D+1)**2) 
+      features for each gaussian OR spherical harmonics coefficients of degree D
+    
+    camera_params: CameraParams
+    config: RasterConfig
+    use_sh: bool - whether to use spherical harmonics
+    render_depth: bool - whether to render depth and depth variance
+  
+  Returns:
+    images : Rendering - rendered images, with optional depth and depth variance
+    
+  """
+
   check_packed3d(packed_gaussians)      
 
-  
   gaussians, features = cull_gaussians(packed_gaussians, features, camera_params, config.tile_size, config.margin_tiles)
-  gaussians2d, depths = project_to_image(gaussians, camera_params)
+  if use_sh:
+    features = evaluate_sh_at(features, gaussians.detach(), camera_params.camera_position)
+  else:
+    assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
-  return _render_with_features(gaussians2d, depths, features,
+  gaussians2d, depthvars = project_to_image(gaussians, camera_params)
+
+  if render_depth:
+    features = torch.cat([depthvars, features], dim=1)
+
+
+  image_features, total_weight = rasterize(gaussians2d, depthvars, features,
     image_size=camera_params.image_size, config=config)
 
-def _render_with_features(gaussians2d:torch.Tensor, depths:torch.Tensor, 
-                          features:torch.Tensor, image_size:Tuple[Integral, Integral],
-                          config:RasterConfig):
-    
-  # render with padding to tile_size, later crop back to original size
-  padded_size = pad_to_tile(image_size, config.tile_size)
-  overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
-    image_size=padded_size, config=config)
+  if render_depth:
+    depth, depth_var = compute_depth_var(image_features, total_weight)
+    return Rendering(image_features, depth, depth_var)
 
-  n = features.shape[1]
-  features=torch.cat([features, depths.unsqueeze(1)], dim=1) 
+  return Rendering(image_features)
 
-  image, alpha = rasterize(gaussians=gaussians2d, features=features, 
-    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
-    image_size=image_size, config=config)
-
-  depth = image[..., n] / (alpha + 1e-6)
-  return image[..., :n], depth
 
 
 def cull_gaussians(

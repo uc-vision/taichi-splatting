@@ -67,6 +67,9 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 
 ### Todo
 
+* Depth covariance example
+* Benchmark with original + taichi_3dgs rasterizer
+
 * 3D training code (likely different repository)
 * Backward projection autograd takes a while to compile and is not cached properly
 
