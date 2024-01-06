@@ -121,6 +121,8 @@ def backward_kernel(config: RasterConfig,
           if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_idx)):
             continue
 
+          # Could factor this out and only compute grad if needed
+          # however, it does not seem to make any difference
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
 
           gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
