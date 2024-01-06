@@ -64,6 +64,7 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 * Spherical harmonics with autograd
 * Gradient tests for most parts (float64)
 * Fit to image training example/test
+* Depth and depth-covariance rendering
 
 ### Todo
 
