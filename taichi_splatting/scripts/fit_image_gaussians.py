@@ -68,7 +68,7 @@ def main():
   h, w = ref_image.shape[:2]
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
-          debug=args.debug, device_memory_GB=0.1, kernel_profiler=args.profile)
+          debug=args.debug, device_memory_GB=0.1)
 
   print(f'Image size: {w}x{h}')
 

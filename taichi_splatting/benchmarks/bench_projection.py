@@ -3,14 +3,12 @@ from functools import partial
 
 import torch
 from taichi_splatting.benchmarks.util import benchmarked
-from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting import projection
 # from taichi_splatting import projection
 
 
 import taichi as ti
 from taichi_splatting.tests.random_data import random_3d_gaussians, random_camera
-
 
 
 def parse_args():
@@ -29,12 +27,12 @@ def parse_args():
   return args
 
 
-def main():
+def test_projection():
 
   args = parse_args()
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1, kernel_profiler=args.profile)
+  ti.init(arch=ti.cuda, offline_cache=True, log_level=ti.INFO, 
+        device_memory_GB=0.1)
   
      
   torch.manual_seed(args.seed)
@@ -63,10 +61,17 @@ def main():
 
   packed.requires_grad_(False)    
   camera_params.T_camera_world.requires_grad_(True)
-  camera_params.T_image_camera.requires_grad_(True)
-  benchmarked('backward (camera)', project_backward, profile=args.profile, iters=args.iters)  
+  benchmarked('backward (extrinsics)', project_backward, profile=args.profile, iters=args.iters)  
 
+  camera_params.T_camera_world.requires_grad_(False)
+  camera_params.T_image_camera.requires_grad_(True)
+  benchmarked('backward (intrinsics)', project_backward, profile=args.profile, iters=args.iters)  
+
+  packed.requires_grad_(True)    
+  camera_params.T_camera_world.requires_grad_(True)
+  camera_params.T_image_camera.requires_grad_(True)
+  benchmarked('backward (everything)', project_backward, profile=args.profile, iters=args.iters)  
 
 
 if __name__ == '__main__':
-  main()
+  test_projection()

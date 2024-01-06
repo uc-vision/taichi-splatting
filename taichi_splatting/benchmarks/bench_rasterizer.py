@@ -5,7 +5,7 @@ import torch
 import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
 
-from taichi_splatting.rasterizer.function import rasterize, RasterConfig
+from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
 from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
 from taichi_splatting.tile_mapper import map_to_tiles
@@ -21,7 +21,7 @@ def parse_args():
   parser.add_argument('--scale_factor', type=int, default=2)
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--iters', type=int, default=50)
+  parser.add_argument('--iters', type=int, default=100)
 
   
 
@@ -30,12 +30,12 @@ def parse_args():
   return args
 
 
-def main():
+def test_rasterizer():
 
   args = parse_args()
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1, kernel_profiler=True)
+        device_memory_GB=0.1)
   
      
   torch.manual_seed(args.seed)
@@ -62,7 +62,7 @@ def main():
   benchmarked('map_to_tiles', tile_map, profile=args.profile, iters=args.iters)  
 
 
-  forward = partial(rasterize, gaussians=gaussians2d, features=gaussians.feature, 
+  forward = partial(rasterize_with_tiles, gaussians2d=gaussians2d, features=gaussians.feature, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=args.image_size, config=config)
   

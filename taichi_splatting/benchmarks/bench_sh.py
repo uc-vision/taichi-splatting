@@ -4,11 +4,8 @@ from functools import partial
 import torch
 from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting import spherical_harmonics
-# from taichi_splatting import projection
-
 
 import taichi as ti
-from taichi_splatting.tests.random_data import random_3d_gaussians, random_camera
 
 
 
@@ -30,12 +27,12 @@ def parse_args():
   return args
 
 
-def main():
+def test_sh():
 
   args = parse_args()
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1, kernel_profiler=args.profile)
+        device_memory_GB=0.1)
   
      
   torch.manual_seed(args.seed)

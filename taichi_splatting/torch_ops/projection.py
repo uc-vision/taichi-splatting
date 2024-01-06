@@ -104,13 +104,13 @@ def apply(gaussians, T_image_camera, T_camera_world):
   uv_cov = project_perspective_gaussian(T_image_camera, point_in_camera, cov_in_camera)
 
   points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha], axis=-1)
-  depths = point_in_camera[:, 2]
+  depths = torch.stack([point_in_camera[:, 2], cov_in_camera[:, 2, 2], point_in_camera[:, 2] ** 2], axis=-1)
 
   return points, depths.contiguous()
 
 def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
   ) -> Tuple[torch.Tensor, torch.Tensor]:  
 
-  vec = gaussians.pack_gaussian3d()
+  vec = gaussians.packed()
   return apply(vec, 
           camera_params.T_image_camera, camera_params.T_camera_world)

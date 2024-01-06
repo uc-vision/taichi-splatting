@@ -159,7 +159,7 @@ def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor,
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
      gaussians: (N, 6) torch.Tensor of packed gaussians, N is the number of gaussians
-     depths: (N, >= 1)  torch.Tensor of depths or depth + depth variance + depth^2
+     depths: (N, 1 or 3)  torch.Tensor of depths or depth + depth variance + depth^2
      image_size: (2, ) tuple of ints, (width, height)
      tile_config: configuration for tile mapper (tile_size etc.)
 

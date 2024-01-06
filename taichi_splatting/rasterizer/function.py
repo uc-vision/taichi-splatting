@@ -135,4 +135,4 @@ def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor,
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
     image_size=image_size, config=config)
 
-  return image, alpha
+  return image, alpha 

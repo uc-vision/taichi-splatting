@@ -58,7 +58,7 @@ def test_projection(iters = 100, dtype=torch.float64):
 
   for i in tqdm(range(iters)):
     gaussians, camera = gen_inputs(i)
-    inputs = (gaussians.pack_gaussian3d(), 
+    inputs = (gaussians.packed(), 
       camera.T_image_camera, camera.T_camera_world)
 
     out1, grad1 = eval_with_grad(ti_proj.apply, *inputs)
@@ -78,7 +78,7 @@ def test_projection_grad(iters = 100):
 
   for i in tqdm(range(iters), desc="projection_gradcheck"):
       gaussians, camera = gen_inputs(i)
-      inputs = [x.requires_grad_(True) for x in (gaussians.pack_gaussian3d(), 
+      inputs = [x.requires_grad_(True) for x in (gaussians.packed(), 
         camera.T_image_camera, camera.T_camera_world)]
       
       try:
@@ -91,5 +91,5 @@ def test_projection_grad(iters = 100):
 if __name__ == '__main__':
   torch.set_printoptions(precision=8, sci_mode=False)
 
-  test_projection_grad()
+  # test_projection_grad()
   test_projection()
