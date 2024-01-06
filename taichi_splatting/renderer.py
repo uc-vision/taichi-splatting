@@ -56,14 +56,13 @@ def render_gaussians(
 
   if render_depth:
     features = torch.cat([depthvars, features], dim=1)
-
-
+    
   image_features, total_weight = rasterize(gaussians2d, depthvars, features,
     image_size=camera_params.image_size, config=config)
 
   if render_depth:
     depth, depth_var = compute_depth_var(image_features, total_weight)
-    return Rendering(image_features, depth, depth_var)
+    return Rendering(image_features[:, :, 3:], depth, depth_var)
 
   return Rendering(image_features)
 

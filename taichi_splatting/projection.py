@@ -167,13 +167,13 @@ def depth_var_func(torch_dtype=torch.float32, eps=1e-8):
     h, w = features_depth.shape[0:2]
 
     for v, u in ti.ndrange(h, w):
-      d, d2, var = [features_depth[v, u, i] for i in ti.static(range(3))]
       
       weight = total_weight[v, u] + eps
+      d, d2, var = [features_depth[v, u, i] / weight
+                     for i in ti.static(range(3))]
       
-      d = d / weight
       depth[v, u] = d 
-      depth_var[v, u] = (d2 / weight - (d / weight) ** 2) + var / weight
+      depth_var[v, u] = (d2  - d**2) + var
 
   class _module_function(torch.autograd.Function):
     @staticmethod
