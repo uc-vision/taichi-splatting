@@ -12,7 +12,9 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 
 @cache
-def project_to_image_function(torch_dtype=torch.float32, perspective:bool = True):
+def project_to_image_function(torch_dtype=torch.float32, 
+                              perspective:bool = True,
+                              blur_cov:float = 0.1):
   dtype = torch_taichi[torch_dtype]
 
   lib = make_library(dtype)
@@ -45,11 +47,16 @@ def project_to_image_function(torch_dtype=torch.float32, perspective:bool = True
 
       uv_cov = lib.project_perspective_gaussian(
           camera_image, point_in_camera, cov_in_camera)
+      
+      # add small fudge factor blur to avoid numerical issues
+      uv_cov += lib.mat2([blur_cov, 0, 0, blur_cov]) 
+      uv_conic = lib.cov_to_conic(uv_cov)
 
       depth_var[idx] = lib.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
+
       points[idx] = Gaussian2D.to_vec(
           uv=uv.xy,
-          uv_conic=lib.cov_to_conic(uv_cov),
+          uv_conic=uv_conic,
           alpha=alpha,
       )
 
@@ -77,11 +84,13 @@ def project_to_image_function(torch_dtype=torch.float32, perspective:bool = True
       cov_in_camera = lib.gaussian_covariance_in_camera(
           camera_world, rotation, scale)
 
+      uv_cov = cov_in_camera[0:2, 0:2]
+      uv_cov += lib.mat2([blur_cov, 0, 0, blur_cov]) 
 
       depth_var[idx] = ti.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
       points[idx] = Gaussian2D.to_vec(
           uv=uv.xy,
-          uv_conic=lib.cov_to_conic(cov_in_camera[0:2, 0:2]),
+          uv_conic=lib.cov_to_conic(uv_cov),
           alpha=alpha,
       )
 
