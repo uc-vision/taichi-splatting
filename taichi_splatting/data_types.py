@@ -95,7 +95,6 @@ class CameraParams:
   near_plane: float
   far_plane: float
   image_size: Tuple[Integral, Integral]
-  orthographic: bool = False
 
   def __repr__(self):
     w, h = self.image_size

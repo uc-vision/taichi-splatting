@@ -6,7 +6,8 @@ import torch
 
 from taichi_splatting.culling import CameraParams, frustum_culling
 from taichi_splatting.data_types import check_packed3d
-from taichi_splatting.projection import compute_depth_var, project_to_image
+from taichi_splatting.depth_var import compute_depth_var
+from taichi_splatting.projection import  project_to_image
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
