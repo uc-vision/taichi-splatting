@@ -1,8 +1,11 @@
 import math
+from numbers import Number
+from typing import Tuple
+from beartype import beartype
 import torch
 from taichi_splatting.data_types import CameraParams, Gaussians2D, Gaussians3D
 
-from taichi_splatting.torch_ops.transforms import join_rt
+from taichi_splatting.torch_ops.transforms import join_rt, make_homog, transform33, transform_points
 from taichi_splatting.torch_ops import projection as torch_proj
 
 
@@ -39,21 +42,32 @@ def random_camera(pos_scale:float=1., max_image_size:int = 1024) -> CameraParams
   )
 
 
+@beartype
 def random_3d_gaussians(n, camera_params:CameraParams, 
-  scale_factor:float=1.0, alpha_range=(0.1, 0.9)) -> Gaussians3D:
-  
+  scale_factor:float=1.0, alpha_range:Tuple[Number, Number]=(0.1, 0.9)) -> Gaussians3D:
   w, h = camera_params.image_size
 
   uv_pos = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
 
   depth_range = camera_params.far_plane - camera_params.near_plane
-  depth = torch.rand(n) * depth_range + camera_params.near_plane   
+  depth = (torch.rand(n) * depth_range + camera_params.near_plane).unsqueeze(1)   
 
-  position = torch_proj.unproject_points(uv_pos, depth.unsqueeze(1), camera_params.T_image_world)
-  fx = camera_params.T_image_camera[0, 0]
+  fx = camera_params.T_image_camera[0, 0].item()
 
-  scale =  (w / math.sqrt(n)) * (depth / fx) * scale_factor
-  scaling = (torch.rand(n, 3) + 0.2) * scale.unsqueeze(1) 
+  if camera_params.orthographic:
+
+    points_camera = transform33(torch.inverse(camera_params.T_image_camera), 
+      make_homog(uv_pos))[:, :2]
+    position = transform_points(torch.inverse(camera_params.T_camera_world),
+      torch.cat([points_camera, depth], -1))[..., :3]
+    
+    scale = torch.tensor([0.01 * fx / math.sqrt(n) * scale_factor], dtype=torch.float32)
+  else:
+
+    position = torch_proj.unproject_points(uv_pos, depth, camera_params.T_image_world)
+    scale =  (w / math.sqrt(n)) * (depth / fx) * scale_factor
+  
+  scaling = (torch.rand(n, 3) + 0.2) * scale
 
   rotation = torch.randn(n, 4) 
   rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)

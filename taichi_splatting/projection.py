@@ -13,14 +13,12 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 @cache
 def project_to_image_function(torch_dtype=torch.float32, 
-                              perspective:bool = True,
-                              blur_cov:float = 0.1):
+                              orthographic:bool = True,
+                              blur_cov:float = 0.3):
   dtype = torch_taichi[torch_dtype]
 
   lib = make_library(dtype)
   Gaussian3D, Gaussian2D = lib.Gaussian3D, lib.Gaussian2D
-
-
 
   @ti.kernel
   def project_perspective_kernel(  
@@ -78,23 +76,23 @@ def project_to_image_function(torch_dtype=torch.float32,
       camera_image = lib.mat3_from_ndarray(T_image_camera)
       camera_world = lib.mat4_from_ndarray(T_camera_world)
 
-      uv, point_in_camera = lib.project_orthographic(
-          position, camera_world, camera_image)
+      point_in_camera = (camera_world @ lib.vec4(*position, 1.))
+      uv = (camera_image @ lib.vec3(point_in_camera.xy, 1.))
     
       cov_in_camera = lib.gaussian_covariance_in_camera(
           camera_world, rotation, scale)
 
       uv_cov = cov_in_camera[0:2, 0:2]
       uv_cov += lib.mat2([blur_cov, 0, 0, blur_cov]) 
+      depth_var[idx] = lib.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
 
-      depth_var[idx] = ti.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
       points[idx] = Gaussian2D.to_vec(
           uv=uv.xy,
           uv_conic=lib.cov_to_conic(uv_cov),
           alpha=alpha,
       )
 
-  projection_kernel = (project_perspective_kernel if perspective 
+  projection_kernel = (project_perspective_kernel if not orthographic 
     else orthographic_projection_kernel)
 
   class _module_function(torch.autograd.Function):
@@ -131,7 +129,7 @@ def project_to_image_function(torch_dtype=torch.float32,
 
 @beartype
 def apply(gaussians:torch.Tensor, T_image_camera:torch.Tensor, T_camera_world:torch.Tensor, orthographic:bool = False):
-  _module_function = project_to_image_function(gaussians.dtype)
+  _module_function = project_to_image_function(gaussians.dtype, orthographic=orthographic)
   return _module_function.apply(gaussians.contiguous(), 
         T_image_camera.contiguous(), T_camera_world.contiguous())
 
@@ -158,76 +156,4 @@ def project_to_image(gaussians:torch.Tensor, camera_params: CameraParams
       camera_params.T_camera_world,
       orthographic=camera_params.orthographic
   )
-
-
-
-
-@cache
-def depth_var_func(torch_dtype=torch.float32, eps=1e-8):
-  dtype = torch_taichi[torch_dtype]
-
-  @ti.kernel
-  def depth_var_kernel(  
-    features_depth: ti.types.ndarray(dtype, ndim=3),  # (H, W, 3 + C) image features with 3 depth features at the start
-    total_weight: ti.types.ndarray(dtype, ndim=2),  # (H, W) - pixel alpha (normalizing factor)
-    depth: ti.types.ndarray(dtype, ndim=2),  # (H, W, ) # output
-    depth_var: ti.types.ndarray(dtype, ndim=2),  # (H, W, ) # output
-  ):
-    h, w = features_depth.shape[0:2]
-
-    for v, u in ti.ndrange(h, w):
-      
-      weight = total_weight[v, u] + eps
-      d, d2, var = [features_depth[v, u, i] / weight
-                     for i in ti.static(range(3))]
-      
-      depth[v, u] = d 
-      depth_var[v, u] = (d2  - d**2) + var
-
-  class _module_function(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, features_depth, alpha):
-      device = features_depth.device
-      shape = features_depth.shape[:2]
-
-      depth = torch.empty(shape, dtype=torch_dtype, device=device)
-      depth_var = torch.empty(shape, dtype=torch_dtype, device=device)
-
-      depth_var_kernel(features_depth, alpha, depth, depth_var)
-      ctx.save_for_backward(features_depth, depth, depth_var)
-      ctx.alpha = alpha
-
-      return depth, depth_var
-
-    @staticmethod
-    def backward(ctx, ddepth, ddepth_var):
-      features_depth, depth, depth_var = ctx.saved_tensors
-      alpha = ctx.alpha
-
-      with restore_grad(features_depth, depth, depth_var):
-        depth.grad = ddepth.contiguous()
-        depth_var.grad = ddepth_var.contiguous()
-        depth_var_kernel.grad(
-          features_depth, alpha, depth, depth_var)
-
-        return features_depth.grad, None
-
-  return _module_function
-
-
-
-@beartype
-def compute_depth_var(features:torch.Tensor, alpha:torch.Tensor):
-  """ 
-  Compute depth and depth variance from image features.
-  
-  Parameters:
-    features: torch.Tensor (N, 3 + C) - image features
-    alpha:    torch.Tensor (N, 1) - alpha values
-  """
-
-  _module_function = depth_var_func(features.dtype)
-  return _module_function.apply(features.contiguous(), alpha.contiguous())
-
-
 

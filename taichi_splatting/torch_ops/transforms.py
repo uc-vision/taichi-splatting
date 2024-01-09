@@ -33,14 +33,19 @@ def make_homog(points):
   return torch.concatenate([points, torch.ones(shape, dtype=points.dtype, device=points.device)], axis=-1)
 
 def transform44(transform, points):
+  assert points.shape[-1] == 4, f"points must be (..., 4), got {points.shape}"
 
   points = points.reshape([-1, 4, 1])
   transformed = transform.reshape([1, 4, 4]) @ points
   return transformed[..., 0].reshape(-1, 4)
 
+def transform_points(transform, points):
+  assert points.shape[-1] == 3, f"points must be (..., ), got {points.shape}"
+  return transform44(transform, make_homog(points))
 
 
 def transform33(transform, points):
+  assert points.shape[-1] == 3, f"points must be (..., 3), got {points.shape}"
 
   points = points.reshape([-1, 3, 1])
   transformed = transform.reshape([1, 3, 3]) @ points

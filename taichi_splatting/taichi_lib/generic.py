@@ -140,6 +140,14 @@ def make_library(dtype=ti.f32):
 
 
 
+  @ti.func
+  def project_orthographic(
+      position: vec3,
+      T_image_world: mat4,
+  ):
+      point_in_camera = (T_image_world @ vec4(*position, 1))
+      return point_in_camera.xy, point_in_camera.z
+
   def camera_origin(T_camera_world: mat4):
     r, t = split_rt(T_camera_world)
     t = -(r.transpose() @ t)

@@ -39,3 +39,16 @@ def benchmarked(name, f, iters=100, warmup=1, profile: bool = False):
     profiled_benchmark(name, f, iters, warmup)
   else:
     timed_benchmark(name, f, iters, warmup)
+
+
+def with_profiler(f, *args, **kwargs):
+  with profile(activities=[ProfilerActivity.CUDA], record_shapes=True) as prof:
+    with record_function("model_inference"):
+      f(*args, **kwargs)
+  return  prof
+
+def with_timer(f, *args, **kwargs):
+  start = time.time()
+  f(*args, **kwargs)
+  end = time.time()
+  return end - start

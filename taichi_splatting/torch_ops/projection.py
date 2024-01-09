@@ -20,6 +20,17 @@ def unproject_points(uv, depth, transform):
   transformed = transform44(torch.inverse(transform), points)
   return transformed[..., 0:3] / transformed[..., 3:4]
 
+def unproject_points_ortho(uv, depth, transform):
+  points = torch.concatenate(
+     [uv, torch.ones_like(depth), depth], axis=-1)
+  transformed = transform44(torch.inverse(transform), points)
+  return transformed[..., 0:3] 
+
+
+def transform_points(points, transform):
+  transformed = transform44(transform, make_homog(points))
+  return transformed[..., 0:3] 
+
 
 
 def covariance_in_camera(
@@ -92,7 +103,7 @@ def unpack_activate(vec: torch.Tensor
   )
 
 
-def apply(gaussians, T_image_camera, T_camera_world):
+def apply(gaussians, T_image_camera, T_camera_world, blur_cov=0.3):
   position, scale, rotation, alpha = unpack_activate(gaussians)
 
   T_camera_world = T_camera_world.squeeze(0)
@@ -101,7 +112,9 @@ def apply(gaussians, T_image_camera, T_camera_world):
   point_in_camera = transform44(T_camera_world,  make_homog(position))[:, :3]
   uv = transform33(T_image_camera, point_in_camera) / point_in_camera[:, 2:3]
   cov_in_camera = covariance_in_camera(T_camera_world, rotation, scale)
+  
   uv_cov = project_perspective_gaussian(T_image_camera, point_in_camera, cov_in_camera)
+  uv_cov += torch.eye(2, device=gaussians.device, dtype=gaussians.dtype) * blur_cov
 
   points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha], axis=-1)
   depths = torch.stack([point_in_camera[:, 2], cov_in_camera[:, 2, 2], point_in_camera[:, 2] ** 2], axis=-1)

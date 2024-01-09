@@ -4,14 +4,16 @@ import taichi as ti
 
 import torch
 from torch.optim import Adam
+from taichi_splatting.data_types import CameraParams, Gaussians3D
 from taichi_splatting.data_types import RasterConfig
 
-from taichi_splatting.renderer2d import render_gaussians, Gaussians2D
-from taichi_splatting.tests.random_data import random_2d_gaussians
+from taichi_splatting.renderer import render_gaussians
+from taichi_splatting.tests.random_data import random_3d_gaussians
+from taichi_splatting.torch_ops.transforms import make_homog, transform44
 
 from taichi_splatting.torch_ops.util import check_finite
+from taichi_splatting.benchmarks.util import with_timer, with_profiler
 
-import time
 
 
 def parse_args():
@@ -29,7 +31,7 @@ def parse_args():
   return parser.parse_args()
 
 
-def optimizer(gaussians: Gaussians2D, base_lr=1.0):
+def optimizer(gaussians: Gaussians3D, base_lr=1.0):
 
   learning_rates = dict(
     position=0.1,
@@ -47,7 +49,7 @@ def optimizer(gaussians: Gaussians2D, base_lr=1.0):
       for name, lr in learning_rates.items()
   ]
 
-  return Adam(param_groups), Gaussians2D(**params, batch_size=gaussians.batch_size)
+  return Adam(param_groups), Gaussians3D(**params, batch_size=gaussians.batch_size)
 
 
 def display_image(image):
@@ -58,16 +60,35 @@ def display_image(image):
     cv2.waitKey(1)
     
 
+def orthographic_camera(w, h):
+  # setup simple orthographic camera
+
+  projection = torch.tensor([
+    [w/2, 0,   w / 2],
+    [0, h/2,   h / 2],
+    [0, 0,     1]
+  ], dtype=torch.float32)
+
+  return CameraParams(
+    image_size=(w, h),
+    T_image_camera=projection,
+    T_camera_world=torch.eye(4, dtype=torch.float32),
+    near_plane=1.,
+    far_plane=100.,
+    orthographic=True
+  )
+
 
 def main():
   device = torch.device('cuda:0')
+  torch.set_printoptions(precision=3, sci_mode=False, linewidth=120)
 
   args = parse_args()
   
   ref_image = cv2.imread(args.image_file)
   h, w = ref_image.shape[:2]
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, 
+  ti.init(arch=ti.cuda, log_level=ti.DEBUG, offline_cache=True,
           debug=args.debug, device_memory_GB=0.1)
 
   print(f'Image size: {w}x{h}')
@@ -77,23 +98,28 @@ def main():
 
   torch.manual_seed(args.seed)
 
-  gaussians = random_2d_gaussians(args.n, (w, h)).to(torch.device('cuda:0'))
+  camera = orthographic_camera(w, h)
+
+  point3d = torch.tensor([[100, 100, 4, 1]], dtype=torch.float32)
+  point2d = transform44(camera.T_image_world, point3d) / point3d[:, 3:4]
+
+  print(point2d)
+
+
+
+  gaussians = random_3d_gaussians(args.n, camera).to(torch.device('cuda:0'))
   opt, params = optimizer(gaussians, base_lr=1.0)
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
 
   config = RasterConfig(tile_size=args.tile_size)
 
-  while True:
-    if args.profile:
-      ti.profiler.clear_kernel_profiler_info()
-
-    start = time.time()
+  def train_epoch():
 
     for _ in range(args.epoch):
       opt.zero_grad()
 
-      image = render_gaussians(params, (w, h), config)
-      loss = torch.nn.functional.l1_loss(image, ref_image) 
+      render = render_gaussians(params.packed(), params.feature, camera, config)
+      loss = torch.nn.functional.l1_loss(render.image, ref_image) 
       
       loss.backward()
 
@@ -104,14 +130,21 @@ def main():
         params.log_scaling.clamp_(min=-1, max=6)
     
       if args.show:
-        display_image(image)
+        display_image(render.image)
       
-    end = time.time()
 
-    print(f'{args.epoch} iterations: {end - start:.3f}s at {args.epoch / (end - start):.1f} iters/sec')
-
+  while True:
     if args.profile:
-      ti.profiler.print_kernel_profiler_info("count")
+      prof = with_profiler(train_epoch)
+      print(prof.key_averages().table(sort_by="self_cuda_time_total", 
+                                      row_limit=25, max_name_column_width=70))
+    else:
+      duration = with_timer(train_epoch)
+      print(f'{args.epoch} iterations: {duration:.3f}s at {args.epoch / (duration):.1f} iters/sec')
+
+
+
+
   
 
 if __name__ == '__main__':

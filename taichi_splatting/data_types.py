@@ -86,11 +86,16 @@ class CameraParams:
 
   @property
   def T_image_world(self):
+    
     T_image_camera = torch.eye(4, 
       device=self.T_image_camera.device, dtype=self.T_image_camera.dtype)
     T_image_camera[0:3, 0:3] = self.T_image_camera
 
     return T_image_camera @ self.T_camera_world
+  
+  @property
+  def T_world_image(self):
+    return torch.inverse(self.T_image_world)
 
   near_plane: float
   far_plane: float
@@ -117,7 +122,8 @@ class CameraParams:
       T_camera_world=self.T_camera_world.to(device=device, dtype=dtype),
       near_plane=self.near_plane,
       far_plane=self.far_plane,
-      image_size=self.image_size
+      image_size=self.image_size,
+      orthographic=self.orthographic
     )
 
   def __post_init__(self):
