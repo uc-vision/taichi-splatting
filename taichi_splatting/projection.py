@@ -13,7 +13,6 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 @cache
 def project_to_image_function(torch_dtype=torch.float32, 
-                              perspective:bool = True,
                               blur_cov:float = 0.1):
   dtype = torch_taichi[torch_dtype]
 
