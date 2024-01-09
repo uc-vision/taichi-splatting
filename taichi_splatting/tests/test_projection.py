@@ -91,5 +91,5 @@ def test_projection_grad(iters = 100):
 if __name__ == '__main__':
   torch.set_printoptions(precision=8, sci_mode=False)
 
-  # test_projection_grad()
+  test_projection_grad()
   test_projection()
