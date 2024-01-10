@@ -1,37 +1,20 @@
 import copy
 from functools import cached_property
+from typing import Callable
 import torch.optim as optim
 import torch
 
 
-def as_parameters(tensors, keys):
-    param_dict = {k: torch.nn.Parameter(x, requires_grad=True) 
-                        for k, x in tensors.items()
-                        if k in keys}
-
-    cls = type(tensors)
-    return cls.from_dict(param_dict) 
-
-
-
-
-def modify_state(state, f, state_keys = ("exp_avg", "exp_avg_sq")):
-  return {k : f(v) if k in state_keys else state[k]
-            for k, v in state.items()}
-
-def replace_dict(d, **kwargs):
-  d = copy(d)
-  d.update(kwargs)
-  return d
 
 class ParameterClass():
   """
-  Maintains a group of mixed parameters in a TensorClass,
-  some of them optimized by gradient via. a torch optimizer.
-  Keeps optimizer state synchronized with the parameters.
+  Maintains a group of mixed parameters/non parameters in a TensorClass,
+  as well as optimizer state synchronized with the parameters.
 
   Note - call ParameterClass.create to create a ParameterClass instead 
   of the constructor directly.
+
+  Supports filtering with python indexing and appending parameters.
 
   Parameters:
     tensors: TensorClass
@@ -74,8 +57,13 @@ class ParameterClass():
   def _optimized_keys(self):
     return {group["name"] for group in self.optimizer.param_groups}
     
-  def _updated_state(self, f):
-    return {k:modify_state(self.optimizer.state[param], f)
+  def _updated_state(self, f:Callable, state_keys = ("exp_avg", "exp_avg_sq")):
+
+    def modify_state(state):
+      return {k : f(v) if k in state_keys else state[k]
+                for k, v in state.items()}
+
+    return {k:modify_state(self.optimizer.state[param])
               for k, param in self.tensors.items()
                 if param in self.optimizer.state}
   
@@ -103,3 +91,17 @@ class ParameterClass():
     return ParameterClass(tensors, updated_groups, state)
 
 
+
+def as_parameters(tensors, keys):
+    param_dict = {k: torch.nn.Parameter(x, requires_grad=True) 
+                        for k, x in tensors.items()
+                        if k in keys}
+
+    cls = type(tensors)
+    return cls.from_dict(param_dict) 
+
+
+def replace_dict(d, **kwargs):
+  d = copy(d)
+  d.update(kwargs)
+  return d
