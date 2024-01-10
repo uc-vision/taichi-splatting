@@ -28,8 +28,10 @@ class ParameterClass():
   """
   Maintains a group of mixed parameters in a TensorClass,
   some of them optimized by gradient via. a torch optimizer.
-
   Keeps optimizer state synchronized with the parameters.
+
+  Note - call ParameterClass.create to create a ParameterClass instead 
+  of the constructor directly.
 
   Parameters:
     tensors: TensorClass
@@ -44,7 +46,6 @@ class ParameterClass():
     if param_state is not None:
       for k, v in param_state.items():
         self.optimizer.state[self.tensors[k]] = v
-
 
 
   @staticmethod
@@ -65,17 +66,21 @@ class ParameterClass():
   def step(self):
     self.optimizer.step()
 
+
+  def __getattr__(self, name):
+    return getattr(self.tensors, name)
+
   @cached_property
-  def optimized_keys(self):
+  def _optimized_keys(self):
     return {group["name"] for group in self.optimizer.param_groups}
     
-  def updated_state(self, f):
+  def _updated_state(self, f):
     return {k:modify_state(self.optimizer.state[param], f)
               for k, param in self.tensors.items()
                 if param in self.optimizer.state}
   
 
-  def updated_parameters(self, tensors):
+  def _updated_parameters(self, tensors):
     tensors = as_parameters(tensors, self.optimized_keys)
     updated_groups = [ replace_dict(group, params=[tensors[group["name"]]])
       for group in self.optimizer.param_groups]
@@ -84,14 +89,14 @@ class ParameterClass():
 
   def __index__(self, idx):
     tensors, updated_groups = self.updated_parameters(self.tensors[idx])
-    state = self.updated_state(lambda x: x[idx])
+    state = self._updated_state(lambda x: x[idx])
     return ParameterClass(tensors, updated_groups, state)
   
   def append(self, tensors):
     n = tensors.batch_size[0]
 
-    tensors, updated_groups = self.updated_parameters(torch.cat([self.tensors, tensors]))
-    state = self.updated_state(lambda x: torch.cat(
+    tensors, updated_groups = self._updated_parameters(torch.cat([self.tensors, tensors]))
+    state = self._updated_state(lambda x: torch.cat(
       [x, x.new_zeros(n)])
     )
     
