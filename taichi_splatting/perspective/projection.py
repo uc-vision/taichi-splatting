@@ -6,7 +6,7 @@ import taichi as ti
 import torch
 from taichi_splatting.autograd import restore_grad
 
-from taichi_splatting.culling import CameraParams
+from .params import CameraParams
 from taichi_splatting.taichi_lib.generic import make_library
 from taichi_splatting.taichi_lib.conversions import torch_taichi
 

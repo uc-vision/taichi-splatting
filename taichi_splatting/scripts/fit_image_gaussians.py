@@ -83,6 +83,7 @@ def main():
 
   config = RasterConfig(tile_size=args.tile_size)
 
+
   while True:
     if args.profile:
       ti.profiler.clear_kernel_profiler_info()
@@ -99,6 +100,8 @@ def main():
 
       check_finite(params)
       opt.step()
+
+            
 
       with torch.no_grad():
         params.log_scaling.clamp_(min=-1, max=6)

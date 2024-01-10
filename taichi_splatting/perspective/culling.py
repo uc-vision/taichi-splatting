@@ -2,12 +2,12 @@ import taichi as ti
 from taichi.math import vec4, mat4
 import torch
 
-from taichi_splatting.data_types import CameraParams, check_packed3d
-
+from taichi_splatting.data_types import check_packed3d
 from taichi_splatting.taichi_lib.f32 import Gaussian3D
 from taichi_splatting.torch_ops.transforms import transform44
 
 from taichi_splatting.taichi_lib.f32 import project_perspective
+from .params import CameraParams
  
 
 @ti.kernel
@@ -54,7 +54,6 @@ def frustum_culling(gaussians: torch.Tensor, camera_params: CameraParams, margin
   return mask
     
 
-    
 def planes_from_points(points: torch.Tensor):
    
   normals = torch.cross(points[:, 1] - points[:, 0], 

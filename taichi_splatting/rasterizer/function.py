@@ -127,9 +127,8 @@ def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor,
   """
 
   # render with padding to tile_size, later crop back to original size
-  padded_size = pad_to_tile(image_size, config.tile_size)
   overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
-    image_size=padded_size, config=config)
+    image_size=image_size, config=config)
 
   image, alpha = rasterize_with_tiles(gaussians2d, features, 
     tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,

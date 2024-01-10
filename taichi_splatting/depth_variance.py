@@ -9,7 +9,7 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 
 @cache
-def depth_var_func(torch_dtype=torch.float32, eps=1e-8):
+def depth_variance_func(torch_dtype=torch.float32, eps=1e-8):
   dtype = torch_taichi[torch_dtype]
 
   @ti.kernel
@@ -63,7 +63,7 @@ def depth_var_func(torch_dtype=torch.float32, eps=1e-8):
 
 
 @beartype
-def compute_depth_var(features:torch.Tensor, alpha:torch.Tensor):
+def compute_depth_variance(features:torch.Tensor, alpha:torch.Tensor):
   """ 
   Compute depth and depth variance from image features.
   
@@ -72,7 +72,7 @@ def compute_depth_var(features:torch.Tensor, alpha:torch.Tensor):
     alpha:    torch.Tensor (N, 1) - alpha values
   """
 
-  _module_function = depth_var_func(features.dtype)
+  _module_function = depth_variance_func(features.dtype)
   return _module_function.apply(features.contiguous(), alpha.contiguous())
 
 

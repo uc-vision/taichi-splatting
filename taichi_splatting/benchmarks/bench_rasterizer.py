@@ -11,7 +11,7 @@ from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
 from taichi_splatting.tile_mapper import map_to_tiles
 
 
-def parse_args():
+def parse_args(args=None):
   parser = argparse.ArgumentParser()
   parser.add_argument('--profile', action='store_true')
 
@@ -21,18 +21,14 @@ def parse_args():
   parser.add_argument('--scale_factor', type=int, default=2)
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--iters', type=int, default=100)
+  parser.add_argument('--iters', type=int, default=200)
 
-  
-
-  args = parser.parse_args()
+  args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
   return args
 
 
-def test_rasterizer():
-
-  args = parse_args()
+def bench_rasterizer(args):
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
         device_memory_GB=0.1)
@@ -87,4 +83,5 @@ def test_rasterizer():
 
 
 if __name__ == '__main__':
-  main()
+  args = parse_args()
+  bench_rasterizer(args)

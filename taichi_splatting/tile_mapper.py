@@ -8,7 +8,7 @@ from taichi.math import ivec2
 import torch
 from taichi_splatting.data_types import RasterConfig
 
-from taichi_splatting.taichi_lib.f32 import (Gaussian2D, vec3)
+from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
 
 
 from taichi_splatting.taichi_lib.grid_query import make_grid_query
@@ -23,6 +23,7 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
 
 @cache
 def tile_mapper(config:RasterConfig):
+
 
   tile_size = config.tile_size
   grid_query = make_grid_query(
@@ -127,6 +128,8 @@ def tile_mapper(config:RasterConfig):
 
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
 
+    image_size = pad_to_tile(image_size, tile_size)
+
     with torch.no_grad():
       cum_overlap_counts, total_overlap = generate_tile_overlaps(
         gaussians, image_size)
@@ -167,9 +170,7 @@ def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor,
      overlap_to_point: (K, ) torch tensor, where K is the number of overlaps, maps overlap index to point index
      tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
-  w, h = image_size
-  assert w % config.tile_size == 0 and h % config.tile_size == 0,\
-      f"image size ({w}x{h}) is not divisible by tile size {config.tile_size}"
+
   
   mapper = tile_mapper(config)
   return mapper(gaussians, depths, image_size)

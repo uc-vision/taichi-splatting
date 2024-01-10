@@ -3,7 +3,7 @@ from functools import partial
 
 import torch
 from taichi_splatting.benchmarks.util import benchmarked
-from taichi_splatting import projection
+from taichi_splatting.perspective import projection
 # from taichi_splatting import projection
 
 
@@ -11,7 +11,7 @@ import taichi as ti
 from taichi_splatting.tests.random_data import random_3d_gaussians, random_camera
 
 
-def parse_args():
+def parse_args(args=None):
   parser = argparse.ArgumentParser()
   parser.add_argument('--profile', action='store_true')
 
@@ -19,19 +19,17 @@ def parse_args():
   parser.add_argument('--device', type=str, default='cuda:0')
   parser.add_argument('--n', type=int, default=1000000)
   parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--iters', type=int, default=1000)
+  parser.add_argument('--iters', type=int, default=500)
   
 
-  args = parser.parse_args()
+  args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
   return args
 
 
-def test_projection():
+def bench_projection(args):
 
-  args = parse_args()
-
-  ti.init(arch=ti.cuda, offline_cache=True, log_level=ti.INFO, 
+  ti.init(arch=ti.cuda, offline_cache=True, log_level=ti.DEBUG, 
         device_memory_GB=0.1)
   
      
@@ -74,4 +72,5 @@ def test_projection():
 
 
 if __name__ == '__main__':
-  test_projection()
+  args = parse_args()
+  bench_projection(args)

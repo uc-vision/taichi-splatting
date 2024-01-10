@@ -4,7 +4,6 @@ from typing import Tuple
 import torch
 from taichi_splatting.data_types import Gaussians2D
 
-from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 
 
@@ -32,15 +31,12 @@ def render_gaussians(
     ):
   
   gaussians2d = project_gaussians2d(gaussians)
-  padded_size = pad_to_tile(image_size, raster_config.tile_size)
-
-  overlap_to_point, ranges = map_to_tiles(gaussians2d, gaussians.depth, 
-    image_size=padded_size, config=raster_config)
   
-
-  image, alpha = rasterize(gaussians=gaussians2d, features=gaussians.feature, 
-    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
-    image_size=image_size, config=raster_config)
+  image, alpha = rasterize(gaussians2d=gaussians2d, 
+    depths=gaussians.depth, 
+    features=gaussians.feature, 
+    image_size=image_size, 
+    config=raster_config)
   
   return image
 

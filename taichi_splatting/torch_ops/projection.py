@@ -1,7 +1,7 @@
 from typing import Tuple
 import torch
 
-from taichi_splatting.culling import CameraParams
+from taichi_splatting.perspective import CameraParams
 from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.torch_ops.transforms import make_homog, quat_to_mat, transform33, transform44
 
@@ -92,7 +92,7 @@ def unpack_activate(vec: torch.Tensor
   )
 
 
-def apply(gaussians, T_image_camera, T_camera_world):
+def apply(gaussians, T_image_camera, T_camera_world, blur_cov=0.3):
   position, scale, rotation, alpha = unpack_activate(gaussians)
 
   T_camera_world = T_camera_world.squeeze(0)
@@ -102,6 +102,8 @@ def apply(gaussians, T_image_camera, T_camera_world):
   uv = transform33(T_image_camera, point_in_camera) / point_in_camera[:, 2:3]
   cov_in_camera = covariance_in_camera(T_camera_world, rotation, scale)
   uv_cov = project_perspective_gaussian(T_image_camera, point_in_camera, cov_in_camera)
+
+  uv_cov += torch.eye(2, device=uv_cov.device, dtype=uv_cov.dtype) * blur_cov
 
   points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha], axis=-1)
   depths = torch.stack([point_in_camera[:, 2], cov_in_camera[:, 2, 2], point_in_camera[:, 2] ** 2], axis=-1)

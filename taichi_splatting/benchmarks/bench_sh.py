@@ -9,7 +9,7 @@ import taichi as ti
 
 
 
-def parse_args():
+def parse_args(args=None):
   parser = argparse.ArgumentParser()
   parser.add_argument('--profile', action='store_true')
 
@@ -21,20 +21,17 @@ def parse_args():
   parser.add_argument('--degree', type=int, default=3)
   
   
-
-  args = parser.parse_args()
+  args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
   return args
 
 
-def test_sh():
 
-  args = parse_args()
+def bench_sh(args):
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
         device_memory_GB=0.1)
   
-     
   torch.manual_seed(args.seed)
 
   with torch.no_grad():
@@ -61,4 +58,5 @@ def test_sh():
 
 
 if __name__ == '__main__':
-  main()
+  args = parse_args()
+  bench_sh(args)

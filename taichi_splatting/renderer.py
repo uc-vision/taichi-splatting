@@ -4,12 +4,14 @@ from dataclasses import dataclass
 from typing import Optional
 import torch
 
-from taichi_splatting.culling import CameraParams, frustum_culling
 from taichi_splatting.data_types import check_packed3d
-from taichi_splatting.depth_var import compute_depth_var
-from taichi_splatting.projection import  project_to_image
+from taichi_splatting.depth_variance import compute_depth_variance
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
+
+from taichi_splatting.perspective import (
+  frustum_culling, project_to_image, CameraParams)
+
 
 
 @dataclass 
@@ -62,7 +64,7 @@ def render_gaussians(
     image_size=camera_params.image_size, config=config)
 
   if render_depth:
-    depth, depth_var = compute_depth_var(image_features, total_weight)
+    depth, depth_var = compute_depth_variance(image_features, total_weight)
     return Rendering(image_features[:, :, 3:], depth, depth_var)
 
   return Rendering(image_features)
