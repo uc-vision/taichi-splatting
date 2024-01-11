@@ -3,7 +3,7 @@ from functools import cache
 import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
-from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
+from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D, vec2
 
 
 
@@ -15,6 +15,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
   tile_area = tile_size * tile_size
   thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
+
 
   block_area = tile_area // thread_pixels
 
@@ -57,8 +58,8 @@ def forward_kernel(config: RasterConfig, feature_size: int):
                         tile_size, config.pixel_stride, tiles_wide)
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
-      T_i = 1.0 # thread_alphas(1.0)
-      accum_feature = feature_vec(0.)#thread_features(0.)
+      T_i =  thread_alphas(1.0)
+      accum_feature = thread_features(0.)
 
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
@@ -102,40 +103,51 @@ def forward_kernel(config: RasterConfig, feature_size: int):
             break
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          gaussian_alpha = conic_pdf(ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
-          alpha = point_alpha * gaussian_alpha
+          pixel_saturated = True
 
+          
+          for i in ti.static(range(thread_pixels)): 
+            pixel_offset = ti.math.ivec2(ti.static(i % config.pixel_stride[0]),
+              ti.static(i / config.pixel_stride[0]))
             
-          # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
-          # 255 ) and also clamp 𝛼 with 0.99 from above.
-          if alpha < ti.static(config.alpha_threshold):
-            alpha = 0.
+            gaussian_alpha = conic_pdf(ti.cast(pixel_offset + pixel, ti.f32) + 0.5, uv, uv_conic)
+            alpha = point_alpha * gaussian_alpha
 
-          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-          # from paper: before a Gaussian is included in the forward rasterization
-          # pass, we compute the accumulated opacity if we were to include it
-          # and stop front-to-back blending before it can exceed 0.9999.
-          next_T_i = T_i * (1 - alpha)
-          if next_T_i < ti.static(1 - config.saturate_threshold):
-            pixel_saturated = True
+              
+            # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
+            # 255 ) and also clamp 𝛼 with 0.99 from above.
+            if alpha < ti.static(config.alpha_threshold):
+              alpha = 0.
 
-          else:
-            last_point_idx = group_start_offset + in_group_idx + 1
+            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+            # from paper: before a Gaussian is included in the forward rasterization
+            # pass, we compute the accumulated opacity if we were to include it
+            # and stop front-to-back blending before it can exceed 0.9999.
+            next_T_i = T_i[i] * (1 - alpha)
 
-            # weight = alpha * T_i
-            accum_feature += tile_feature[in_group_idx] * alpha * T_i
-            T_i = next_T_i
+            if next_T_i > ti.static(1 - config.saturate_threshold):
+              pixel_saturated = False
+
+              last_point_idx = group_start_offset + in_group_idx + 1
+
+              # weight = alpha * T_i
+              accum_feature[i, :] += tile_feature[in_group_idx] * alpha * T_i[i]
+              T_i[i] = next_T_i
 
 
         # end of point group loop
       # end of point group id loop
 
-      if pixel.x < camera_width and pixel.y < camera_height:
-        image_feature[pixel.y, pixel.x] = accum_feature
+      for i in ti.static(range(thread_pixels)): 
+        pos = pixel + ti.math.ivec2(ti.static(i % config.pixel_stride[0]),
+            ti.static(i / config.pixel_stride[0]))
+        
+        if pos.x < camera_width and pos.y < camera_height:
+          image_feature[pos.y, pos.x] = accum_feature[i, :]
 
-        # No need to accumulate a normalisation factor as it is exactly 1 - T_i
-        image_alpha[pixel.y, pixel.x] = 1. - T_i    
-        image_last_valid[pixel.y, pixel.x] = last_point_idx
+          # No need to accumulate a normalisation factor as it is exactly 1 - T_i
+          image_alpha[pos.y, pos.x] = 1. - T_i[i]    
+          image_last_valid[pos.y, pos.x] = last_point_idx
 
     # end of pixel loop
 
