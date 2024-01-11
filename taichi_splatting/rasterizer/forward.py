@@ -14,11 +14,12 @@ def forward_kernel(config: RasterConfig, feature_size: int):
   tile_size = config.tile_size
 
   tile_area = tile_size * tile_size
-  pixel_stride = config.pixel_tile[0] * config.pixel_tile[1]
+  thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
 
-  block_area = tile_area // pixel_stride
-  warp_block = (8 * config.pixel_tile[0], 4 * config.pixel_tile[1]) 
+  block_area = tile_area // thread_pixels
 
+  thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
+  thread_alphas = ti.types.vector(thread_pixels, dtype=ti.f32)
 
   @ti.kernel
   def _forward_kernel(
@@ -52,13 +53,12 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     ti.loop_config(block_dim=(block_area))
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
 
-
-      pixel = tiling.tile_transform(tile_id, tile_idx * pixel_stride, 
-                                    tile_size, warp_block, tiles_wide)
+      pixel = tiling.tile_transform(tile_id, tile_idx, 
+                        tile_size, config.pixel_stride, tiles_wide)
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
-      T_i = 1.0
-      accum_feature = feature_vec(0.)
+      T_i = 1.0 # thread_alphas(1.0)
+      accum_feature = feature_vec(0.)#thread_features(0.)
 
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
@@ -109,7 +109,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
           # 255 ) and also clamp 𝛼 with 0.99 from above.
           if alpha < ti.static(config.alpha_threshold):
-            continue
+            alpha = 0.
 
           alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
           # from paper: before a Gaussian is included in the forward rasterization
@@ -118,12 +118,13 @@ def forward_kernel(config: RasterConfig, feature_size: int):
           next_T_i = T_i * (1 - alpha)
           if next_T_i < ti.static(1 - config.saturate_threshold):
             pixel_saturated = True
-            continue  # somehow faster than directly breaking
-          last_point_idx = group_start_offset + in_group_idx + 1
 
-          # weight = alpha * T_i
-          accum_feature += tile_feature[in_group_idx] * alpha * T_i
-          T_i = next_T_i
+          else:
+            last_point_idx = group_start_offset + in_group_idx + 1
+
+            # weight = alpha * T_i
+            accum_feature += tile_feature[in_group_idx] * alpha * T_i
+            T_i = next_T_i
 
 
         # end of point group loop

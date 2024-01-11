@@ -32,14 +32,12 @@ def morton_tile_inv(order:ti.i32):
 
 
 @ti.func
-def warp_transform(i:ti.i32, tile_size:ti.template(), warp_block:ti.template()):
+def warp_transform(i:ti.i32, tile_size:ti.template(), pixel_stride:ti.template()):
   # divide tile into 32 (8x4) sized chunks for a warp
-  w = ti.static(warp_block[0])
-  h = ti.static(warp_block[1])
-  block_area = ti.static(w * h)
-
-  warp_id = i // block_area
-  warp_offset = i % block_area
+  w = ti.static(8 * pixel_stride[0])
+  
+  warp_id = i // WARP_SIZE
+  warp_offset = i % WARP_SIZE
 
   warps_wide = ti.static(tile_size // w)
 
@@ -47,18 +45,18 @@ def warp_transform(i:ti.i32, tile_size:ti.template(), warp_block:ti.template()):
   warp_v = (warp_id // warps_wide)
 
   return ivec2(
-    warp_u * w + warp_offset % w,
-    warp_v * h + warp_offset // w)
+    (warp_u * 8 + warp_offset % 8) * pixel_stride[0],
+    (warp_v * 4 + warp_offset // 8) * pixel_stride[1])
 
 
 
 @ti.func
 def tile_transform(tile_id:ti.i32, tile_idx:ti.i32, 
                    tile_size:ti.template(),
-                   warp_block:ti.template(), 
+                   pixel_stride:ti.template(), 
                    tiles_wide:ti.template()):
     
-    u, v = warp_transform(tile_idx, tile_size, warp_block)
+    u, v = warp_transform(tile_idx, tile_size, pixel_stride)
 
     tile_u = tile_id % tiles_wide
     tile_v = tile_id // tiles_wide
