@@ -1,7 +1,6 @@
 
 from functools import cache
 import taichi as ti
-from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
@@ -13,7 +12,12 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
+
   tile_area = tile_size * tile_size
+  pixel_stride = config.pixel_tile[0] * config.pixel_tile[1]
+
+  block_area = tile_area // pixel_stride
+  warp_block = (8 * config.pixel_tile[0], 4 * config.pixel_tile[1]) 
 
 
   @ti.kernel
@@ -44,32 +48,36 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     # tile_idx is the index of the pixel in the tile
     # pixels are blocked first by tile_id, then by tile_idx into (8x4) warps
     
-    ti.loop_config(block_dim=(tile_area))
-    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
-      pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, tiles_wide)
+
+    ti.loop_config(block_dim=(block_area))
+    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
+
+
+      pixel = tiling.tile_transform(tile_id, tile_idx * pixel_stride, 
+                                    tile_size, warp_block, tiles_wide)
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
       T_i = 1.0
       accum_feature = feature_vec(0.)
 
       # open the shared memory
-      tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
-      tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
+      tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
+      tile_feature = ti.simt.block.SharedArray((block_area, ), dtype=feature_vec)
 
       start_offset, end_offset = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
 
-      num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
+      num_point_groups = (tile_point_count + ti.static(block_area - 1)) // block_area
       pixel_saturated = False
       last_point_idx = start_offset
 
-      # Loop through the range in groups of tile_area
+      # Loop through the range in groups of block_area
       for point_group_id in range(num_point_groups):
 
         ti.simt.block.sync()
 
         # The offset of the first point in the group
-        group_start_offset = start_offset + point_group_id * tile_area
+        group_start_offset = start_offset + point_group_id * block_area
 
         # each thread in a block loads one point into shared memory
         # then all threads in the block process those points sequentially
@@ -86,7 +94,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
         ti.simt.block.sync()
 
         max_point_group_offset: ti.i32 = ti.min(
-            tile_area, tile_point_count - point_group_id * tile_area)
+            block_area, tile_point_count - point_group_id * block_area)
 
         # in parallel across a block, render all points in the group
         for in_group_idx in range(max_point_group_offset):

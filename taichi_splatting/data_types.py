@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Tuple
 from beartype import beartype
 from tensordict import tensorclass
 import torch
@@ -8,6 +9,8 @@ import torch
 @dataclass(frozen=True)
 class RasterConfig:
   tile_size: int = 16
+  pixel_tile: Tuple[int, int] = (1, 1)
+
   margin_tiles: int = 3
 
   # cutoff N standard deviations from mean
