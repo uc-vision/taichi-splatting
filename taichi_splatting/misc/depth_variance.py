@@ -4,7 +4,7 @@ from beartype import beartype
 import taichi as ti
 import torch
 
-from taichi_splatting.autograd import restore_grad
+from taichi_splatting.misc.autograd import restore_grad
 from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 
@@ -74,6 +74,5 @@ def compute_depth_variance(features:torch.Tensor, alpha:torch.Tensor):
 
   _module_function = depth_variance_func(features.dtype)
   return _module_function.apply(features.contiguous(), alpha.contiguous())
-
 
 

@@ -5,7 +5,8 @@ from typing import Optional
 import torch
 
 from taichi_splatting.data_types import check_packed3d
-from taichi_splatting.depth_variance import compute_depth_variance
+from taichi_splatting.misc.depth_variance import compute_depth_variance
+from taichi_splatting.misc.indexing import index_features
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
@@ -82,4 +83,8 @@ def cull_gaussians(
     camera_params=camera_params, margin_pixels=margin_tiles * tile_size
   )
 
-  return packed_gaussians[point_mask], features[point_mask]
+  indexes = torch.nonzero(point_mask, as_tuple=True)[0]
+  return packed_gaussians[indexes], features[indexes]
+  # return (
+  #   index_features(packed_gaussians, indexes), 
+  #   index_features(features, indexes))
