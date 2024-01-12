@@ -21,14 +21,16 @@ def backward_kernel(config: RasterConfig,
   thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
   block_area = tile_area // thread_pixels
 
-  thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
-  thread_vector = ti.types.vector(thread_pixels, dtype=ti.f32)
-  thread_index = ti.types.vector(thread_pixels, dtype=ti.i32)
-
+  # each thread is responsible for a small tile of pixels
   pixel_tile = tuple([ (i, 
             (i % config.pixel_stride[0],
             i // config.pixel_stride[0]))
               for i in range(thread_pixels) ])
+
+  # types for each thread to keep state in it's tile of pixels
+  thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
+  thread_vector = ti.types.vector(thread_pixels, dtype=ti.f32)
+  thread_index = ti.types.vector(thread_pixels, dtype=ti.i32)
 
   @ti.kernel
   def _backward_kernel(

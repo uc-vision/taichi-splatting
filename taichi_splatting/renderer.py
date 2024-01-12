@@ -6,7 +6,6 @@ import torch
 
 from taichi_splatting.data_types import check_packed3d
 from taichi_splatting.misc.depth_variance import compute_depth_variance
-from taichi_splatting.misc.indexing import index_features
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
