@@ -9,7 +9,7 @@ import torch
 @dataclass(frozen=True)
 class RasterConfig:
   tile_size: int = 16
-  pixel_stride: Tuple[int, int] = (1, 2)
+  pixel_stride: Tuple[int, int] = (2, 4)
 
   margin_tiles: int = 3
 

@@ -17,6 +17,11 @@ def backward_kernel(config: RasterConfig,
   tile_size = config.tile_size
   tile_area = tile_size * tile_size
 
+  thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
+  block_area = tile_area // thread_pixels
+
+  thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
+  thread_alphas = ti.types.vector(thread_pixels, dtype=ti.f32)
 
   @ti.kernel
   def _backward_kernel(
@@ -48,17 +53,19 @@ def backward_kernel(config: RasterConfig,
     tiles_high = (camera_height + tile_size - 1) // tile_size
 
     # see forward.py for explanation of tile_id and tile_idx and blocking
-    ti.loop_config(block_dim=(tile_area))
-    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
-      pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, tiles_wide)
+    ti.loop_config(block_dim=(block_area))
+    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
+      pixel = tiling.tile_transform(tile_id, tile_idx, 
+                        tile_size, config.pixel_stride, tiles_wide)
+
 
       # open the shared memory
-      tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
-      tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
-      tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
+      tile_point_id = ti.simt.block.SharedArray((block_area, ), dtype=ti.i32)
+      tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
+      tile_feature = ti.simt.block.SharedArray((block_area, ), dtype=feature_vec)
 
-      tile_grad_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
-      tile_grad_feature = ti.simt.block.SharedArray((tile_area,), dtype=feature_vec)
+      tile_grad_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
+      tile_grad_feature = ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
       
       last_point_idx = 0
       accumulated_alpha: ti.f32 = 0.0
@@ -66,6 +73,7 @@ def backward_kernel(config: RasterConfig,
 
       if pixel.y < camera_height and pixel.x < camera_width:
         last_point_idx = image_last_valid[pixel.y, pixel.x]
+        
         accumulated_alpha: ti.f32 = image_alpha[pixel.y, pixel.x]
         grad_pixel_feature = grad_image_feature[pixel.y, pixel.x]
 
@@ -86,18 +94,18 @@ def backward_kernel(config: RasterConfig,
       start_offset, _ = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
 
-      num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
+      num_point_groups = (tile_point_count + ti.static(block_area - 1)) // block_area
 
-      # Loop through the range in groups of tile_area
+      # Loop through the range in groups of block_area
       for point_group_id in range(num_point_groups):
 
         ti.simt.block.sync() 
 
         # load points and features into block shared memory
-        group_offset_base = point_group_id * tile_area
+        group_offset_base = point_group_id * block_area
 
         block_end_idx = end_offset - group_offset_base
-        block_start_idx = ti.max(block_end_idx - tile_area, 0)
+        block_start_idx = ti.max(block_end_idx - block_area, 0)
 
         load_index = block_end_idx - tile_idx - 1
         if load_index >= block_start_idx:
@@ -113,7 +121,7 @@ def backward_kernel(config: RasterConfig,
         ti.simt.block.sync()
 
         point_group_size = ti.min(
-          tile_area, tile_point_count - group_offset_base)
+          block_area, tile_point_count - group_offset_base)
                     
         for in_group_idx in range(point_group_size):
           point_index = end_offset - (group_offset_base + in_group_idx)
