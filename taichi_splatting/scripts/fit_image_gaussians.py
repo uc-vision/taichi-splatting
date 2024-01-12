@@ -104,7 +104,7 @@ def main():
             
 
       with torch.no_grad():
-        params.log_scaling.clamp_(min=-1, max=6)
+        params.log_scaling.clamp_(min=-1, max=4)
     
       if args.show:
         display_image(image)

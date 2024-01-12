@@ -4,6 +4,7 @@ import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
+from taichi.math import ivec2
 
 
 
@@ -20,7 +21,14 @@ def forward_kernel(config: RasterConfig, feature_size: int):
   block_area = tile_area // thread_pixels
 
   thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
-  thread_alphas = ti.types.vector(thread_pixels, dtype=ti.f32)
+  thread_vector = ti.types.vector(thread_pixels, dtype=ti.f32)
+  thread_index = ti.types.vector(thread_pixels, dtype=ti.i32)
+
+  pixel_tile = [ (i, 
+            (i % config.pixel_stride[0],
+            i / config.pixel_stride[0]))
+              for i in range(thread_pixels) ]
+
 
   @ti.kernel
   def _forward_kernel(
@@ -54,11 +62,11 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     ti.loop_config(block_dim=(block_area))
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
 
-      pixel = tiling.tile_transform(tile_id, tile_idx, 
+      pixel_base = tiling.tile_transform(tile_id, tile_idx, 
                         tile_size, config.pixel_stride, tiles_wide)
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
-      T_i =  thread_alphas(1.0)
+      T_i =  thread_vector(1.0)
       accum_feature = thread_features(0.)
 
       # open the shared memory
@@ -70,7 +78,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
       num_point_groups = (tile_point_count + ti.static(block_area - 1)) // block_area
       pixel_saturated = False
-      last_point_idx = start_offset
+      last_point_idx = thread_index(start_offset)
 
       # Loop through the range in groups of block_area
       for point_group_id in range(num_point_groups):
@@ -106,11 +114,8 @@ def forward_kernel(config: RasterConfig, feature_size: int):
           pixel_saturated = True
 
           
-          for i in ti.static(range(thread_pixels)): 
-            pixel_offset = ti.math.ivec2(ti.static(i % config.pixel_stride[0]),
-              ti.static(i / config.pixel_stride[0]))
-            
-            gaussian_alpha = conic_pdf(ti.cast(pixel_offset + pixel, ti.f32) + 0.5, uv, uv_conic)
+          for i, offset in ti.static(pixel_tile):
+            gaussian_alpha = conic_pdf(ti.cast(pixel_base, ti.f32) + ivec2(offset) + 0.5, uv, uv_conic)
             alpha = point_alpha * gaussian_alpha
 
               
@@ -128,7 +133,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
             if next_T_i > ti.static(1 - config.saturate_threshold):
               pixel_saturated = False
 
-              last_point_idx = group_start_offset + in_group_idx + 1
+              last_point_idx[i] = group_start_offset + in_group_idx + 1
 
               # weight = alpha * T_i
               accum_feature[i, :] += tile_feature[in_group_idx] * alpha * T_i[i]
@@ -138,16 +143,14 @@ def forward_kernel(config: RasterConfig, feature_size: int):
         # end of point group loop
       # end of point group id loop
 
-      for i in ti.static(range(thread_pixels)): 
-        pos = pixel + ti.math.ivec2(ti.static(i % config.pixel_stride[0]),
-            ti.static(i / config.pixel_stride[0]))
-        
-        if pos.x < camera_width and pos.y < camera_height:
-          image_feature[pos.y, pos.x] = accum_feature[i, :]
+      for i, offset in ti.static(pixel_tile):
+        pixel = pixel_base + ivec2(offset)
+        if pixel.x < camera_width and pixel.y < camera_height:
+          image_feature[pixel.y, pixel.x] = accum_feature[i, :]
 
           # No need to accumulate a normalisation factor as it is exactly 1 - T_i
-          image_alpha[pos.y, pos.x] = 1. - T_i[i]    
-          image_last_valid[pos.y, pos.x] = last_point_idx
+          image_alpha[pixel.y, pixel.x] = 1. - T_i[i]    
+          image_last_valid[pixel.y, pixel.x] = last_point_idx[i]
 
     # end of pixel loop
 

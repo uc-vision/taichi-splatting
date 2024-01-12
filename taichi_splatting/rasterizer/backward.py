@@ -5,6 +5,7 @@ from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, block_reduce_i32, warp_add_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
+from taichi.math import ivec2, vec2
 
 
 @cache
@@ -21,7 +22,13 @@ def backward_kernel(config: RasterConfig,
   block_area = tile_area // thread_pixels
 
   thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
-  thread_alphas = ti.types.vector(thread_pixels, dtype=ti.f32)
+  thread_vector = ti.types.vector(thread_pixels, dtype=ti.f32)
+  thread_index = ti.types.vector(thread_pixels, dtype=ti.i32)
+
+  pixel_tile = [ (i, 
+            (i % config.pixel_stride[0],
+            i / config.pixel_stride[0]))
+              for i in range(thread_pixels) ]
 
   @ti.kernel
   def _backward_kernel(
@@ -55,7 +62,7 @@ def backward_kernel(config: RasterConfig,
     # see forward.py for explanation of tile_id and tile_idx and blocking
     ti.loop_config(block_dim=(block_area))
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
-      pixel = tiling.tile_transform(tile_id, tile_idx, 
+      pixel_base = tiling.tile_transform(tile_id, tile_idx, 
                         tile_size, config.pixel_stride, tiles_wide)
 
 
@@ -67,18 +74,21 @@ def backward_kernel(config: RasterConfig,
       tile_grad_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
       tile_grad_feature = ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
       
-      last_point_idx = 0
-      accumulated_alpha: ti.f32 = 0.0
-      grad_pixel_feature = feature_vec(0.0)
+      last_point_pixel = thread_index(0)
+      T_i = thread_vector(1.0)
+      grad_pixel_feature = thread_features(0.0)
 
-      if pixel.y < camera_height and pixel.x < camera_width:
-        last_point_idx = image_last_valid[pixel.y, pixel.x]
-        
-        accumulated_alpha: ti.f32 = image_alpha[pixel.y, pixel.x]
-        grad_pixel_feature = grad_image_feature[pixel.y, pixel.x]
+      for i, x, y in ti.static(pixel_tile):
+        pixel = ivec2(x, y) + pixel_base
 
-      T_i = 1.0 - accumulated_alpha  
-      w_i = feature_vec(0.0)
+        if pixel.y < camera_height and pixel.x < camera_width:
+          last_point_pixel[i] = image_last_valid[pixel.y, pixel.x]
+          T_i[i] = 1.0 - image_alpha[pixel.y, pixel.x]
+          grad_pixel_feature[i, :] = grad_image_feature[pixel.y, pixel.x]
+
+      last_point_thread = last_point_pixel.max()
+
+      w_i = thread_features(0.0)
 
       #  T_i = \prod_{j=1}^{i-1} (1 - a_j) \\
       #  \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} \\
@@ -89,7 +99,7 @@ def backward_kernel(config: RasterConfig,
       #  \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i \\
 
       # fine tune the end offset to the actual number of points renderered
-      end_offset = block_reduce_i32(last_point_idx, ti.max, ti.atomic_max, 0)
+      end_offset = block_reduce_i32(last_point_thread, ti.max, ti.atomic_max, 0)
 
       start_offset, _ = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
@@ -126,42 +136,46 @@ def backward_kernel(config: RasterConfig,
         for in_group_idx in range(point_group_size):
           point_index = end_offset - (group_offset_base + in_group_idx)
 
-          if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_idx)):
+          if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
             continue
 
           # Could factor this out and only compute grad if needed
           # however, it does not seem to make any difference
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
 
-          gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(
-            ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
-          
-          alpha = point_alpha * gaussian_alpha
-          has_grad = (alpha >= ti.static(config.alpha_threshold)) and (point_index <= last_point_idx)      
-
           grad_point = Gaussian2D.vec(0.0)
           grad_feature = feature_vec(0.0)
 
-          if has_grad:
-            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-            T_i = T_i / (1. - alpha)
+          has_grad = False
+          for i, offset in ti.static(pixel_tile):
+            pixel = ti.cast(pixel_base, ti.f32) + vec2(offset) + 0.5
 
-            feature = tile_feature[in_group_idx]
+            gaussian_alpha, dp_dmean, dp_dconic = conic_pdf_with_grad(pixel, uv, uv_conic)
+            
+            alpha = point_alpha * gaussian_alpha
+            pixel_grad = (alpha >= ti.static(config.alpha_threshold)) and (point_index <= last_point_pixel[i])      
 
-            # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
-            alpha_grad_from_feature = (feature * T_i - w_i / (1. - alpha)
-                                      ) * grad_pixel_feature
+            if pixel_grad:
+              has_grad = True
+              alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+              T_i[i] /= (1. - alpha)
 
-            # w_{i-1} = w_i + c_i a_i T(i)
-            w_i += feature * alpha * T_i
-            alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
+              feature = tile_feature[in_group_idx]
 
-            grad_point = alpha_grad * Gaussian2D.to_vec(
-                point_alpha * dp_dmean, 
-                point_alpha * dp_dconic,
-                gaussian_alpha)
+              # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
+              alpha_grad_from_feature = (feature * T_i[i] - w_i / (1. - alpha)
+                                        ) * grad_pixel_feature[i, :]
 
-            grad_feature = alpha * T_i * grad_pixel_feature    
+              # w_{i-1} = w_i + c_i a_i T(i)
+              w_i += feature * alpha * T_i[i]
+              alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
+
+              grad_point += alpha_grad * Gaussian2D.to_vec(
+                  point_alpha * dp_dmean, 
+                  point_alpha * dp_dconic,
+                  gaussian_alpha)
+
+              grad_feature += alpha * T_i[i] * grad_pixel_feature[i, :]
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
 
