@@ -85,6 +85,3 @@ def cull_gaussians(
 
   indexes = torch.nonzero(point_mask, as_tuple=True)[0]
   return packed_gaussians[indexes], features[indexes]
-  # return (
-  #   index_features(packed_gaussians, indexes), 
-  #   index_features(features, indexes))

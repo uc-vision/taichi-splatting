@@ -70,7 +70,6 @@ def backward_kernel(config: RasterConfig,
       tile_point_id = ti.simt.block.SharedArray((block_area, ), dtype=ti.i32)
       tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((block_area, ), dtype=feature_vec)
-      tile_grad_count = ti.simt.block.SharedArray((block_area, ), dtype=ti.i32)
 
       tile_grad_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
       tile_grad_feature = ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
@@ -127,7 +126,6 @@ def backward_kernel(config: RasterConfig,
 
           tile_grad_point[tile_idx] = Gaussian2D.vec(0.0)
           tile_grad_feature[tile_idx] = feature_vec(0.0)
-          tile_grad_count[tile_idx] = 0
 
         ti.simt.block.sync()
 
@@ -179,9 +177,7 @@ def backward_kernel(config: RasterConfig,
               grad_feature += alpha * T_i[i] * grad_pixel_feature[i, :]
 
 
-          mask = ti.simt.warp.ballot(ti.i32(has_grad))
-          if mask != 0:
-            tile_grad_count[tile_idx] += 1
+          if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
 
             # Accumulating gradients in block shared memory does not appear to be faster
             # on it's own, but combined with warp sums it seems to be fast
@@ -195,7 +191,7 @@ def backward_kernel(config: RasterConfig,
         ti.simt.block.sync()
 
         # finally accumulate gradients in global memory
-        if load_index >= block_start_idx and tile_grad_count[tile_idx] > 0:
+        if load_index >= block_start_idx:
           point_offset = tile_point_id[tile_idx] 
           if ti.static(points_requires_grad):
             atomic_add_vector(grad_points[point_offset], tile_grad_point[tile_idx])
