@@ -26,7 +26,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
   pixel_tile = [ (i, 
             (i % config.pixel_stride[0],
-            i / config.pixel_stride[0]))
+            i // config.pixel_stride[0]))
               for i in range(thread_pixels) ]
 
 

@@ -27,7 +27,7 @@ def backward_kernel(config: RasterConfig,
 
   pixel_tile = [ (i, 
             (i % config.pixel_stride[0],
-            i / config.pixel_stride[0]))
+            i // config.pixel_stride[0]))
               for i in range(thread_pixels) ]
 
   @ti.kernel
@@ -78,8 +78,8 @@ def backward_kernel(config: RasterConfig,
       T_i = thread_vector(1.0)
       grad_pixel_feature = thread_features(0.0)
 
-      for i, x, y in ti.static(pixel_tile):
-        pixel = ivec2(x, y) + pixel_base
+      for i, offset in ti.static(pixel_tile):
+        pixel = ivec2(offset) + pixel_base
 
         if pixel.y < camera_height and pixel.x < camera_width:
           last_point_pixel[i] = image_last_valid[pixel.y, pixel.x]
@@ -87,7 +87,6 @@ def backward_kernel(config: RasterConfig,
           grad_pixel_feature[i, :] = grad_image_feature[pixel.y, pixel.x]
 
       last_point_thread = last_point_pixel.max()
-
       w_i = thread_features(0.0)
 
       #  T_i = \prod_{j=1}^{i-1} (1 - a_j) \\
@@ -163,11 +162,11 @@ def backward_kernel(config: RasterConfig,
               feature = tile_feature[in_group_idx]
 
               # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
-              alpha_grad_from_feature = (feature * T_i[i] - w_i / (1. - alpha)
+              alpha_grad_from_feature = (feature * T_i[i] - w_i[i, :] / (1. - alpha)
                                         ) * grad_pixel_feature[i, :]
 
               # w_{i-1} = w_i + c_i a_i T(i)
-              w_i += feature * alpha * T_i[i]
+              w_i[i, :] += feature * alpha * T_i[i]
               alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
 
               grad_point += alpha_grad * Gaussian2D.to_vec(
