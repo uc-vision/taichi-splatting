@@ -1,7 +1,7 @@
-from functools import cache
 
+from functools import cache
 from taichi_splatting.autograd import restore_grad
-from taichi_splatting.tile_mapper import map_to_tiles, pad_to_tile
+from taichi_splatting.tile_mapper import map_to_tiles
 
 from .forward import RasterConfig, forward_kernel
 from .backward import backward_kernel
@@ -12,11 +12,14 @@ from typing import Tuple
 import torch
 from beartype import beartype
 
+
+
 @cache
 def render_function(config:RasterConfig,
                     points_requires_grad:bool,
                     features_requires_grad:bool, 
                     feature_size:int):
+  
     
   forward = forward_kernel(config, feature_size=feature_size)
   backward = backward_kernel(config, points_requires_grad,

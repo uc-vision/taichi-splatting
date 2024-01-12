@@ -1,10 +1,10 @@
 
 from functools import cache
 import taichi as ti
+from taichi.math import ivec2
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
-from taichi.math import ivec2
 
 
 
@@ -13,21 +13,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size
-
   tile_area = tile_size * tile_size
-  thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
-
-
-  block_area = tile_area // thread_pixels
-
-  thread_features = ti.types.matrix(thread_pixels, feature_size, dtype=ti.f32)
-  thread_vector = ti.types.vector(thread_pixels, dtype=ti.f32)
-  thread_index = ti.types.vector(thread_pixels, dtype=ti.i32)
-
-  pixel_tile = [ (i, 
-            (i % config.pixel_stride[0],
-            i // config.pixel_stride[0]))
-              for i in range(thread_pixels) ]
 
 
   @ti.kernel
@@ -58,35 +44,32 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     # tile_idx is the index of the pixel in the tile
     # pixels are blocked first by tile_id, then by tile_idx into (8x4) warps
     
-
-    ti.loop_config(block_dim=(block_area))
-    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
-
-      pixel_base = tiling.tile_transform(tile_id, tile_idx, 
-                        tile_size, config.pixel_stride, tiles_wide)
+    ti.loop_config(block_dim=(tile_area))
+    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
+      pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, (1, 1), tiles_wide)
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
-      T_i =  thread_vector(1.0)
-      accum_feature = thread_features(0.)
+      T_i = 1.0
+      accum_feature = feature_vec(0.)
 
       # open the shared memory
-      tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
-      tile_feature = ti.simt.block.SharedArray((block_area, ), dtype=feature_vec)
+      tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
+      tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
 
       start_offset, end_offset = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
 
-      num_point_groups = (tile_point_count + ti.static(block_area - 1)) // block_area
+      num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
       pixel_saturated = False
-      last_point_idx = thread_index(start_offset)
+      last_point_idx = start_offset
 
-      # Loop through the range in groups of block_area
+      # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
 
         ti.simt.block.sync()
 
         # The offset of the first point in the group
-        group_start_offset = start_offset + point_group_id * block_area
+        group_start_offset = start_offset + point_group_id * tile_area
 
         # each thread in a block loads one point into shared memory
         # then all threads in the block process those points sequentially
@@ -103,7 +86,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
         ti.simt.block.sync()
 
         max_point_group_offset: ti.i32 = ti.min(
-            block_area, tile_point_count - point_group_id * block_area)
+            tile_area, tile_point_count - point_group_id * tile_area)
 
         # in parallel across a block, render all points in the group
         for in_group_idx in range(max_point_group_offset):
@@ -111,46 +94,39 @@ def forward_kernel(config: RasterConfig, feature_size: int):
             break
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          pixel_saturated = True
+          gaussian_alpha = conic_pdf(ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
+          alpha = point_alpha * gaussian_alpha
 
-          
-          for i, offset in ti.static(pixel_tile):
-            gaussian_alpha = conic_pdf(ti.cast(pixel_base, ti.f32) + ivec2(offset) + 0.5, uv, uv_conic)
-            alpha = point_alpha * gaussian_alpha
+            
+          # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
+          # 255 ) and also clamp 𝛼 with 0.99 from above.
+          if alpha < ti.static(config.alpha_threshold):
+            continue
 
-              
-            # from paper: we skip any blending updates with 𝛼 < 𝜖 (we choose 𝜖 as 1
-            # 255 ) and also clamp 𝛼 with 0.99 from above.
-            if alpha < ti.static(config.alpha_threshold):
-              alpha = 0.
+          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+          # from paper: before a Gaussian is included in the forward rasterization
+          # pass, we compute the accumulated opacity if we were to include it
+          # and stop front-to-back blending before it can exceed 0.9999.
+          next_T_i = T_i * (1 - alpha)
+          if next_T_i < ti.static(1 - config.saturate_threshold):
+            pixel_saturated = True
+            continue  # somehow faster than directly breaking
+          last_point_idx = group_start_offset + in_group_idx + 1
 
-            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-            # from paper: before a Gaussian is included in the forward rasterization
-            # pass, we compute the accumulated opacity if we were to include it
-            # and stop front-to-back blending before it can exceed 0.9999.
-            next_T_i = T_i[i] * (1 - alpha)
-
-            if next_T_i > ti.static(1 - config.saturate_threshold):
-              pixel_saturated = False
-
-              last_point_idx[i] = group_start_offset + in_group_idx + 1
-
-              # weight = alpha * T_i
-              accum_feature[i, :] += tile_feature[in_group_idx] * alpha * T_i[i]
-              T_i[i] = next_T_i
+          # weight = alpha * T_i
+          accum_feature += tile_feature[in_group_idx] * alpha * T_i
+          T_i = next_T_i
 
 
         # end of point group loop
       # end of point group id loop
 
-      for i, offset in ti.static(pixel_tile):
-        pixel = pixel_base + ivec2(offset)
-        if pixel.x < camera_width and pixel.y < camera_height:
-          image_feature[pixel.y, pixel.x] = accum_feature[i, :]
+      if pixel.x < camera_width and pixel.y < camera_height:
+        image_feature[pixel.y, pixel.x] = accum_feature
 
-          # No need to accumulate a normalisation factor as it is exactly 1 - T_i
-          image_alpha[pixel.y, pixel.x] = 1. - T_i[i]    
-          image_last_valid[pixel.y, pixel.x] = last_point_idx[i]
+        # No need to accumulate a normalisation factor as it is exactly 1 - T_i
+        image_alpha[pixel.y, pixel.x] = 1. - T_i    
+        image_last_valid[pixel.y, pixel.x] = last_point_idx
 
     # end of pixel loop
 

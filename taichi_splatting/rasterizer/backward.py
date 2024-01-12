@@ -25,10 +25,10 @@ def backward_kernel(config: RasterConfig,
   thread_vector = ti.types.vector(thread_pixels, dtype=ti.f32)
   thread_index = ti.types.vector(thread_pixels, dtype=ti.i32)
 
-  pixel_tile = [ (i, 
+  pixel_tile = tuple([ (i, 
             (i % config.pixel_stride[0],
             i // config.pixel_stride[0]))
-              for i in range(thread_pixels) ]
+              for i in range(thread_pixels) ])
 
   @ti.kernel
   def _backward_kernel(

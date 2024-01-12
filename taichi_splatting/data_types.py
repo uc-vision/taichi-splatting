@@ -9,6 +9,8 @@ import torch
 @dataclass(frozen=True)
 class RasterConfig:
   tile_size: int = 16
+
+  # pixel tilin per thread in the backwards pass 
   pixel_stride: Tuple[int, int] = (2, 2)
 
   margin_tiles: int = 3
