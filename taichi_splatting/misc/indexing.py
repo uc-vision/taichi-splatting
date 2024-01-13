@@ -26,7 +26,7 @@ def indexing_function(size:int, dtype=torch.float32):
       device = features.device
 
       n = indexes.shape[0]
-      features_out = torch.zeros((n, features.shape[1]), dtype=features.dtype, device=device)
+      features_out = torch.empty((n, features.shape[1]), dtype=features.dtype, device=device)
       indexing_kernel(features, indexes, features_out)
 
       ctx.indexes = indexes
