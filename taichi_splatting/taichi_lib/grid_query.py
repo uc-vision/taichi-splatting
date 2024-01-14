@@ -1,4 +1,5 @@
 
+from types import SimpleNamespace
 import taichi as ti
 from taichi.math import ivec2, vec2, mat2, vec3
 
@@ -7,20 +8,6 @@ from taichi_splatting.taichi_lib.f32 import (Gaussian2D,
 
 
 
-@ti.func
-def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
-  rel_points = ti.Matrix.cols(
-      [lower, vec2(upper.x, lower.y), upper, vec2(lower.x, upper.y)])
-  local_points = (inv_basis @ rel_points)
-
-  separates = False
-  for i in ti.static(range(2)):
-    min_val = ti.min(*local_points[i, :])
-    max_val = ti.max(*local_points[i, :])
-    if (min_val > 1. or max_val < -1.):
-      separates = True
-
-  return separates
 
 def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bool=True):
 
@@ -109,4 +96,25 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
 
       return min_tile_bound, max_tile_bound
   
-  return obb_grid_query if tight_culling else range_grid_query
+
+  @ti.func
+  def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
+    rel_points = ti.Matrix.cols(
+        [lower, vec2(upper.x, lower.y), upper, vec2(lower.x, upper.y)])
+    local_points = (inv_basis @ rel_points)
+
+    separates = False
+    for i in ti.static(range(2)):
+      min_val = ti.min(*local_points[i, :])
+      max_val = ti.max(*local_points[i, :])
+      if (min_val > 1. or max_val < -1.):
+        separates = True
+
+    return separates
+
+  return SimpleNamespace(
+    grid_query = obb_grid_query if tight_culling else range_grid_query,
+    obb_grid_query = obb_grid_query,
+    range_grid_query = range_grid_query,
+    separates_bbox = separates_bbox,
+    gaussian_tile_ranges = gaussian_tile_ranges)
