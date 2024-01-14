@@ -54,14 +54,14 @@ def tile_mapper(config:RasterConfig):
   ):  
     for idx in range(sorted_keys.shape[0] - 1):
         # tile id is in the 32 high bits of the 64 bit key
-        tile_id = ti.cast(sorted_keys[idx] >> 32, ti.i32)
-        next_tile_id = ti.cast(sorted_keys[idx + 1] >> 32, ti.i32)
-
+        tile_id = sorted_keys[idx] >> 32
+        next_tile_id = sorted_keys[idx + 1] >> 32
+        
         if tile_id != next_tile_id:
             tile_ranges[next_tile_id][0] = idx + 1
             tile_ranges[tile_id][1] = idx + 1
 
-    last_tile_id = ti.cast(sorted_keys[sorted_keys.shape[0] - 1] >> 32, ti.i32)
+    last_tile_id = sorted_keys[sorted_keys.shape[0] - 1] >> 32
     tile_ranges[last_tile_id][1] = sorted_keys.shape[0]
 
 

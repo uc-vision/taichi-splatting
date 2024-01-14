@@ -143,7 +143,7 @@ def sh_function(degree:int=3, dimension:int=3,
 
           for d in ti.static(range(dimension)):
               out[i][d] = ti.math.clamp(
-                 0.5 + coeffs.dot(params_i[d, :]), 0, 1)
+                coeffs.dot(params_i[d, :]) + 0.5, 0, 1)
 
 
 

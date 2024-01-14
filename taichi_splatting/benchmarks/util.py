@@ -14,7 +14,7 @@ def profiled_benchmark(name, f, iters=100, warmup=1):
       torch.cuda.synchronize()
 
   result = prof.key_averages().table(sort_by="self_cuda_time_total", 
-                                      row_limit=25, max_name_column_width=70)
+                                      row_limit=25, max_name_column_width=100)
   print(result)
 
 

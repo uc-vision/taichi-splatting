@@ -35,7 +35,7 @@ def frustum_culling_kernel(
                 pixel.y >= -margin_pixels and pixel.y < image_size.y + margin_pixels)
 
 @beartype
-def frustum_culling(gaussians: torch.Tensor, camera_params: CameraParams, margin_pixels: int):
+def frustum_culling(gaussians: torch.Tensor, camera_params: CameraParams, margin_pixels: int = 48):
   mask = torch.empty(gaussians.shape[0], dtype=torch.bool, device=gaussians.device)
 
   frustum_culling_kernel(

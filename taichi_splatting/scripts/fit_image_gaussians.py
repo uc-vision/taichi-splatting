@@ -101,8 +101,6 @@ def main():
       check_finite(params)
       opt.step()
 
-            
-
       with torch.no_grad():
         params.log_scaling.clamp_(min=-1, max=4)
     

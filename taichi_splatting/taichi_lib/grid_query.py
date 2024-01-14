@@ -1,9 +1,9 @@
 
 import taichi as ti
-from taichi.math import ivec2, vec2, mat2
+from taichi.math import ivec2, vec2, mat2, vec3
 
 from taichi_splatting.taichi_lib.f32 import (Gaussian2D, 
-    conic_to_cov, cov_inv_basis, radii_from_cov)
+    inverse_cov, cov_inv_basis, radii_from_cov,)
 
 
 
@@ -48,7 +48,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
   @ti.func 
   def obb_grid_query(v: Gaussian2D.vec, image_size:ivec2) -> OBBGridQuery:
       uv, uv_conic, _ = Gaussian2D.unpack(v)
-      uv_cov = conic_to_cov(uv_conic)
+      uv_cov = inverse_cov(uv_conic)
 
       min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
       return OBBGridQuery(
@@ -77,7 +77,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
   @ti.func 
   def range_grid_query(v: Gaussian2D.vec, image_size:ivec2) -> RangeGridQuery:
       uv, uv_conic, _ = Gaussian2D.unpack(v)
-      uv_cov = conic_to_cov(uv_conic)
+      uv_cov = inverse_cov(uv_conic)
 
       min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
       return RangeGridQuery(
@@ -88,7 +88,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
   @ti.func
   def gaussian_tile_ranges(
       uv: vec2,
-      uv_cov: mat2,
+      uv_cov: vec3,
       image_size: ti.math.ivec2,
   ):
 

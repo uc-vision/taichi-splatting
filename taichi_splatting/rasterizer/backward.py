@@ -13,6 +13,7 @@ def backward_kernel(config: RasterConfig,
                     points_requires_grad: bool,
                     features_requires_grad: bool, 
                     feature_size: int):
+  
 
   feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
   tile_size = config.tile_size

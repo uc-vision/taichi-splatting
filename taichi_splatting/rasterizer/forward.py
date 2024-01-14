@@ -45,6 +45,8 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     # pixels are blocked first by tile_id, then by tile_idx into (8x4) warps
     
     ti.loop_config(block_dim=(tile_area))
+
+    
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
       pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, (1, 1), tiles_wide)
 

@@ -44,12 +44,12 @@ def project_to_image_function(torch_dtype=torch.float32,
       cov_in_camera = lib.gaussian_covariance_in_camera(
           camera_world, rotation, scale)
 
-      uv_cov = lib.project_perspective_gaussian(
-          camera_image, point_in_camera, cov_in_camera)
+      uv_cov = lib.upper(lib.project_perspective_gaussian(
+          camera_image, point_in_camera, cov_in_camera))
       
       # add small fudge factor blur to avoid numerical issues
-      uv_cov += lib.mat2([blur_cov, 0, 0, blur_cov]) 
-      uv_conic = lib.cov_to_conic(uv_cov)
+      uv_cov += lib.vec3([blur_cov, 0, blur_cov]) 
+      uv_conic = lib.inverse_cov(uv_cov)
 
       depth_var[idx] = lib.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
 
