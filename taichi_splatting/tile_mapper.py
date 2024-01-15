@@ -59,12 +59,12 @@ def tile_mapper(config:RasterConfig):
   def partition_tiles_kernel(
       depth: ti.types.ndarray(ti.f32, ndim=2),  # (M, >= 1)
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
-      tile_offsets: ti.types.ndarray(ti.i64, ndim=1),  # (Th, Tw)
-          # (K), K = sum(num_overlap_tiles)
+      tile_offsets: ti.types.ndarray(ti.i32, ndim=2),  # (H, W)
+
       image_size: ivec2,
 
-      # output - more precise tile counts
-      tile_counts : ti.types.ndarray(ti.i32, ndim=1),  # (Th, Tw)
+      # output - precise tile counts
+      tile_counts : ti.types.ndarray(ti.i32, ndim=2),  # (H, W)
 
       overlap_depths: ti.types.ndarray(ti.f32, ndim=1),
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
@@ -80,7 +80,7 @@ def tile_mapper(config:RasterConfig):
           tile_idx = ti.atomic_add(tile_counts[tile], 1)
           key_idx = tile_offsets[tile] + tile_idx
 
-          overlap_depths[key_idx] = depth[point_idx] # sort based on tile_id, depth
+          overlap_depths[key_idx] = depth[point_idx, 0] # sort based on tile_id, depth
           overlap_to_point[key_idx] = point_idx # map overlap index back to point index
 
 
@@ -89,19 +89,24 @@ def tile_mapper(config:RasterConfig):
     image_size = pad_to_tile(image_size, tile_size)
 
     with torch.no_grad():
-      overlap_counts = count_tile_overlaps(gaussians, image_size)          
-      overlap_offsets, max_overlaps = full_cumsum(overlap_counts.view(-1), dim=0)
+      max_overlap_counts = count_tile_overlaps(gaussians, image_size)          
+      overlap_sums, max_overlaps = full_cumsum(max_overlap_counts.view(-1))
 
       overlap_depths = torch.empty((max_overlaps,), dtype=torch.float32, device=gaussians.device)
       overlap_to_point = torch.empty((max_overlaps,), dtype=torch.int32, device=gaussians.device)
 
-      partition_tiles_kernel(depths, gaussians, overlap_offsets, ivec2(image_size), 
-                             overlap_counts, overlap_depths, overlap_to_point)
+      overlap_offsets = overlap_sums[:-1].view(max_overlap_counts.shape)
+      overlap_counts = torch.zeros_like(max_overlap_counts)
+
+      partition_tiles_kernel(depths, gaussians, overlap_offsets, 
+                             ivec2(image_size), overlap_counts, overlap_depths, overlap_to_point)
 
       tile_ranges = torch.stack(
         [overlap_offsets, overlap_offsets + overlap_counts], dim=1)
 
-      return overlap_to_point, tile_ranges
+
+
+      return overlap_to_point, tile_ranges.view(-1, 2)
       
   return f
 
