@@ -3,9 +3,11 @@ import torch
 from torch.utils.cpp_extension import load
 from pathlib import Path
 
-path = Path(__file__).parent  / "scan.cu"
+sources = [str(Path(__file__).parent  / filename)
+            for filename in 
+          ["full_cumsum.cu", "segmented_sort_pairs.cu", "module.cpp"]]
 
-cuda_lib = load("cuda_lib", sources=[str(path)], verbose=True)
+cuda_lib = load("cuda_lib", sources=sources, verbose=True)
 
 
 def full_cumsum(x:torch.Tensor) -> Tuple[torch.Tensor, int]:
@@ -13,13 +15,22 @@ def full_cumsum(x:torch.Tensor) -> Tuple[torch.Tensor, int]:
   total = cuda_lib.full_cumsum(x, out)
   return out, total
 
+segmented_sort_pairs = cuda_lib.segmented_sort_pairs
 
-__all__ = ["full_cumsum"]
+__all__ = ["full_cumsum", "segmented_sort_pairs"]
 
 
 if __name__ == "__main__":
-  x = torch.randint(100, (10,), dtype=torch.int32, device="cuda")
-  y = full_cumsum(x)
-  print(y)
+  k = torch.randint(100, (20,), dtype=torch.int32, device="cuda")
+  v = torch.arange(20, dtype=torch.int32, device="cuda")
 
-  print(torch.cumsum(x, dim=0))
+  segments = torch.tensor([[0, 8, 16], [8, 16, 20]], dtype=torch.long, device="cuda")
+
+  k1, v1 = segmented_sort_pairs(k, v, segments)
+  print(k1)
+  print(v1)
+
+  # y = full_cumsum(x)
+  # print(y)
+
+  # print(torch.cumsum(x, dim=0))

@@ -9,7 +9,7 @@ import torch
 from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
-from taichi_splatting.cuda_lib import full_cumsum
+from taichi_splatting.cuda_lib import full_cumsum, segmented_sort_pairs
 
 from taichi_splatting.taichi_lib.grid_query import make_grid_query
 
@@ -104,7 +104,7 @@ def tile_mapper(config:RasterConfig):
       tile_ranges = torch.stack(
         [overlap_offsets, overlap_offsets + overlap_counts], dim=1)
 
-
+      segmented_sort_pairs(overlap_depths, overlap_to_point, tile_ranges)
 
       return overlap_to_point, tile_ranges.view(-1, 2)
       

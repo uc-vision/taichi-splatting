@@ -1,4 +1,3 @@
-#include <pybind11/pybind11.h>
 #include <torch/extension.h>
 #include <cub/cub.cuh>
 
@@ -7,6 +6,9 @@ __global__ void complete_cumsum(T *input, T *output, T *total) {
   T const v = *output + *input;
   *total = *(output + 1) = v;
 }
+
+
+
 
 
 template <typename T>
@@ -41,6 +43,7 @@ T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType 
   return *total_tensor.data_ptr<T>();
 }
 
+
 // full cumsum and also returns the total to the CPU.
 int64_t full_cumsum(const torch::Tensor input, const torch::Tensor output) {
   assert(input.size(0) + 1 == output.size(0));
@@ -60,6 +63,6 @@ int64_t full_cumsum(const torch::Tensor input, const torch::Tensor output) {
   }
 }
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("full_cumsum", &full_cumsum, "Full cumulative sum");
-}
+
+
+
