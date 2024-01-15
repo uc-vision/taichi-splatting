@@ -13,7 +13,6 @@ def warp_reduce_f32(val: ti.f32, op:ti.template()):
   mask_full = ti.u32(0xFFFFFFFF)
 
   lane_id = global_tid % WARP_SIZE
-  offset_j = 16
   for offset_j in ti.static([16, 8, 4, 2, 1]):
       n = warp.shfl_down_f32(mask_full, val, offset_j)
       if lane_id < offset_j:
@@ -38,7 +37,6 @@ def warp_reduce_i32(val: ti.i32, op:ti.template()):
   mask_full = ti.u32(0xFFFFFFFF)
 
   lane_id = global_tid % WARP_SIZE
-  offset_j = 16
   for offset_j in ti.static([16, 8, 4, 2, 1]):
       n = warp.shfl_down_i32(mask_full, val, offset_j)
       if lane_id < offset_j:
@@ -85,3 +83,18 @@ def warp_add_vector(dest:ti.template(), val: ti.template()):
     # ti.atomic_add(dest, val) 
     # taichi spits out a LLVM assertion when using shared memory
     atomic_add_vector(dest, val)
+
+
+
+@ti.func
+def warp_scan(val: ti.template(), op:ti.template()):
+    global_tid = block.global_thread_idx()
+    lane_id = global_tid % WARP_SIZE
+    mask_full = ti.u32(0xFFFFFFFF)
+
+    for offset_j in ti.static([16, 8, 4, 2, 1]):
+      n = warp.shfl_up_i32(mask_full, val, offset_j)
+      if lane_id >= offset_j:
+          val = op(val, n)
+
+    return val
