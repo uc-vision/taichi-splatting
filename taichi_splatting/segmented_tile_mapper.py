@@ -115,8 +115,7 @@ def tile_mapper(config:RasterConfig):
       _, overlap_to_point = segmented_sort_pairs(overlap_depths.view(dtype=torch.int32), overlap_to_point, 
                             tile_start.view(-1), tile_end.view(-1))
     
-      tile_overlap_ranges = torch.stack((tile_start, tile_end), dim=2)
-
+      tile_overlap_ranges = torch.stack((tile_start, tile_end), dim=2).to(torch.int32)
       return overlap_to_point, tile_overlap_ranges
       
   return f
