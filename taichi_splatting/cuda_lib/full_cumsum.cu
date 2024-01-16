@@ -13,18 +13,16 @@ __global__ void complete_cumsum(T *input, T *output, T *total) {
 
 template <typename T>
 T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType input_scalar_type) {
-  void *d_temp_storage = nullptr;
   size_t temp_storage_bytes = 0;
-  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, input, output, input_size);
+  cub::DeviceScan::ExclusiveSum(nullptr, temp_storage_bytes, input, output, input_size);
 
   // Make temp storage on in the torch mempool.
-  auto temp_storage_tensor_options = torch::TensorOptions().dtype(torch::kUInt8).device(torch::kCUDA);
-  auto temp_storage_tensor = torch::empty({int64_t(temp_storage_bytes)}, temp_storage_tensor_options);
-  assert(temp_storage_tensor.nbytes() >= temp_storage_bytes);
-  d_temp_storage = temp_storage_tensor.data_ptr<uint8_t>();
+  auto temp_storage = torch::empty({int64_t(temp_storage_bytes)}, 
+    torch::TensorOptions().dtype(torch::kUInt8).device(torch::kCUDA));
 
-  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, input, output, input_size);
-
+  cub::DeviceScan::ExclusiveSum(temp_storage.data_ptr<uint8_t>(), 
+    temp_storage_bytes, input, output, input_size);
+    
   // cumsum is now in the output but the final value is missing.
 
   // Make storage in pinned_memory.

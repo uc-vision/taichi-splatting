@@ -30,6 +30,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
       for tile_uv in ti.grouped(ti.ndrange(*self.tile_span)):
         if self.test_tile(tile_uv):
           count += 1
+
       return count
 
   @ti.func 
@@ -37,7 +38,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
       uv, uv_conic, _ = Gaussian2D.unpack(v)
       uv_cov = inverse_cov(uv_conic)
 
-      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
+      min_tile, max_tile = cov_tile_ranges(uv, uv_cov, image_size)
       return OBBGridQuery(
         # Find tiles which intersect the oriented box
         inv_basis = cov_inv_basis(uv_cov, gaussian_scale),
@@ -63,17 +64,14 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
           
   @ti.func 
   def range_grid_query(v: Gaussian2D.vec, image_size:ivec2) -> RangeGridQuery:
-      uv, uv_conic, _ = Gaussian2D.unpack(v)
-      uv_cov = inverse_cov(uv_conic)
-
-      min_tile, max_tile = gaussian_tile_ranges(uv, uv_cov, image_size)
+      min_tile, max_tile = gaussian_tile_ranges(v, image_size)
       return RangeGridQuery(
         min_tile = min_tile,
         tile_span = max_tile - min_tile)
 
 
   @ti.func
-  def gaussian_tile_ranges(
+  def cov_tile_ranges(
       uv: vec2,
       uv_cov: vec3,
       image_size: ti.math.ivec2,
@@ -96,6 +94,15 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
 
       return min_tile_bound, max_tile_bound
   
+  @ti.func
+  def gaussian_tile_ranges(
+      gaussian: Gaussian2D.vec,
+      image_size: ti.math.ivec2,
+  ):
+      uv, uv_conic, _ = Gaussian2D.unpack(gaussian)
+      uv_cov = inverse_cov(uv_conic)
+
+      return cov_tile_ranges(uv, uv_cov, image_size)
 
   @ti.func
   def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
@@ -117,4 +124,5 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
     obb_grid_query = obb_grid_query,
     range_grid_query = range_grid_query,
     separates_bbox = separates_bbox,
-    gaussian_tile_ranges = gaussian_tile_ranges)
+    gaussian_tile_ranges = gaussian_tile_ranges,
+    cov_tile_ranges = cov_tile_ranges)

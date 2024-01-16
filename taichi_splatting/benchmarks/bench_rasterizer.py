@@ -8,7 +8,7 @@ from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
 from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
-from taichi_splatting.tile_mapper import map_to_tiles
+from taichi_splatting import tile_mapper, segmented_tile_mapper
 
 
 def parse_args(args=None):
@@ -22,6 +22,7 @@ def parse_args(args=None):
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--iters', type=int, default=200)
+  parser.add_argument('--tight_culling', action='store_true')
 
   args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
@@ -38,27 +39,31 @@ def bench_rasterizer(args):
 
   gaussians = random_2d_gaussians(args.n, args.image_size, 
           args.scale_factor, alpha_range=(0.5, 1.0)).to(args.device)
-  config = RasterConfig(tile_size=args.tile_size)
-
+  config = RasterConfig(tile_size=args.tile_size, tight_culling=args.tight_culling)
   
   gaussians2d = project_gaussians2d(gaussians)
-  tile_map = partial(map_to_tiles, gaussians2d, gaussians.depth, 
-    image_size=args.image_size, 
-    config=config)    
-  overlap_to_point, ranges = tile_map()
 
-  points_per_tile = (ranges[1] - ranges[0]).float().mean()
-  point_overlap = overlap_to_point.shape[0] / args.n 
-  
+  for map_to_tiles in [tile_mapper.map_to_tiles, segmented_tile_mapper.map_to_tiles]:
+    tile_map = partial(map_to_tiles, gaussians2d, gaussians.depth, 
+      image_size=args.image_size, 
+      config=config)    
+    overlap_to_point, tile_ranges = tile_map()
 
-  print('----------------------------------------------------------')
-  print(f'scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={point_overlap:.2f} tile_points={points_per_tile:.2f}')
-  
-  benchmarked('map_to_tiles', tile_map, profile=args.profile, iters=args.iters)  
+    points_per_tile = (tile_ranges[:, :, 1] - tile_ranges[:, :, 0])
+    overlap_ratio = points_per_tile.sum() / args.n 
 
+    print(points_per_tile.shape)
+    print(points_per_tile)
+
+
+    print(f'scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={overlap_ratio:.2f} tile_points={points_per_tile.float().mean():.2f}')
+    print('----------------------------------------------------------')    
+    benchmarked('map_to_tiles', tile_map, profile=args.profile, iters=args.iters)  
+
+  return 
 
   forward = partial(rasterize_with_tiles, gaussians2d=gaussians2d, features=gaussians.feature, 
-    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
+    tile_overlap_ranges=tile_ranges, overlap_to_point=overlap_to_point,
     image_size=args.image_size, config=config)
   
   benchmarked('forward', forward, profile=args.profile, iters=args.iters)  

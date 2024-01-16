@@ -1,6 +1,6 @@
 from .renderer import render_gaussians
 from .data_types import Gaussians2D, Gaussians3D, RasterConfig
-from .tile_mapper import map_to_tiles, pad_to_tile
+from .segmented_tile_mapper import map_to_tiles, pad_to_tile
 from .spherical_harmonics import evaluate_sh_at
 
 from . import perspective

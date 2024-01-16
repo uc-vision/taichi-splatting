@@ -89,7 +89,7 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
       gaussians2d: (N, 6)  packed gaussians, N is the number of gaussians
       features: (N, F)   features, F is the number of features
 
-      tile_overlap_ranges: (TH, TW, 2) M is the number of tiles, 
+      tile_overlap_ranges: (TH * TW, 2) M is the number of tiles, 
         maps tile index to range of overlap indices (0..K]
       overlap_to_point: (K, )  K is the number of overlaps, 
         maps overlap index to point index (0..N]
@@ -130,11 +130,11 @@ def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor,
   """
 
   # render with padding to tile_size, later crop back to original size
-  overlap_to_point, ranges = map_to_tiles(gaussians2d, depths, 
+  overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, depths, 
     image_size=image_size, config=config)
-
+  
   image, alpha = rasterize_with_tiles(gaussians2d, features, 
-    tile_overlap_ranges=ranges, overlap_to_point=overlap_to_point,
+    tile_overlap_ranges=tile_overlap_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
     image_size=image_size, config=config)
 
   return image, alpha 
