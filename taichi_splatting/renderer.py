@@ -30,7 +30,7 @@ def render_gaussians(
   config:RasterConfig,      
   use_sh:bool = False,      
   render_depth:bool = False, 
-  use_depth16:bool = True
+  use_depth16:bool = False
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 

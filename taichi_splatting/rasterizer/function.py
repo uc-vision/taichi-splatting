@@ -1,7 +1,7 @@
 
 from functools import cache
 from taichi_splatting.misc.autograd import restore_grad
-from taichi_splatting.segmented_tile_mapper import map_to_tiles
+from taichi_splatting.tile_mapper import map_to_tiles
 
 from .forward import RasterConfig, forward_kernel
 from .backward import backward_kernel
