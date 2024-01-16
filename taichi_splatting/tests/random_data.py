@@ -72,11 +72,11 @@ def random_3d_gaussians(n, camera_params:CameraParams,
   )
 
 
-def random_2d_gaussians(n, image_size, scale_factor=1.0, alpha_range=(0.1, 0.9)):
+def random_2d_gaussians(n, image_size, scale_factor=1.0, alpha_range=(0.1, 0.9), depth_range=(0.1, 100.0)):
   w, h = image_size
 
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
-  depth = torch.rand((n, 1))  
+  depth = torch.rand((n, 1)) * (depth_range[1] - depth_range[0]) + depth_range[0]
   
   density_scale = scale_factor * w / math.sqrt(n) 
   scaling = (torch.rand(n, 2) + 0.2) * density_scale 

@@ -37,8 +37,9 @@ def bench_rasterizer(args):
      
   torch.manual_seed(args.seed)
 
+  depth_range = (0.1, 100.)
   gaussians = random_2d_gaussians(args.n, args.image_size, 
-          args.scale_factor, alpha_range=(0.5, 1.0)).to(args.device)
+          args.scale_factor, alpha_range=(0.5, 1.0), depth_range=depth_range).to(args.device)
   config = RasterConfig(tile_size=args.tile_size, tight_culling=args.tight_culling)
   
   gaussians2d = project_gaussians2d(gaussians)

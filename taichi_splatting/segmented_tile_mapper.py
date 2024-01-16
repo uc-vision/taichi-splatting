@@ -56,7 +56,7 @@ def tile_mapper(config:RasterConfig):
   @ti.kernel
   def partition_tiles_kernel(
       depths: ti.types.ndarray(ti.f32, ndim=2),  # (M, >= 1)
-      near: ti.f32, far: ti.f32,
+      # near: ti.f32, far: ti.f32,
 
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
       tile_offsets: ti.types.ndarray(ti.i64, ndim=2),  # (H, W)
@@ -66,7 +66,7 @@ def tile_mapper(config:RasterConfig):
       # output - precise tile counts
       tile_counts : ti.types.ndarray(ti.i64, ndim=2),  # (H, W)
 
-      overlap_depths: ti.types.ndarray(ti.f16, ndim=1),
+      overlap_depths: ti.types.ndarray(ti.f32, ndim=1),
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
 
   ):
@@ -124,7 +124,7 @@ def tile_mapper(config:RasterConfig):
 @beartype
 def map_to_tiles(gaussians : torch.Tensor, 
                  depths:torch.Tensor, 
-                 near:float, far:float,
+                #  near:float, far:float,
 
                  image_size:Tuple[Integral, Integral],
                  config:RasterConfig
