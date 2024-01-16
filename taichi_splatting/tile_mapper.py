@@ -92,7 +92,7 @@ def tile_mapper(config:RasterConfig):
 
   @ti.kernel
   def generate_sort_keys_kernel(
-      depth: ti.types.ndarray(ti.f32, ndim=2),  # (M, >= 1)
+      depth: ti.types.ndarray(ti.i32, ndim=1),  # (M)
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
       cumulative_overlap_counts: ti.types.ndarray(ti.i32, ndim=1),  # (M)
       # (K), K = sum(num_overlap_tiles)
@@ -106,15 +106,15 @@ def tile_mapper(config:RasterConfig):
     tiles_wide = image_size.x // tile_size
 
     for idx in range(cumulative_overlap_counts.shape[0]):
-      encoded_depth_key = ti.bit_cast(depth[idx, 0], ti.i32)
+      encoded_depth_key = depth[idx]
       query = grid_query(gaussians[idx], image_size)
 
-      overlap_idx = 0
+      key_idx = cumulative_overlap_counts[idx]
+
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
         if query.test_tile(tile_uv):
           tile = tile_uv + query.min_tile
 
-          key_idx = cumulative_overlap_counts[idx] + overlap_idx
           encoded_tile_id = ti.cast(tile.x + tile.y * tiles_wide, ti.i32)
           
           sort_key = ti.cast(encoded_depth_key, ti.i64) | (
@@ -122,7 +122,7 @@ def tile_mapper(config:RasterConfig):
       
           overlap_sort_key[key_idx] = sort_key # sort based on tile_id, depth
           overlap_to_point[key_idx] = idx # map overlap index back to point index
-          overlap_idx += 1
+          key_idx += 1
 
   def sort_tile_depths(depths:torch.Tensor, tile_overlap_ranges:torch.Tensor, cum_overlap_counts:torch.Tensor, total_overlap:int, image_size):
 
@@ -172,14 +172,14 @@ def tile_mapper(config:RasterConfig):
 
 
 @beartype
-def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor, 
+def map_to_tiles(gaussians : torch.Tensor, encoded_depth:torch.Tensor, 
                  image_size:Tuple[Integral, Integral],
                  config:RasterConfig
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
      gaussians: (N, 6) torch.Tensor of packed gaussians, N is the number of gaussians
-     depths: (N, 1 or 3)  torch.Tensor of depths or depth + depth variance + depth^2
+     encoded_depths: (N)  torch.Tensor of encoded depths (int32)
      image_size: (2, ) tuple of ints, (width, height)
      tile_config: configuration for tile mapper (tile_size etc.)
 
@@ -190,4 +190,4 @@ def map_to_tiles(gaussians : torch.Tensor, depths:torch.Tensor,
 
   
   mapper = tile_mapper(config)
-  return mapper(gaussians, depths, image_size)
+  return mapper(gaussians, encoded_depth, image_size)

@@ -26,6 +26,7 @@ class RasterConfig:
   saturate_threshold: float = 0.9999
 
 
+
 def check_packed3d(packed_gaussians: torch.Tensor):
   assert len(packed_gaussians.shape) == 2 and packed_gaussians.shape[1] == 11, f"Expected shape (N, 11), got {packed_gaussians.shape}"  
 

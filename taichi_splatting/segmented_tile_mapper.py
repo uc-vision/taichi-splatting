@@ -4,7 +4,7 @@ from numbers import Integral
 from typing import Tuple
 from beartype import beartype
 import taichi as ti
-from taichi.math import ivec2
+from taichi.math import ivec2, vec2
 import torch
 from taichi_splatting.data_types import RasterConfig
 
@@ -12,6 +12,7 @@ from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
 from taichi_splatting.cuda_lib import full_cumsum, segmented_sort_pairs
 
 from taichi_splatting.taichi_lib.grid_query import make_grid_query
+from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
   def pad(x):
@@ -21,8 +22,9 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
 
 
 @cache
-def tile_mapper(config:RasterConfig):
+def tile_mapper(config:RasterConfig, depth_type):
 
+  ti_depth_type = torch_taichi[depth_type]
 
   tile_size = config.tile_size
   grid_ops = make_grid_query(
@@ -37,7 +39,7 @@ def tile_mapper(config:RasterConfig):
   def count_tile_overlaps_kernel(
       gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1), 
       image_size: ivec2,
-      tile_counts: ti.types.ndarray(ti.i64, ndim=2), 
+      tile_counts: ti.types.ndarray(ti.i32, ndim=2), 
   ):
       for idx in range(gaussians.shape[0]):
           lower, upper = grid_ops.gaussian_tile_ranges(gaussians[idx], image_size)
@@ -47,26 +49,27 @@ def tile_mapper(config:RasterConfig):
 
   def count_tile_overlaps(gaussians:torch.Tensor, image_size:Tuple[Integral, Integral]):
     tile_counts = torch.zeros((image_size[1] // tile_size, image_size[0] // tile_size), 
-                              dtype=torch.int64, device=gaussians.device)
+                              dtype=torch.int32, device=gaussians.device)
     
     count_tile_overlaps_kernel(gaussians, ivec2(image_size), tile_counts)
     return tile_counts
 
 
+
+
   @ti.kernel
   def partition_tiles_kernel(
-      depths: ti.types.ndarray(ti.f32, ndim=2),  # (M, >= 1)
-      # near: ti.f32, far: ti.f32,
+      depths: ti.types.ndarray(ti_depth_type, ndim=1),  # (M)
 
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
-      tile_offsets: ti.types.ndarray(ti.i64, ndim=2),  # (H, W)
+      tile_offsets: ti.types.ndarray(ti.i32, ndim=2),  # (H, W)
 
       image_size: ivec2,
 
       # output - precise tile counts
-      tile_counts : ti.types.ndarray(ti.i64, ndim=2),  # (H, W)
+      tile_counts : ti.types.ndarray(ti.i32, ndim=2),  # (H, W)
 
-      overlap_depths: ti.types.ndarray(ti.f32, ndim=1),
+      overlap_depths: ti.types.ndarray(ti_depth_type, ndim=1),
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
 
   ):
@@ -74,7 +77,7 @@ def tile_mapper(config:RasterConfig):
     for point_idx in range(gaussians.shape[0]):
       query = grid_query(gaussians[point_idx], image_size)
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
-        depth = depths[point_idx, 0]
+        depth = depths[point_idx]
 
         if query.test_tile(tile_uv):
           tile = tile_uv + query.min_tile
@@ -82,12 +85,15 @@ def tile_mapper(config:RasterConfig):
           tile_idx = ti.atomic_add(tile_counts[tile.y, tile.x], 1)
           key_idx = tile_offsets[tile.y, tile.x] + tile_idx
 
-          overlap_depths[key_idx] = ti.cast(depth, ti.f16) # sort based on tile_id, depth
+          overlap_depths[key_idx] = depth # sort based on tile_id, depth
           overlap_to_point[key_idx] = point_idx # map overlap index back to point index
 
 
 
-  def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
+
+  def f(gaussians : torch.Tensor, depths:torch.Tensor, 
+        image_size:Tuple[Integral, Integral]):
+    
     image_size = pad_to_tile(image_size, tile_size)
 
     with torch.no_grad():
@@ -99,7 +105,7 @@ def tile_mapper(config:RasterConfig):
       overlap_offsets = overlap_sums[:-1].view(max_overlap_counts.shape)
 
       # allocate overlap array and sort key (depth)
-      overlap_depths = torch.empty((total_overlaps,), dtype=torch.float32, device=gaussians.device)
+      overlap_depths = torch.empty((total_overlaps,), dtype=depth_type, device=gaussians.device)
       overlap_to_point = torch.empty((total_overlaps,), dtype=torch.int32, device=gaussians.device)
 
       # allocate space for precise tile counts
@@ -112,10 +118,11 @@ def tile_mapper(config:RasterConfig):
       # sort the ranges of each tile by depth (in parallel)
       tile_start = overlap_offsets
       tile_end = tile_start + overlap_counts
-      _, overlap_to_point = segmented_sort_pairs(overlap_depths.view(dtype=torch.int32), overlap_to_point, 
-                            tile_start.view(-1), tile_end.view(-1))
+
+      _, overlap_to_point = segmented_sort_pairs(overlap_depths, overlap_to_point, 
+                            tile_start.view(-1).to(torch.int64), tile_end.view(-1).to(torch.int64))
     
-      tile_overlap_ranges = torch.stack((tile_start, tile_end), dim=2).to(torch.int32)
+      tile_overlap_ranges = torch.stack((tile_start, tile_end), dim=2)
       return overlap_to_point, tile_overlap_ranges
       
   return f
@@ -123,16 +130,14 @@ def tile_mapper(config:RasterConfig):
 
 @beartype
 def map_to_tiles(gaussians : torch.Tensor, 
-                 depths:torch.Tensor, 
-                #  near:float, far:float,
-
+                 encoded_depth:torch.Tensor, 
                  image_size:Tuple[Integral, Integral],
                  config:RasterConfig
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
      gaussians: (N, 6) torch.Tensor of packed gaussians, N is the number of gaussians
-     depths: (N, 1 or 3)  torch.Tensor of depths or depth + depth variance + depth^2
+     encoded_depth: (N)  torch.Tensor (i16 or i32) of encoded depths
      image_size: (2, ) tuple of ints, (width, height)
      tile_config: configuration for tile mapper (tile_size etc.)
 
@@ -141,6 +146,7 @@ def map_to_tiles(gaussians : torch.Tensor,
      tile_ranges: (2, M) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
 
-  
-  mapper = tile_mapper(config)
-  return mapper(gaussians, depths, image_size)
+
+  mapper = tile_mapper(config, encoded_depth.dtype)
+  return mapper(gaussians, encoded_depth, 
+                image_size=image_size)

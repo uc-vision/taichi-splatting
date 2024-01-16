@@ -4,6 +4,7 @@ from functools import partial
 import torch
 import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
+from taichi_splatting.misc.encode_depth import encode_depth16
 
 from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
@@ -44,27 +45,38 @@ def bench_rasterizer(args):
   
   gaussians2d = project_gaussians2d(gaussians)
 
-  for map_to_tiles in [tile_mapper.map_to_tiles, segmented_tile_mapper.map_to_tiles]:
-    tile_map = partial(map_to_tiles, gaussians2d, gaussians.depth, 
+  def tile_map_segmented():
+    return segmented_tile_mapper.map_to_tiles(gaussians2d, 
+      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(), 
       image_size=args.image_size, 
-      config=config)    
+      config=config)
+
+  def tile_map_segmented16():
+    depth = encode_depth16(gaussians.depth, depth_range)
+    return segmented_tile_mapper.map_to_tiles(gaussians2d, depth, 
+      image_size=args.image_size, 
+      config=config)
+
+  def tile_map():
+    return tile_mapper.map_to_tiles(gaussians2d, 
+      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(), 
+      image_size=args.image_size, 
+      config=config)
+
+  for map_to_tiles in [tile_map, tile_map_segmented, tile_map_segmented16 ]:
+
     overlap_to_point, tile_ranges = tile_map()
 
     points_per_tile = (tile_ranges[:, :, 1] - tile_ranges[:, :, 0])
     overlap_ratio = points_per_tile.sum() / args.n 
 
-    print(points_per_tile.shape)
-    print(points_per_tile)
-
-
     print(f'scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={overlap_ratio:.2f} tile_points={points_per_tile.float().mean():.2f}')
     print('----------------------------------------------------------')    
-    benchmarked('map_to_tiles', tile_map, profile=args.profile, iters=args.iters)  
+    benchmarked('map_to_tiles', map_to_tiles, profile=args.profile, iters=args.iters)  
 
-  return 
 
   forward = partial(rasterize_with_tiles, gaussians2d=gaussians2d, features=gaussians.feature, 
-    tile_overlap_ranges=tile_ranges, overlap_to_point=overlap_to_point,
+    tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
     image_size=args.image_size, config=config)
   
   benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
@@ -87,6 +99,9 @@ def bench_rasterizer(args):
   benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
 
 
-if __name__ == '__main__':
+def main():
   args = parse_args()
   bench_rasterizer(args)
+
+if __name__ == '__main__':
+  main()

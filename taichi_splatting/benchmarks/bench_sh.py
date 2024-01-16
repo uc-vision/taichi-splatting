@@ -57,6 +57,9 @@ def bench_sh(args):
   benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
 
 
-if __name__ == '__main__':
+def main():
   args = parse_args()
   bench_sh(args)
+
+if __name__ == '__main__':
+  main()

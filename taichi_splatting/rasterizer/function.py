@@ -1,7 +1,7 @@
 
 from functools import cache
 from taichi_splatting.misc.autograd import restore_grad
-from taichi_splatting.tile_mapper import map_to_tiles
+from taichi_splatting.segmented_tile_mapper import map_to_tiles
 
 from .forward import RasterConfig, forward_kernel
 from .backward import backward_kernel
@@ -11,8 +11,6 @@ from typing import Tuple
 
 import torch
 from beartype import beartype
-
-
 
 @cache
 def render_function(config:RasterConfig,
@@ -109,7 +107,7 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
           image_size)
 
 
-def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor, 
+def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor, 
                           features:torch.Tensor, image_size:Tuple[Integral, Integral],
                           config:RasterConfig):
     
@@ -119,6 +117,7 @@ def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor,
 
   Parameters:
       gaussians2d: (N, 6)  packed gaussians, N is the number of gaussians
+      encoded_depths: (N )  encoded depths, N is the number of gaussians
       features: (N, F)   features, F is the number of features
 
       image_size: (2, ) tuple of ints, (width, height)
@@ -130,7 +129,7 @@ def rasterize(gaussians2d:torch.Tensor, depths:torch.Tensor,
   """
 
   # render with padding to tile_size, later crop back to original size
-  overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, depths, 
+  overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, encoded_depths, 
     image_size=image_size, config=config)
   
   image, alpha = rasterize_with_tiles(gaussians2d, features, 
