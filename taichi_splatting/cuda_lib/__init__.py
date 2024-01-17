@@ -11,9 +11,14 @@ cuda_lib = load("cuda_lib", sources=sources, verbose=True)
 
 
 def full_cumsum(x:torch.Tensor) -> Tuple[torch.Tensor, int]:
-  out = x.new_empty((x.shape[0] + 1, *x.shape[1:]))
-  total = cuda_lib.full_cumsum(x, out)
-  return out, total
+  assert x.dim() == 1, f"full_cumsum expects 1D tensor, got {x.shape}"
+
+  if x.shape[0] == 0:
+    return x.new_empty((0,)), 0
+  else:
+    out = x.new_empty((x.shape[0] + 1, *x.shape[1:]))
+    total = cuda_lib.full_cumsum(x, out)
+    return out, total
 
 segmented_sort_pairs = cuda_lib.segmented_sort_pairs
 sort_pairs = cuda_lib.sort_pairs

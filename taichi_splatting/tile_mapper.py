@@ -144,7 +144,6 @@ def tile_mapper(config:RasterConfig):
     cum_overlap_counts, total_overlap = cuda_lib.full_cumsum(overlap_counts)
     return cum_overlap_counts[:-1], total_overlap
 
-
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
 
     image_size = pad_to_tile(image_size, tile_size)
@@ -158,6 +157,7 @@ def tile_mapper(config:RasterConfig):
       # This needs to be initialised to zeros (not empty)
       # as sometimes there are no overlaps for a tile
       tile_ranges = torch.zeros((*tile_shape, 2), dtype=torch.int32, device=gaussians.device)
+
 
       if total_overlap > 0:
         overlap_key, overlap_to_point = sort_tile_depths(

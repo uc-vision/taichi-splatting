@@ -47,7 +47,7 @@ def bench_rasterizer(args):
 
   def tile_map_segmented():
     return segmented_tile_mapper.map_to_tiles(gaussians2d, 
-      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(), 
+      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(1), 
       image_size=args.image_size, 
       config=config)
 
@@ -59,7 +59,7 @@ def bench_rasterizer(args):
 
   def tile_map():
     return tile_mapper.map_to_tiles(gaussians2d, 
-      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(), 
+      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(1), 
       image_size=args.image_size, 
       config=config)
 

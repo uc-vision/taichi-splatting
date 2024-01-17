@@ -78,7 +78,7 @@ def random_2d_gaussians(n, image_size, scale_factor=1.0, alpha_range=(0.1, 0.9),
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
   depth = torch.rand((n, 1)) * (depth_range[1] - depth_range[0]) + depth_range[0]
   
-  density_scale = scale_factor * w / math.sqrt(n) 
+  density_scale = scale_factor * w / (1 + math.sqrt(n))
   scaling = (torch.rand(n, 2) + 0.2) * density_scale 
 
   rotation = torch.randn(n, 2) 
