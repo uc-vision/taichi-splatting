@@ -23,11 +23,12 @@ def encode_depth16(depths:torch.Tensor, depth_range:Tuple[float, float] ) -> tor
   encode_depth16_kernel(depths, depth_range[0], depth_range[1], encoded)
   return encoded
 
-def encode_depth(depths:torch.Tensor, 
-                 depth_range:Tuple[float, float], 
-                 use_depth16:bool=False ) -> torch.Tensor:
+
+def encode_depth32(depths:torch.Tensor) -> torch.Tensor:
+  return depths[:, 0].view(dtype=torch.int32)
   
+def encode_depth(depths:torch.Tensor, depth_range:Tuple[float, float], use_depth16=False ) -> torch.Tensor:
   if use_depth16:
     return encode_depth16(depths, depth_range)
   else:
-    return depths[:, 0].contiguous().view(torch.int32)
+    return encode_depth32(depths)

@@ -57,6 +57,9 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 ## Progress
 
 ### Done
+* Benchmarks with original + taichi_3dgs rasterizer
+* A couple of different tile-mapping algorithms + benchmarks
+
 * Simple view culling 
 * Projection with autograd
 * Tile mapping 
@@ -66,10 +69,11 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 * Fit to image training example/test
 * Depth and depth-covariance rendering
 
+
+
 ### Todo
 
 * Depth covariance example
-* Benchmark with original + taichi_3dgs rasterizer
 
 * 3D training code (likely different repository)
 * Backward projection autograd takes a while to compile and is not cached properly

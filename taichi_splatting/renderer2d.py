@@ -3,6 +3,7 @@ from numbers import Integral
 from typing import Tuple
 import torch
 from taichi_splatting.data_types import Gaussians2D
+from taichi_splatting.misc.encode_depth import encode_depth32
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 
@@ -33,7 +34,7 @@ def render_gaussians(
   gaussians2d = project_gaussians2d(gaussians)
   
   image, alpha = rasterize(gaussians2d=gaussians2d, 
-    depths=gaussians.depth, 
+    encoded_depths= encode_depth32(gaussians.depth),
     features=gaussians.feature, 
     image_size=image_size, 
     config=raster_config)
