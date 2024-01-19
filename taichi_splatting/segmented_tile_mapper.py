@@ -148,5 +148,5 @@ def map_to_tiles(gaussians : torch.Tensor,
 
 
   mapper = tile_mapper(config, encoded_depth.dtype)
-  return mapper(gaussians, encoded_depth, 
+  return mapper(gaussians, encoded_depth.contiguous(), 
                 image_size=image_size)
