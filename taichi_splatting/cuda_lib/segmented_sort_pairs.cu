@@ -1,4 +1,6 @@
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
+
 #include <cub/cub.cuh>
 
 
@@ -13,16 +15,19 @@ void sort_helper(
   int num_segments) 
 {
   size_t   temp_storage_bytes = 0;
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+
   cub::DeviceSegmentedSort::SortPairs(nullptr, temp_storage_bytes,
       d_keys, d_keys_out, d_values, d_values_out,
-      num_items, num_segments, d_start_offset, d_end_offset);
+      num_items, num_segments, d_start_offset, d_end_offset, stream);
 
   auto temp_storage = torch::empty({int64_t(temp_storage_bytes)}, 
     torch::TensorOptions().dtype(torch::kUInt8).device(torch::kCUDA));
 
   cub::DeviceSegmentedSort::SortPairs(temp_storage.data_ptr<uint8_t>(), temp_storage_bytes,
       d_keys, d_keys_out, d_values, d_values_out,
-      num_items, num_segments, d_start_offset, d_end_offset);
+      num_items, num_segments, d_start_offset, d_end_offset, stream);
 
 }
 

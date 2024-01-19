@@ -22,7 +22,9 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
 
 
 @cache
-def tile_mapper(config:RasterConfig):
+def tile_mapper(config:RasterConfig, depth_type=torch.int32):
+
+
 
 
   tile_size = config.tile_size
@@ -45,28 +47,6 @@ def tile_mapper(config:RasterConfig):
       for idx in range(gaussians.shape[0]):
           query = grid_query(gaussians[idx], image_size)
           counts[idx] =  query.count_tiles()
-
-  @ti.kernel
-  def count_tile_overlaps_kernel(
-      gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1), 
-      image_size: ivec2,
-      tile_counts: ti.types.ndarray(ti.i32, ndim=2), 
-  ):
-      for idx in range(gaussians.shape[0]):
-          lower, upper = grid_ops.gaussian_tile_ranges(gaussians[idx], image_size)
-          for tile_uv in ti.grouped(ti.ndrange((lower.x, upper.x), (lower.y, upper.y))):
-              tile_counts[tile_uv] += 1
-
-
-
-
-  def count_tile_overlaps(gaussians:torch.Tensor, image_size:Tuple[Integral, Integral]):
-    tile_counts = torch.zeros((image_size[0] // tile_size, image_size[1] // tile_size), 
-                              dtype=torch.int32, device=gaussians.device)
-    
-    count_tile_overlaps_kernel(gaussians, ivec2(image_size), tile_counts)
-    return tile_counts
-
 
 
   @ti.kernel
@@ -124,6 +104,7 @@ def tile_mapper(config:RasterConfig):
           overlap_to_point[key_idx] = idx # map overlap index back to point index
           key_idx += 1
 
+
   def sort_tile_depths(depths:torch.Tensor, tile_overlap_ranges:torch.Tensor, cum_overlap_counts:torch.Tensor, total_overlap:int, image_size):
 
     overlap_key = torch.empty((total_overlap, ), dtype=torch.int64, device=cum_overlap_counts.device)
@@ -132,7 +113,7 @@ def tile_mapper(config:RasterConfig):
     generate_sort_keys_kernel(depths, tile_overlap_ranges, cum_overlap_counts, image_size,
                               overlap_key, overlap_to_point)
 
-    overlap_key, overlap_to_point  = cuda_lib.sort_pairs(overlap_key, overlap_to_point)
+    overlap_key, overlap_to_point  = cuda_lib.radix_sort_pairs(overlap_key, overlap_to_point, end_bit=48)
     return overlap_key, overlap_to_point
   
 

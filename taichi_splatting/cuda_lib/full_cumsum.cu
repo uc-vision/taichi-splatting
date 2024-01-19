@@ -1,4 +1,6 @@
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
+
 #include <cub/cub.cuh>
 
 template<typename T>
@@ -14,14 +16,17 @@ __global__ void complete_cumsum(T *input, T *output, T *total) {
 template <typename T>
 T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType input_scalar_type) {
   size_t temp_storage_bytes = 0;
-  cub::DeviceScan::ExclusiveSum(nullptr, temp_storage_bytes, input, output, input_size);
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+
+  cub::DeviceScan::ExclusiveSum(nullptr, temp_storage_bytes, input, output, input_size, stream);
 
   // Make temp storage on in the torch mempool.
   auto temp_storage = torch::empty({int64_t(temp_storage_bytes)}, 
     torch::TensorOptions().dtype(torch::kUInt8).device(torch::kCUDA));
 
   cub::DeviceScan::ExclusiveSum(temp_storage.data_ptr<uint8_t>(), 
-    temp_storage_bytes, input, output, input_size);
+    temp_storage_bytes, input, output, input_size, stream);
     
   // cumsum is now in the output but the final value is missing.
 
