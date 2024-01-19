@@ -19,11 +19,11 @@ def full_cumsum(x:torch.Tensor) -> Tuple[torch.Tensor, int]:
   return out, total
 
 segmented_sort_pairs = cuda_lib.segmented_sort_pairs
-def radix_sort_pairs(keys:torch.Tensor, values:torch.Tensor, start_bit=0, end_bit=None):
+def radix_sort_pairs(keys:torch.Tensor, values:torch.Tensor, start_bit=0, end_bit=None, unsigned=False):
   if end_bit is None:
     end_bit = -1
 
-  return cuda_lib.radix_sort_pairs(keys, values, start_bit, end_bit)
+  return cuda_lib.radix_sort_pairs(keys, values, start_bit, end_bit, unsigned)
 
 __all__ = ["full_cumsum", "radix_sort_pairs", "segmented_sort_pairs"]
 
