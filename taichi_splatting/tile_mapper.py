@@ -142,7 +142,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
     overlap_key = torch.empty((total_overlap, ), dtype=key_type, device=cum_overlap_counts.device)
     overlap_to_point = torch.empty((total_overlap, ), dtype=torch.int32, device=cum_overlap_counts.device)
 
-    generate_sort_keys_kernel(depths, tile_overlap_ranges, cum_overlap_counts, image_size,
+    generate_sort_keys_kernel(depths.contiguous(), tile_overlap_ranges, cum_overlap_counts, image_size,
                               overlap_key, overlap_to_point)
 
     overlap_key, overlap_to_point  = cuda_lib.radix_sort_pairs(overlap_key, overlap_to_point, end_bit=end_sort_bit, unsigned=True)
