@@ -41,6 +41,8 @@ def tile_mapper(config:RasterConfig, depth_type):
       image_size: ivec2,
       tile_counts: ti.types.ndarray(ti.i32, ndim=2), 
   ):
+      ti.loop_config(block_dim=1024)
+
       for idx in range(gaussians.shape[0]):
           lower, upper = grid_ops.gaussian_tile_ranges(gaussians[idx], image_size)
           for tile_uv in ti.grouped(ti.ndrange((lower.x, upper.x), (lower.y, upper.y))):
@@ -74,6 +76,7 @@ def tile_mapper(config:RasterConfig, depth_type):
 
   ):
 
+    ti.loop_config(block_dim=128)
     for point_idx in range(gaussians.shape[0]):
       query = grid_query(gaussians[point_idx], image_size)
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):

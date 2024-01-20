@@ -24,6 +24,7 @@ def parse_args(args=None):
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--iters', type=int, default=1000)
   parser.add_argument('--no_tight_culling', action='store_true')
+  parser.add_argument('--debug', action='store_true')
 
   args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
@@ -33,7 +34,7 @@ def parse_args(args=None):
 def bench_rasterizer(args):
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1)
+        device_memory_GB=0.1, debug=args.debug)
   
      
   torch.manual_seed(args.seed)

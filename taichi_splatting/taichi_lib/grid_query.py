@@ -27,6 +27,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
     @ti.func 
     def count_tiles(self) -> ti.i32:
       count = 0
+      
       for tile_uv in ti.grouped(ti.ndrange(*self.tile_span)):
         if self.test_tile(tile_uv):
           count += 1
