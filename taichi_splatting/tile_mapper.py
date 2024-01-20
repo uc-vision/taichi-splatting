@@ -76,6 +76,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
       # outputs
       counts: ti.types.ndarray(ti.i32, ndim=1),
   ):
+      ti.loop_config(block_dim=128)
       for idx in range(gaussians.shape[0]):
           query = grid_query(gaussians[idx], image_size)
           counts[idx] =  query.count_tiles()
@@ -90,6 +91,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
       # output tile_ranges (tile id -> start, end)
       tile_ranges: ti.types.ndarray(ti.math.ivec2, ndim=1),   
   ):  
+    ti.loop_config(block_dim=1024)
     for idx in range(sorted_keys.shape[0]):
         # tile id is in the 32 high bits of the 64 bit key
         tile_id = get_tile_id(sorted_keys[idx])
@@ -121,6 +123,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
   ):
     tiles_wide = image_size.x // tile_size
 
+    ti.loop_config(block_dim=128)
     for idx in range(cumulative_overlap_counts.shape[0]):
       query = grid_query(gaussians[idx], image_size)
       key_idx = cumulative_overlap_counts[idx]
