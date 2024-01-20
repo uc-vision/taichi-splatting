@@ -1,12 +1,11 @@
 import argparse
-from functools import partial
 
 import torch
 import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting.misc.encode_depth import encode_depth16
 
-from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
+from taichi_splatting.rasterizer.function import  RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
 from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
 from taichi_splatting import tile_mapper, segmented_tile_mapper
