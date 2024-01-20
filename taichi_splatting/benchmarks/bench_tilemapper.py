@@ -19,11 +19,11 @@ def parse_args(args=None):
   parser.add_argument('--image_size', type=str, default='1024,768')
   parser.add_argument('--device', type=str, default='cuda:0')
   parser.add_argument('--n', type=int, default=1000000)
-  parser.add_argument('--scale_factor', type=int, default=4)
+  parser.add_argument('--scale_factor', type=float, default=2)
   parser.add_argument('--tile_size', type=int, default=16)
 
   parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--iters', type=int, default=200)
+  parser.add_argument('--iters', type=int, default=1000)
   parser.add_argument('--no_tight_culling', action='store_true')
 
   args = parser.parse_args(args)

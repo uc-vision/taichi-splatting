@@ -8,6 +8,7 @@ from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
 from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
+from taichi_splatting.tile_mapper import map_to_tiles
 
 
 def parse_args(args=None):
@@ -20,7 +21,7 @@ def parse_args(args=None):
   parser.add_argument('--scale_factor', type=int, default=4)
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--seed', type=int, default=0)
-  parser.add_argument('--iters', type=int, default=200)
+  parser.add_argument('--iters', type=int, default=1000)
   parser.add_argument('--no_tight_culling', action='store_true')
 
   args = parser.parse_args(args)
@@ -43,7 +44,7 @@ def bench_rasterizer(args):
   
   gaussians2d = project_gaussians2d(gaussians)
 
-  overlap_to_point, tile_ranges = tile_mapper.map_to_tiles(gaussians2d, 
+  overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, 
       encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(1), 
       image_size=args.image_size, 
       config=config)
