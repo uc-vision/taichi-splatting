@@ -87,14 +87,47 @@ def warp_add_vector(dest:ti.template(), val: ti.template()):
 
 
 @ti.func
-def warp_scan(val: ti.template(), op:ti.template()):
+def warp_scan_up(val: ti.template(), op:ti.template()):
     global_tid = block.global_thread_idx()
     lane_id = global_tid % WARP_SIZE
     mask_full = ti.u32(0xFFFFFFFF)
 
-    for offset_j in ti.static([16, 8, 4, 2, 1]):
-      n = warp.shfl_up_i32(mask_full, val, offset_j)
+    out = val
+    for offset_j in ti.static([16]):#, 8, 4, 2, 1]):
+      n = warp.shfl_up_i32(mask_full, out, offset_j)
       if lane_id >= offset_j:
-          val = op(val, n)
+          out = op(out, n)
 
-    return val
+    return out
+
+
+@ti.func
+def warp_scan_down(val: ti.template(), op:ti.template()):
+    global_tid = block.global_thread_idx()
+    lane_id = global_tid % WARP_SIZE
+    mask_full = ti.u32(0xFFFFFFFF)
+
+    out = val
+    for offset_j in ti.static([16, 8, 4, 2, 1]):
+      n = warp.shfl_down_i32(mask_full, out, offset_j)
+      if 31 - lane_id >= offset_j:
+        out = op(out, n)
+
+    return out
+
+
+@ti.func
+def warp_allocate(dest:ti.template(), val: ti.template()):
+  mask_full = ti.u32(0xFFFFFFFF)
+  global_tid = block.global_thread_idx()
+  warp_prefix = warp_scan_down(val, add)
+
+  prev = 0
+  if (global_tid % WARP_SIZE) == 0:
+    prev = ti.atomic_add(dest, warp_prefix)
+    warp.shfl_sync_i32(mask_full, prev, 0)
+  else:
+    prev = warp.shfl_sync_i32(mask_full, 0, 0)
+
+  return prev + (warp_prefix - val)
+

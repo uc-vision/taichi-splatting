@@ -20,7 +20,7 @@ def profiled_benchmark(name, f, iters=100, warmup=1):
 
   
 
-def timed_benchmark(name, f, iters=100, warmup=1):
+def timed_benchmark(name, f, iters=100, warmup=10):
   for _ in range(warmup):
     f()
 
@@ -34,7 +34,7 @@ def timed_benchmark(name, f, iters=100, warmup=1):
   print(f'{name}  {iters} iterations: {end - start:.3f}s at {iters / (end - start):.1f} iters/sec')
 
 
-def benchmarked(name, f, iters=100, warmup=1, profile: bool = False):
+def benchmarked(name, f, iters=100, warmup=10, profile: bool = False):
   if profile:
     profiled_benchmark(name, f, iters, warmup)
   else:

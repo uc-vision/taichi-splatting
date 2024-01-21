@@ -3,12 +3,12 @@ import argparse
 import torch
 import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
-from taichi_splatting.misc.encode_depth import encode_depth16
+from taichi_splatting.misc.encode_depth import encode_depth
 
 from taichi_splatting.rasterizer.function import  RasterConfig
 from taichi_splatting.renderer2d import project_gaussians2d
 from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
-from taichi_splatting import tile_mapper, segmented_tile_mapper
+from taichi_splatting.mapper import tile_mapper, segmented_tile_mapper, bump_mapper
 
 
 def parse_args(args=None):
@@ -25,6 +25,7 @@ def parse_args(args=None):
   parser.add_argument('--iters', type=int, default=1000)
   parser.add_argument('--no_tight_culling', action='store_true')
   parser.add_argument('--debug', action='store_true')
+  parser.add_argument('--depth16', action='store_true')
 
   args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
@@ -46,37 +47,19 @@ def bench_rasterizer(args):
   
   gaussians2d = project_gaussians2d(gaussians)
 
-  def tile_map_segmented():
-    return segmented_tile_mapper.map_to_tiles(gaussians2d, 
-      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(1), 
-      image_size=args.image_size, 
-      config=config)
+  for k, module in dict(bump=bump_mapper,
+                        tile_mapper=tile_mapper, 
+                        segmented=segmented_tile_mapper).items():
 
-  def tile_map_segmented16():
-    depth = encode_depth16(gaussians.depth, depth_range)
-    return segmented_tile_mapper.map_to_tiles(gaussians2d, depth, 
-      image_size=args.image_size, 
-      config=config)
+    def map_to_tiles():
+      encoded_depth = encode_depth(
+        gaussians.depth, depth_range, use_depth16=args.depth16)
+      return module.map_to_tiles(gaussians2d, 
+        encoded_depth=encoded_depth, 
+        image_size=args.image_size, 
+        config=config)
 
-  def tile_map():
-    return tile_mapper.map_to_tiles(gaussians2d, 
-      encoded_depth=gaussians.depth.view(dtype=torch.int32).squeeze(1), 
-      image_size=args.image_size, 
-      config=config)
-  
-
-  def tile_map16():
-    return tile_mapper.map_to_tiles(gaussians2d, 
-      encoded_depth=encode_depth16(gaussians.depth, depth_range), 
-      image_size=args.image_size, 
-      config=config)
-
-  for k, map_to_tiles in dict(tile_map=tile_map, 
-                              tile_map16=tile_map16,
-                              tile_map_segmented=tile_map_segmented,
-                              tile_map_segmented16=tile_map_segmented16).items():
-
-    _, tile_ranges = tile_map()
+    _, tile_ranges = map_to_tiles()
 
     points_per_tile = (tile_ranges[:, :, 1] - tile_ranges[:, :, 0])
     overlap_ratio = points_per_tile.sum() / args.n 

@@ -44,7 +44,7 @@ def tile_mapper(config:RasterConfig, depth_type):
       ti.loop_config(block_dim=1024)
 
       for idx in range(gaussians.shape[0]):
-          lower, upper = grid_ops.gaussian_tile_ranges(gaussians[idx], image_size)
+          lower, upper = grid_ops.gaussian_tile_bounds(gaussians[idx], image_size)
           for tile_uv in ti.grouped(ti.ndrange((lower.x, upper.x), (lower.y, upper.y))):
               ti.atomic_add(tile_counts[tile_uv.y, tile_uv.x], 1)
 

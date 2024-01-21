@@ -65,7 +65,7 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
           
   @ti.func 
   def range_grid_query(v: Gaussian2D.vec, image_size:ivec2) -> RangeGridQuery:
-      min_tile, max_tile = gaussian_tile_ranges(v, image_size)
+      min_tile, max_tile = gaussian_tile_bounds(v, image_size)
       return RangeGridQuery(
         min_tile = min_tile,
         tile_span = max_tile - min_tile)
@@ -86,17 +86,17 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
 
       max_tile = image_size // tile_size
 
-      min_tile_bound = ti.cast(min_bound // tile_size, ti.i32)
+      min_tile_bound = ti.cast(min_bound / tile_size, ti.i32)
       min_tile_bound = ti.min(min_tile_bound, max_tile)
 
-      max_tile_bound = ti.cast(max_bound // tile_size, ti.i32) + 1
+      max_tile_bound = ti.cast(max_bound / tile_size, ti.i32) + 1
       max_tile_bound = ti.min(ti.max(max_tile_bound, min_tile_bound + 1),
                           max_tile)
 
       return min_tile_bound, max_tile_bound
   
   @ti.func
-  def gaussian_tile_ranges(
+  def gaussian_tile_bounds(
       gaussian: Gaussian2D.vec,
       image_size: ti.math.ivec2,
   ):
@@ -120,10 +120,29 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
 
     return separates
 
+  # @ti.func
+  # def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
+  #   bounds = (inv_basis @ lower)
+    
+  #   p = inv_basis @ vec2(upper.x, lower.y)
+  #   bounds = vec2(ti.min(bounds.x, p.x), ti.max(bounds.y, p.y))
+
+  #   p = inv_basis @ upper
+  #   bounds = vec2(ti.min(bounds.x, p.x), ti.max(bounds.y, p.y))
+
+  #   p = inv_basis @ vec2(lower.x, upper.y)
+  #   bounds = vec2(ti.min(bounds.x, p.x), ti.max(bounds.y, p.y))
+
+  #   return bounds.x > 1. or bounds.y < -1.
+  
+    
+
+
+
   return SimpleNamespace(
     grid_query = obb_grid_query if tight_culling else range_grid_query,
     obb_grid_query = obb_grid_query,
     range_grid_query = range_grid_query,
     separates_bbox = separates_bbox,
-    gaussian_tile_ranges = gaussian_tile_ranges,
+    gaussian_tile_bounds = gaussian_tile_bounds,
     cov_tile_ranges = cov_tile_ranges)
