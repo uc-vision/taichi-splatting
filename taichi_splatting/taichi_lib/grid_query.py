@@ -120,24 +120,8 @@ def make_grid_query(tile_size:int=16, gaussian_scale:float=3.0, tight_culling:bo
 
     return separates
 
-  # @ti.func
-  # def separates_bbox(inv_basis: mat2, lower:vec2, upper:vec2) -> bool:
-  #   bounds = (inv_basis @ lower)
-    
-  #   p = inv_basis @ vec2(upper.x, lower.y)
-  #   bounds = vec2(ti.min(bounds.x, p.x), ti.max(bounds.y, p.y))
-
-  #   p = inv_basis @ upper
-  #   bounds = vec2(ti.min(bounds.x, p.x), ti.max(bounds.y, p.y))
-
-  #   p = inv_basis @ vec2(lower.x, upper.y)
-  #   bounds = vec2(ti.min(bounds.x, p.x), ti.max(bounds.y, p.y))
-
-  #   return bounds.x > 1. or bounds.y < -1.
   
-    
-
-
+  
 
   return SimpleNamespace(
     grid_query = obb_grid_query if tight_culling else range_grid_query,
