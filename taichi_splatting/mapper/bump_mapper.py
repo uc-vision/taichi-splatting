@@ -1,7 +1,7 @@
 from functools import cache
 import math
 from numbers import Integral
-from typing import Tuple
+from beartype.typing import Tuple
 from beartype import beartype
 import taichi as ti
 from taichi.math import ivec2

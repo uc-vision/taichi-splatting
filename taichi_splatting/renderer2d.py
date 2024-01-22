@@ -1,6 +1,6 @@
 
 from numbers import Integral
-from typing import Tuple
+from beartype.typing import Tuple
 import torch
 from taichi_splatting.data_types import Gaussians2D
 from taichi_splatting.misc.encode_depth import encode_depth32

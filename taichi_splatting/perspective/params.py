@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from numbers import Integral
-from typing import Tuple
+from beartype.typing import Tuple
 from beartype import beartype
 import torch
 

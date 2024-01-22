@@ -1,4 +1,4 @@
-from typing import Tuple
+from beartype.typing import Tuple
 import taichi as ti
 import torch
 

@@ -1,7 +1,7 @@
 
 
 from dataclasses import dataclass
-from typing import Optional
+from beartype.typing import Optional
 import torch
 
 from taichi_splatting.data_types import check_packed3d

@@ -1,4 +1,4 @@
-from typing import Tuple
+from beartype.typing import Tuple
 import torch
 
 from taichi_splatting.perspective import CameraParams

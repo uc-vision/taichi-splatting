@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple
+from beartype.typing import Tuple
 from beartype import beartype
 from tensordict import tensorclass
 import torch

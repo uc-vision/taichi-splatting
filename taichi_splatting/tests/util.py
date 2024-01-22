@@ -1,6 +1,6 @@
 
 
-from typing import Sequence
+from beartype.typing import Sequence
 import torch
 from tqdm import tqdm
 

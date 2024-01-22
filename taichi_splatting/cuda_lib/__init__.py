@@ -1,4 +1,4 @@
-from typing import Tuple
+from beartype.typing import Tuple
 import torch
 from torch.utils.cpp_extension import load
 from pathlib import Path

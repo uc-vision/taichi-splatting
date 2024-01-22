@@ -1,6 +1,6 @@
 
 from functools import cache
-from typing import Tuple
+from beartype.typing import Tuple
 from beartype import beartype
 import taichi as ti
 import torch

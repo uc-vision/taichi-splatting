@@ -9,7 +9,7 @@ from .forward import RasterConfig, forward_kernel
 from .backward import backward_kernel
 
 from numbers import Integral
-from typing import Tuple
+from beartype.typing import Tuple
 
 import torch
 from beartype import beartype

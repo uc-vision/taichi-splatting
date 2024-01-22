@@ -1,4 +1,4 @@
-from typing import Tuple
+from beartype.typing import Tuple
 import torch
 
 def quat_to_mat(quat: torch.Tensor) -> torch.Tensor:
