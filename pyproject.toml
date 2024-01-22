@@ -21,7 +21,7 @@ dependencies = [
 "Homepage" = "https://github.com/uc-vision/taichi-splatting"
 
 [build-system]
-requires = ["setuptools>=43.0.0", "wheel"]
+requires = ["setuptools>=43.0.0",  "wheel", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 
@@ -35,6 +35,11 @@ bench_rasterizer = "taichi_splatting.benchmarks.bench_rasterizer:main"
 bench_tilemapper = "taichi_splatting.benchmarks.bench_tilemapper:main"
 
 bench_sh = "taichi_splatting.benchmarks.bench_sh:main"
+
+
+[tool.setuptools.package-data]
+
+
 
 [tool.ruff]
 indent-width = 2
