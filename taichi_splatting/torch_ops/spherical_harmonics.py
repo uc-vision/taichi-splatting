@@ -2,9 +2,9 @@ import math
 from beartype import beartype
 import torch
 
-import torchsh 
+from . import rsh
 
-rsh_cart_n = [torchsh.rsh_cart_0, torchsh.rsh_cart_1, torchsh.rsh_cart_2, torchsh.rsh_cart_3]
+rsh_cart_n = [rsh.rsh_cart_0, rsh.rsh_cart_1, rsh.rsh_cart_2, rsh.rsh_cart_3]
               
 def check_sh_degree(sh_features):
   n_sh = sh_features.shape[2]
