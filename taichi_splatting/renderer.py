@@ -18,8 +18,12 @@ from taichi_splatting.perspective import (
 @dataclass 
 class Rendering:
   image: torch.Tensor  # (H, W, C)
+  total_weight: torch.Tensor # (H, W, 1)
+  
   depth: Optional[torch.Tensor] = None  # (H, W)
   depth_var: Optional[torch.Tensor] = None # (H, W)
+
+  
 
 
 
@@ -27,7 +31,7 @@ def render_gaussians(
   packed_gaussians: torch.Tensor,
   features: torch.Tensor,
   camera_params: CameraParams, 
-  config:RasterConfig,      
+  config:RasterConfig = RasterConfig(),      
   use_sh:bool = False,      
   render_depth:bool = False, 
   use_depth16:bool = False
@@ -71,9 +75,10 @@ def render_gaussians(
 
   if render_depth:
     depth, depth_var = compute_depth_variance(image_features, total_weight)
-    return Rendering(image_features[:, :, 3:], depth, depth_var)
+    return Rendering(image=image_features[:, :, 3:], total_weight=total_weight,
+                     depth=depth, depth_var=depth_var)
 
-  return Rendering(image_features)
+  return Rendering(image=image_features, total_weight=total_weight)
 
 
 
