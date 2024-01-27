@@ -22,8 +22,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=20000)
   parser.add_argument('--debug', action='store_true')
   parser.add_argument('--show', action='store_true')
-  parser.add_argument('--profile', action='store_true')
-  parser.add_argument('--epoch', type=int, default=100, help='Number of iterations per measurement/profiling')
+  parser.add_argument('--epoch', type=int, default=20, help='Number of iterations per measurement/profiling')
   
 
   return parser.parse_args()
@@ -85,9 +84,6 @@ def main():
 
 
   while True:
-    if args.profile:
-      ti.profiler.clear_kernel_profiler_info()
-
     start = time.time()
 
     for _ in range(args.epoch):
@@ -103,16 +99,15 @@ def main():
 
       with torch.no_grad():
         params.log_scaling.clamp_(min=-1, max=4)
-    
-      if args.show:
-        display_image(image)
+  
       
     end = time.time()
 
+    if args.show:
+      display_image(image)
+
     print(f'{args.epoch} iterations: {end - start:.3f}s at {args.epoch / (end - start):.1f} iters/sec')
 
-    if args.profile:
-      ti.profiler.print_kernel_profiler_info("count")
   
 
 if __name__ == '__main__':
