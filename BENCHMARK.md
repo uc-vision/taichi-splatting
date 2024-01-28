@@ -1,1 +1,1 @@
-<img src="benchmarks/overall.png" height="600" width="1600">
+<img src="benchmarks/overall.png">
