@@ -1,1 +1,1 @@
-<img src="benchmarks/overall.png">
+<img src="benchmarks/overall.png" width="150%">
