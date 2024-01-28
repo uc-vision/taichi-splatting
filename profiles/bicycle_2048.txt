@@ -1,0 +1,65 @@
+forward only:
+----------------------------------------------------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  
+                                                                                                Name     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+----------------------------------------------------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  
+                                                            _forward_kernel_c90_0_kernel_1_range_for     325.435ms        29.86%     325.435ms       1.677ms           194  
+                                                  generate_sort_keys_kernel_c88_0_kernel_1_range_for     239.045ms        21.93%     239.045ms       1.232ms           194  
+void cub::CUB_200200_890_NS::DeviceRadixSortOnesweepKernel<cub::CUB_200200_890_NS::DeviceRadixSor...     172.199ms        15.80%     172.199ms     147.937us          1164  
+                                                       tile_overlaps_kernel_c84_0_kernel_1_range_for     133.774ms        12.27%     133.774ms     689.557us           194  
+void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_...      70.295ms         6.45%      70.295ms     181.173us           388  
+                                                     frustum_culling_kernel_c78_0_kernel_1_range_for      56.240ms         5.16%      56.240ms     289.897us           194  
+                                                      evaluate_sh_at_kernel_c80_0_kernel_1_range_for      32.365ms         2.97%      32.365ms     166.830us           194  
+                                                 project_perspective_kernel_c82_0_kernel_1_range_for      27.477ms         2.52%      27.477ms     141.634us           194  
+                                                         find_ranges_kernel_c86_0_kernel_1_range_for       8.685ms         0.80%       8.685ms      44.768us           194  
+void cub::CUB_200200_890_NS::DeviceRadixSortHistogramKernel<cub::CUB_200200_890_NS::DeviceRadixSo...       5.664ms         0.52%       5.664ms      29.196us           194  
+void at_cuda_detail::cub::DeviceSelectSweepKernel<at_cuda_detail::cub::DispatchSelectIf<at_cuda_d...       5.119ms         0.47%       5.119ms      26.387us           194  
+void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl<at::native::direct_copy_k...       3.422ms         0.31%       3.422ms      17.639us           194  
+void at::native::(anonymous namespace)::CatArrayBatchedCopy_aligned16_contig<float, unsigned int,...       1.695ms         0.16%       1.695ms       1.695ms             1  
+                                                                                     Memset (Device)       1.542ms         0.14%       1.542ms       0.883us          1746  
+void at_cuda_detail::cub::DeviceReduceKernel<at_cuda_detail::cub::DeviceReducePolicy<int, int, at...       1.165ms         0.11%       1.165ms       6.005us           194  
+void cub::CUB_200200_890_NS::DeviceScanKernel<cub::CUB_200200_890_NS::DeviceScanPolicy<int, cuda:...       1.121ms         0.10%       1.121ms       5.778us           194  
+void getrf_pivot<getrf_params_<float, 32, 1, 32, 32, 1> >(int, int, int, void*, int, long*, int, ...     582.000us         0.05%     582.000us       3.000us           194  
+void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, at::detail::Arr...     388.000us         0.04%     388.000us       1.000us           388  
+void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl<at::native::FillFunctor<f...     388.000us         0.04%     388.000us       1.000us           388  
+                                                         void complete_cumsum<int>(int*, int*, int*)     198.000us         0.02%     198.000us       1.021us           194  
+void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl<at::native::direct_copy_k...     194.000us         0.02%     194.000us       1.000us           194  
+void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float cons...     194.000us         0.02%     194.000us       1.000us           194  
+void at_cuda_detail::cub::DeviceReduceSingleTileKernel<at_cuda_detail::cub::DeviceReducePolicy<in...     194.000us         0.02%     194.000us       1.000us           194  
+                                  void ipiv_lower_small<float, 32>(int, void*, int, long*, int, int)     194.000us         0.02%     194.000us       1.000us           194  
+                                                     void create_pivot_v2<32>(int, int*, long*, int)     194.000us         0.02%     194.000us       1.000us           194  
+----------------------------------------------------------------------------------------------------  ------------  ------------  ------------  ------------  ------------ 
+
+
+forward + backward:
+----------------------------------------------------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  
+                                                                                                Name     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+----------------------------------------------------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  
+                                                           _backward_kernel_c92_0_kernel_1_range_for        1.132s        34.29%        1.132s       5.836ms           194  
+void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, at::detail:...     362.305ms        10.97%     362.305ms     933.776us           388  
+                                                            _forward_kernel_c90_0_kernel_1_range_for     321.686ms         9.74%     321.686ms       1.658ms           194  
+                                                  generate_sort_keys_kernel_c88_0_kernel_1_range_for     237.171ms         7.18%     237.171ms       1.223ms           194  
+                                    project_perspective_kernel_c83_0_reverse_grad_kernel_1_range_for     183.641ms         5.56%     183.641ms     946.603us           194  
+void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, at::detail::Arr...     181.765ms         5.50%     181.765ms      49.299us          3687  
+void cub::CUB_200200_890_NS::DeviceRadixSortOnesweepKernel<cub::CUB_200200_890_NS::DeviceRadixSor...     172.422ms         5.22%     172.422ms     148.129us          1164  
+void (anonymous namespace)::indexing_backward_kernel_small_stride<float>(long const*, long const*...     167.806ms         5.08%     167.806ms     432.490us           388  
+                                                       tile_overlaps_kernel_c84_0_kernel_1_range_for     132.710ms         4.02%     132.710ms     684.072us           194  
+                                         evaluate_sh_at_kernel_c81_0_reverse_grad_kernel_1_range_for      99.223ms         3.00%      99.223ms     511.459us           194  
+void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<at::native::index_...      70.323ms         2.13%      70.323ms     181.245us           388  
+                                                     frustum_culling_kernel_c78_0_kernel_1_range_for      61.867ms         1.87%      61.867ms     318.902us           194  
+                                                      evaluate_sh_at_kernel_c80_0_kernel_1_range_for      38.726ms         1.17%      38.726ms     199.619us           194  
+void at_cuda_detail::cub::DeviceRadixSortOnesweepKernel<at_cuda_detail::cub::DeviceRadixSortPolic...      31.335ms         0.95%      31.335ms      26.920us          1164  
+                                                 project_perspective_kernel_c82_0_kernel_1_range_for      29.479ms         0.89%      29.479ms     151.954us           194  
+void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<long, long, long, at:...      13.119ms         0.40%      13.119ms      33.812us           388  
+                                                         find_ranges_kernel_c86_0_kernel_1_range_for       8.590ms         0.26%       8.590ms      44.278us           194  
+void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::func_wrapper_t<flo...       7.862ms         0.24%       7.862ms      40.526us           194  
+void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl<at::native::direct_copy_k...       6.562ms         0.20%       6.562ms      16.912us           388  
+void cub::CUB_200200_890_NS::DeviceRadixSortHistogramKernel<cub::CUB_200200_890_NS::DeviceRadixSo...       5.699ms         0.17%       5.699ms      29.376us           194  
+void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl<at::native::direct_copy_k...       5.201ms         0.16%       5.201ms      26.809us           194  
+void at_cuda_detail::cub::DeviceSelectSweepKernel<at_cuda_detail::cub::DispatchSelectIf<at_cuda_d...       5.115ms         0.15%       5.115ms      26.366us           194  
+void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<long, long, long, at:...       4.655ms         0.14%       4.655ms      11.997us           388  
+void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arange_cuda_out(c10::S...       4.156ms         0.13%       4.156ms       5.356us           776  
+void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<long, long, long, at:...       4.061ms         0.12%       4.061ms      10.466us           388  
+----------------------------------------------------------------------------------------------------  ------------  ------------  ------------  ------------  ------------ 
+
+
+
