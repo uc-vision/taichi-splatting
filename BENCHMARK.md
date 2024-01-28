@@ -1,1 +1,1 @@
-![render benchmark](benchmarks/overall.png| width=1000)
+![render benchmark](benchmarks/overall.png | width=1000)
