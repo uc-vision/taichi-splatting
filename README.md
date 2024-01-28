@@ -14,6 +14,11 @@ Examples:
   * Depth covariance without needing to build it into the renderer and remaining differentiable.
   * Fully differentiable camera parameters (and ability to swap in new camera models)
 
+## Performance
+
+A document describing some performance benchmarks of taichi-splatting [here](BENCHMARK.md). Through various optimizations, in particular optimizing the summation of gradients in the backward gradient kernel. Taichi-splatting achieves a very large speedup (often an order of magnitude) over the original taichi_3d_gaussian_splatting, and is faster than the reference diff_guassian_rasterization for a complete optimization pass (forward+backward), in particular much faster at higher resolutions.
+
+
 ## Major dependencies
 
 * taichi-nightly
