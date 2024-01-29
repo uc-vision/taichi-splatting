@@ -17,6 +17,12 @@ dependencies = [
   "tensordict"
 ]
 
+
+[tool.setuptools.packages.find]
+include = ["taichi_splatting"]
+exclude = ["profiles", "benchmarks"]
+
+
 [project.urls] 
 "Homepage" = "https://github.com/uc-vision/taichi-splatting"
 
