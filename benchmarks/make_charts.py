@@ -18,7 +18,7 @@ def plot_overall(df, name, axis_label="iters/second", backward=False):
 
     g = sns.catplot(
       data=df, kind="bar",
-      x="image_size", y="total", hue="impl",
+      x="image_size", y="geometric_mean", hue="impl",
       palette="dark", alpha=.6, height=6, aspect=6/6
     )
 
@@ -83,7 +83,7 @@ def load_preprocess(filename):
 
 
   values = [nonzero_mean(row) for _, row in df.iterrows()]
-  df.insert(0, 'total', values)
+  df.insert(0, 'geometric_mean', values)
 
   df = df.sort_index()
   speedups = make_speedup(df)

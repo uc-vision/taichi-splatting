@@ -1,4 +1,4 @@
-impl,image_size,backward,total,bicycle,bonsai,counter,drjohnson,flowers,garden,kitchen,playroom,room,stump,train,treehill,truck
+impl,image_size,backward,geometric_mean,bicycle,bonsai,counter,drjohnson,flowers,garden,kitchen,playroom,room,stump,train,treehill,truck
 gaussian-splatting,1024,False,385.56,207.51,695.58,458.84,354.75,389.83,249.11,402.10,469.55,502.77,396.12,370.94,376.81,346.98
 gaussian-splatting,1024,True,86.67,57.06,123.82,104.90,77.68,87.76,60.42,86.52,92.37,104.85,84.27,97.09,86.94,85.51
 gaussian-splatting,2048,False,181.59,116.28,295.93,195.27,142.72,221.29,147.23,178.08,180.56,184.72,227.74,168.42,196.79,166.71
