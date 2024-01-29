@@ -101,8 +101,10 @@ def main():
   dfs = {}
 
   for name, filename in runs.items():
-    df, speedups = load_preprocess(filename)
+    df, speedups = load_preprocess(Path("raw") / filename)
     dfs[name] = df
+
+    df.to_csv(filename, float_format='%.2f')
 
     folder = Path(f"charts-{name}")
     folder.mkdir(exist_ok=True, parents=True)
