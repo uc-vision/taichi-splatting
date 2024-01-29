@@ -85,7 +85,7 @@ def load_preprocess(filename):
   values = [nonzero_mean(row) for _, row in df.iterrows()]
   df.insert(0, 'geometric_mean', values)
 
-  df = df.sort_index()
+  df = df.sort_index(level=["image_size", "backward"])
   speedups = make_speedup(df)
 
   return df, speedups
@@ -105,6 +105,7 @@ def main():
     dfs[name] = df
 
     df.to_csv(filename, float_format='%.2f')
+    print(df)
 
     folder = Path(f"charts-{name}")
     folder.mkdir(exist_ok=True, parents=True)
