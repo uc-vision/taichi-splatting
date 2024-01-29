@@ -52,7 +52,7 @@ Overall, taichi-splatting has a small speed-up at the lowest image setting, with
 
 ### Invididual benchmarks
 
-A chart showing the berformance on one of the individual benchmarks, and the variation across scenes:
+A chart showing the performance on one of the individual benchmarks, and the variation across scenes:
 
 <img src="benchmarks/4090-2048px.png" width="100%">
 
