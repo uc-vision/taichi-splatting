@@ -1,5 +1,12 @@
 # Benchmarks
 
+## Summary
+
+Charts showing overall averages across benchmark scenes. (details below!)
+
+<img src="benchmarks/overall.png" width="100%">
+<img src="benchmarks/speedup.png" width="100%">
+
 ## Method
 
 ### Assets required
@@ -27,6 +34,8 @@ It was run with arguments `splat-multi-benchmark *(/)`  when in the `models` fol
 
 * Torch synchronization is called at the end of each benchmark   
 
+Averages are computed using a geometric mean across all the scenes (note that the 2070 average excludes a couple of results which were Out of Memory due to the lower 8Gb VRAM).
+
 ## Results
 
 ### Raw data
@@ -35,12 +44,7 @@ Benchmark is run on three different machines with different performance GPUs, Nv
 
 Raw data: [2070](benchmarks/raw/benchmark-2070.csv), [3090](benchmarks/raw/benchmark-3090.csv), [4090](benchmarks/raw/benchmark-4090.csv), Tidied up: [2070](benchmarks/benchmark-2070.csv), [3090](benchmarks/benchmark-3090.csv), [4090](benchmarks/benchmark-4090.csv)
 
-### Summary
 
-Charts showing overall averages across benchmark scenes. Averages are computed using a geometric mean across all the scenes (note that the 2070 average excludes a couple of results which were Out of Memory due to the lower 8Gb VRAM).
-
-<img src="benchmarks/overall.png" width="100%">
-<img src="benchmarks/speedup.png" width="100%">
 
 ### Discussion
 
