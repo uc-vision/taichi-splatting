@@ -8,7 +8,8 @@
 
 ### Raw data
 
-Raw data can be found at [2070](benchmarks/benchmark-2070.csv), [3090](benchmarks/benchmark-3090.csv), [4090](benchmarks/benchmark-4090.csv)
+Raw data: [2070](benchmarks/raw/benchmark-2070.csv), [3090](benchmarks/raw/benchmark-3090.csv), [4090](benchmarks/raw/benchmark-4090.csv)
+Tidied up: [2070](benchmarks/benchmark-2070.csv), [3090](benchmarks/benchmark-3090.csv), [4090](benchmarks/benchmark-4090.csv)
 
 ### Summary
 
