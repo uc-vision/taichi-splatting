@@ -39,3 +39,5 @@ def benchmarked(name, f, iters=100, warmup=10, profile: bool = False):
     profiled_benchmark(name, f, iters, warmup)
   else:
     timed_benchmark(name, f, iters, warmup)
+
+

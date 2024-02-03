@@ -1,6 +1,9 @@
 import copy
 from functools import cached_property
+from typing import Dict
+from beartype import beartype
 from beartype.typing import Callable
+from tensordict import TensorDict
 import torch.optim as optim
 import torch
 
@@ -22,23 +25,28 @@ class ParameterClass():
     param_state: dict of optimizer state to insert into the optimizer
   """
 
-  def __init__(self, tensors, param_groups, param_state=None):
+  def __init__(self, tensors, param_groups, param_state=None, state_keys=None):
+
     self.tensors = tensors
     self.optimizer = optim.Adam(param_groups, fused=True)
+    self.state_keys = ("exp_avg", "exp_avg_sq")
 
     if param_state is not None:
       for k, v in param_state.items():
         self.optimizer.state[self.tensors[k]] = v
 
 
+  @beartype
   @staticmethod
-  def create(tensors, learning_rates, base_lr=1.0):
+  def create(tensors:TensorDict, learning_rates:Dict[str, float], base_lr=1.0):
     param_dict = as_parameters(tensors, learning_rates.keys())
+
     param_groups = [
       dict(params=[param_dict[name]], lr=lr * base_lr, name=name)
         for name, lr in learning_rates.items()
     ]
 
+    tensors = replace_dict(tensors, **param_dict)
     return ParameterClass(tensors, param_groups)
 
 
@@ -49,47 +57,73 @@ class ParameterClass():
   def step(self):
     self.optimizer.step()
 
+  def keys(self):
+    return self.tensors.keys()
+  
+
+  def items(self):
+    return self.tensors.items()
+
 
   def __getattr__(self, name):
-    return getattr(self.tensors, name)
+    if name  not in self.tensors.keys():
+      raise AttributeError(f'ParameterClass has no attribute {name}')
+    
+    return self.tensors[name]
+
+
+  def to_dict(self):
+    return self.tensors.to_dict()
+  
+  @property
+  def batch_size(self):
+    return self.tensors.batch_size
 
   @cached_property
   def _optimized_keys(self):
     return {group["name"] for group in self.optimizer.param_groups}
     
-  def _updated_state(self, f:Callable, state_keys = ("exp_avg", "exp_avg_sq")):
-
+  def _updated_state(self, f:Callable):
     def modify_state(state):
-      return {k : f(v) if k in state_keys else state[k]
+      return {k : f(v) if k in self.state_keys else state[k]
                 for k, v in state.items()}
 
-    return {k:modify_state(self.optimizer.state[param])
-              for k, param in self.tensors.items()
+    return {name:modify_state(self.optimizer.state[param])
+              for name, param in self.tensors.items()
                 if param in self.optimizer.state}
-  
+    
 
-  def _updated_parameters(self, tensors):
-    tensors = as_parameters(tensors, self.optimized_keys)
-    updated_groups = [ replace_dict(group, params=[tensors[group["name"]]])
+  def get_state(self):
+    return self._updated_state(lambda x: x)
+
+
+  def _updated_tensors(self, tensors):
+    params = as_parameters(tensors, self._optimized_keys)
+    updated_groups = [ replace_dict(group, params=[params[group["name"]]])
       for group in self.optimizer.param_groups]
     
-    return tensors, updated_groups
+    return replace_dict(tensors, **params), updated_groups
 
-  def __index__(self, idx):
-    tensors, updated_groups = self.updated_parameters(self.tensors[idx])
+  def __getitem__(self, idx):
+    tensors, updated_groups = self._updated_tensors(self.tensors[idx])
     state = self._updated_state(lambda x: x[idx])
     return ParameterClass(tensors, updated_groups, state)
   
-  def append(self, tensors):
+  def append_tensors(self, tensors):
     n = tensors.batch_size[0]
 
-    tensors, updated_groups = self._updated_parameters(torch.cat([self.tensors, tensors]))
+    tensors, updated_groups = self._updated_tensors(torch.cat([self.tensors, tensors]))
     state = self._updated_state(lambda x: torch.cat(
-      [x, x.new_zeros(n)])
+      [x, x.new_zeros(n, *x.shape[1:])] )
     )
-    
     return ParameterClass(tensors, updated_groups, state)
 
+  def append(self, params:'ParameterClass'):
+    tensors, updated_groups = self._updated_tensors(
+        torch.cat([self.tensors, params.tensors]))
+    
+    state = concat_states(self.get_state(), params.get_state())
+    return ParameterClass(tensors, updated_groups, state)
 
 
 def as_parameters(tensors, keys):
@@ -102,6 +136,16 @@ def as_parameters(tensors, keys):
 
 
 def replace_dict(d, **kwargs):
-  d = copy(d)
+  d = copy.copy(d)
   d.update(kwargs)
   return d
+
+
+def concat_states(state, other_state):
+  def concat_dict(d1, d2):
+
+    return {k: torch.concat( (d1[k], d2[k]) ) if d1[k].dim() > 0 else d1[k]
+            for k in d1.keys()}
+
+  return {k: concat_dict(state[k], other_state[k]) 
+          for k in state.keys()}

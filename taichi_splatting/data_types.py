@@ -72,12 +72,6 @@ class Gaussians2D():
   
   feature      : torch.Tensor # N  - (any rgb, label etc)
 
-  @staticmethod
-  def unpack_vec(vec):
-    uv, uv_conic, alpha = vec[:, 0:2], vec[:, 2:5], vec[:, 5]
-    return uv, uv_conic, alpha
-
-
 
 
 

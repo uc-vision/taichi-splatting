@@ -130,6 +130,9 @@ def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor,
       alpha: (H, W) torch tensor, where H, W are the image height and width
   """
 
+  assert gaussians2d.shape[0] == encoded_depths.shape[0] == features.shape[0], \
+    f"Size mismatch: got {gaussians2d.shape}, {encoded_depths.shape}, {features.shape}"
+
   # render with padding to tile_size, later crop back to original size
   overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, encoded_depths, 
     image_size=image_size, config=config)

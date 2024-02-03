@@ -6,8 +6,8 @@ import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
 
 from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
-from taichi_splatting.renderer2d import project_gaussians2d
-from taichi_splatting.scripts.fit_image_gaussians import random_2d_gaussians
+from taichi_splatting.examples.renderer2d import project_gaussians2d
+from taichi_splatting.examples.fit_image_gaussians import random_2d_gaussians
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
 
 

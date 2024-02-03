@@ -1,4 +1,5 @@
 import math
+from typing import Tuple
 import torch
 from taichi_splatting.data_types import Gaussians2D, Gaussians3D
 from taichi_splatting.perspective import CameraParams
@@ -72,7 +73,7 @@ def random_3d_gaussians(n, camera_params:CameraParams,
   )
 
 
-def random_2d_gaussians(n, image_size, scale_factor=1.0, alpha_range=(0.1, 0.9), depth_range=(0.1, 100.0)):
+def random_2d_gaussians(n, image_size:Tuple[int, int], scale_factor=1.0, alpha_range=(0.1, 0.9), depth_range=(0.1, 100.0)):
   w, h = image_size
 
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
