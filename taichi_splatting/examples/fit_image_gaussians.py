@@ -4,12 +4,12 @@ import argparse
 import taichi as ti
 
 import torch
-from taichi_splatting.examples.renderer2d import project_gaussians2d, split_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import project_gaussians2d, split_gaussians2d, uniform_split_gaussians2d
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.rasterizer.function import rasterize
 
-from taichi_splatting.examples.parameter_class import ParameterClass
+from taichi_splatting.misc.parameter_class import ParameterClass
 from taichi_splatting.tests.random_data import random_2d_gaussians
 
 from taichi_splatting.torch_ops.util import check_finite

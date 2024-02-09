@@ -114,17 +114,15 @@ def resample_inplace(points: Gaussians2D, scale:float=0.625, depth_noise:float=1
     samples = torch.randn_like(points.position)
 
     points.position += (samples.unsqueeze(1) @ point_basis(points)).squeeze(1)
-    points.depth += torch.randn_like(points.depth) * depth_noise
+    points.depth += torch.randn_like(points.depth) * depth_noise           
 
     points.log_scaling += math.log(scale)
     return points
 
 
 
-
-
 def render_gaussians(
-      gaussians: Gaussians2D,
+      gaussians: Gaussians2D, 
       image_size: Tuple[Integral, Integral],
       raster_config: RasterConfig = RasterConfig()
     ):

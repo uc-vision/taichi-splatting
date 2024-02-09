@@ -2,7 +2,7 @@ import copy
 from functools import cached_property
 from typing import Dict
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, List, Dict, Optional
 from tensordict import TensorDict
 import torch.optim as optim
 import torch
@@ -25,10 +25,10 @@ class ParameterClass():
     param_state: dict of optimizer state to insert into the optimizer
   """
 
-  def __init__(self, tensors, param_groups, param_state=None, state_keys=None):
+  def __init__(self, tensors:TensorDict, param_groups:List, param_state:Optional[Dict]=None):
 
     self.tensors = tensors
-    self.optimizer = optim.Adam(param_groups, fused=True)
+    self.optimizer = optim.Adam(param_groups, foreach=True)
     self.state_keys = ("exp_avg", "exp_avg_sq")
 
     if param_state is not None:
