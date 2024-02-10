@@ -31,7 +31,7 @@ def parse_args():
 
   parser.add_argument('--split', action='store_true', help="Enable splitting of gaussians")
 
-  parser.add_argument('--grad-threshold', type=float, default=5e-5)
+  parser.add_argument('--grad-threshold', type=float, default=1e-4)
   parser.add_argument('--size-threshold', type=float, default=8)
 
   parser.add_argument('--profile', action='store_true')
@@ -66,16 +66,16 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       gaussians2d = project_gaussians2d(gaussians)
       gaussians2d.retain_grad()
 
-      gaussians.feature.retain_grad()
+      # gaussians.feature.retain_grad()
       
       depths = encode_depth32(gaussians.depth)
-      image, alpha = rasterize(gaussians2d=gaussians2d, 
+      raster = rasterize(gaussians2d=gaussians2d, 
         encoded_depths=depths,
         features=gaussians.feature, 
         image_size=(w, h), 
         config=config)
 
-      loss = torch.nn.functional.l1_loss(image, ref_image) 
+      loss = torch.nn.functional.l1_loss(raster.image, ref_image) 
       loss.backward()
 
       check_finite(gaussians)
@@ -85,7 +85,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
         gaussians.log_scaling.clamp_(min=-1, max=4)
         gradient += gaussians2d.grad[:, 0:2].norm(dim=-1) 
 
-    return image, gradient
+    return raster.image, gradient
 
 
 def main():
@@ -147,8 +147,10 @@ def main():
       if cmd_args.show:
         gaussians2d = project_gaussians2d(params)
         depths = encode_depth32(params.depth)
-        grad_image, _ =  rasterize(gaussians2d, depths, gradient.unsqueeze(-1), image_size=(w, h), config=config)
-        display_image('gradient', (0.5 * grad_image / cmd_args.grad_threshold))
+        raster =  rasterize(gaussians2d, depths, gradient.unsqueeze(-1), image_size=(w, h), config=config, compute_weight=True)
+
+        
+        display_image('gradient', (0.5 * raster.image / cmd_args.grad_threshold))
         display_image('rendered', image)
 
 

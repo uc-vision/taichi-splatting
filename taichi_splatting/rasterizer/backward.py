@@ -12,6 +12,7 @@ from taichi.math import ivec2, vec2
 def backward_kernel(config: RasterConfig,
                     points_requires_grad: bool,
                     features_requires_grad: bool, 
+                    compute_weight: bool,
                     feature_size: int):
   
 
@@ -54,6 +55,8 @@ def backward_kernel(config: RasterConfig,
       # output gradients
       grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
       grad_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
+
+      point_weight: ti.types.ndarray(ti.f32, ndim=1),  # (M)
   ):
 
     camera_height, camera_width = image_feature.shape
@@ -76,6 +79,9 @@ def backward_kernel(config: RasterConfig,
 
       tile_grad_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
       tile_grad_feature = ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
+      tile_weight = (ti.simt.block.SharedArray((block_area,), dtype=ti.f32) 
+        if compute_weight else None)
+
       
       last_point_pixel = thread_index(0)
       T_i = thread_vector(1.0)
@@ -127,8 +133,14 @@ def backward_kernel(config: RasterConfig,
           tile_point[tile_idx] = points[point_idx]
           tile_feature[tile_idx] = point_features[point_idx]
 
-          tile_grad_point[tile_idx] = Gaussian2D.vec(0.0)
-          tile_grad_feature[tile_idx] = feature_vec(0.0)
+          if ti.static(points_requires_grad):
+            tile_grad_point[tile_idx] = Gaussian2D.vec(0.0)
+
+          if ti.static(features_requires_grad):
+            tile_grad_feature[tile_idx] = feature_vec(0.0)
+          
+          if ti.static(compute_weight):
+            tile_weight[tile_idx] = 0.0
 
         ti.simt.block.sync()
 
@@ -147,6 +159,7 @@ def backward_kernel(config: RasterConfig,
 
           grad_point = Gaussian2D.vec(0.0)
           grad_feature = feature_vec(0.0)
+          weight = 0.0
 
           has_grad = False
           for i, offset in ti.static(pixel_tile):
@@ -156,7 +169,7 @@ def backward_kernel(config: RasterConfig,
             
             alpha = point_alpha * gaussian_alpha
             pixel_grad = (alpha >= ti.static(config.alpha_threshold)) and (point_index <= last_point_pixel[i])      
-
+      
             if pixel_grad:
               has_grad = True
               alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
@@ -169,7 +182,8 @@ def backward_kernel(config: RasterConfig,
                                         ) * grad_pixel_feature[i, :]
 
               # w_{i-1} = w_i + c_i a_i T(i)
-              w_i[i, :] += feature * alpha * T_i[i]
+              weight = alpha * T_i[i]
+              w_i[i, :] += feature * weight
               alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
 
               grad_point += alpha_grad * Gaussian2D.to_vec(
@@ -177,7 +191,7 @@ def backward_kernel(config: RasterConfig,
                   point_alpha * dp_dconic,
                   gaussian_alpha)
 
-              grad_feature += alpha * T_i[i] * grad_pixel_feature[i, :]
+              grad_feature += weight * grad_pixel_feature[i, :]
 
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
@@ -189,6 +203,9 @@ def backward_kernel(config: RasterConfig,
             
             if ti.static(features_requires_grad):
               warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
+
+            if ti.static(compute_weight):
+              warp_add_vector(tile_weight[in_group_idx], weight)
         # end of point group loop
 
         ti.simt.block.sync()
@@ -201,6 +218,9 @@ def backward_kernel(config: RasterConfig,
 
           if ti.static(features_requires_grad):
             atomic_add_vector(grad_features[point_offset], tile_grad_feature[tile_idx])
+
+          if ti.static(compute_weight):
+            atomic_add_vector(point_weight[point_offset], tile_weight[tile_idx])
 
       # end of point group id loop
     # end of pixel loop
