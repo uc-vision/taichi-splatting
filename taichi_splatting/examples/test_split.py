@@ -1,7 +1,11 @@
 
 
 from functools import partial
+<<<<<<< HEAD
 from taichi_splatting.misc.renderer2d import render_gaussians, split_gaussians2d, uniform_split_gaussians2d
+=======
+from taichi_splatting.examples.renderer2d import render_gaussians, split_gaussians2d, uniform_split_gaussians2d
+>>>>>>> splitting2
 from taichi_splatting.tests.random_data import random_2d_gaussians
 import torch
 import taichi as ti

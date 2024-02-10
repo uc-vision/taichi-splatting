@@ -7,7 +7,7 @@ from taichi_splatting.misc.encode_depth import encode_depth
 
 from taichi_splatting.rasterizer.function import  RasterConfig
 from taichi_splatting.misc.renderer2d import project_gaussians2d
-from taichi_splatting.examples.fit_image_gaussians import random_2d_gaussians
+from taichi_splatting.tests.random_data import random_2d_gaussians
 from taichi_splatting.mapper import tile_mapper, segmented_tile_mapper, bump_mapper
 
 
