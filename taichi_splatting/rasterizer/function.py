@@ -18,7 +18,7 @@ from beartype import beartype
 
 RasterOut = NamedTuple('RasterOut', 
     [('image', torch.Tensor), 
-     ('alpha', torch.Tensor),
+     ('image_weight', torch.Tensor),
      ('point_weight', torch.Tensor) ])
 
 @cache
@@ -115,8 +115,10 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
       config: Config - configuration parameters for rasterization
 
     Returns:
-      image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
-      alpha: (H, W) torch tensor, where H, W are the image height and width
+      RasterOut - namedtuple with fields:
+        image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
+        image_weight: (H, W) torch tensor, where H, W are the image height and width
+        point_weight: (N, ) torch tensor, where N is the number of gaussians  
   """
   _module_function = render_function(config, gaussians2d.requires_grad,
                                       features.requires_grad,
@@ -147,8 +149,10 @@ def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor,
       config: Config - configuration parameters for rasterization
 
     Returns:
-      image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
-      alpha: (H, W) torch tensor, where H, W are the image height and width
+      RasterOut - namedtuple with fields:
+        image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
+        image_weight: (H, W) torch tensor, where H, W are the image height and width
+        point_weight: (N, ) torch tensor, where N is the number of gaussians  
   """
 
   assert gaussians2d.shape[0] == encoded_depths.shape[0] == features.shape[0], \

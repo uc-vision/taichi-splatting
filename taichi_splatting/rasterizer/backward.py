@@ -2,7 +2,7 @@ from functools import cache
 import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
-from taichi_splatting.taichi_lib.concurrent import atomic_add_vector, block_reduce_i32, warp_add_vector
+from taichi_splatting.taichi_lib.concurrent import add, atomic_add_vector, block_reduce_i32, is_warp_leader, warp_add_vector, warp_reduce_f32
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
 from taichi.math import ivec2, vec2
@@ -77,8 +77,12 @@ def backward_kernel(config: RasterConfig,
       tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((block_area, ), dtype=feature_vec)
 
-      tile_grad_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
-      tile_grad_feature = ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
+      tile_grad_point = (ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
+        if points_requires_grad else None)
+      
+      tile_grad_feature = (ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
+        if features_requires_grad else None)
+
       tile_weight = (ti.simt.block.SharedArray((block_area,), dtype=ti.f32) 
         if compute_weight else None)
 
@@ -176,22 +180,24 @@ def backward_kernel(config: RasterConfig,
               T_i[i] /= (1. - alpha)
 
               feature = tile_feature[in_group_idx]
-
-              # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
-              alpha_grad_from_feature = (feature * T_i[i] - w_i[i, :] / (1. - alpha)
-                                        ) * grad_pixel_feature[i, :]
-
-              # w_{i-1} = w_i + c_i a_i T(i)
               weight = alpha * T_i[i]
-              w_i[i, :] += feature * weight
-              alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
-
-              grad_point += alpha_grad * Gaussian2D.to_vec(
-                  point_alpha * dp_dmean, 
-                  point_alpha * dp_dconic,
-                  gaussian_alpha)
 
               grad_feature += weight * grad_pixel_feature[i, :]
+
+              if ti.static(points_requires_grad):
+                # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
+                alpha_grad_from_feature = (feature * T_i[i] - w_i[i, :] / (1. - alpha)
+                                          ) * grad_pixel_feature[i, :]
+
+                # w_{i-1} = w_i + c_i a_i T(i)
+                w_i[i, :] += feature * weight
+                alpha_grad: ti.f32 = alpha_grad_from_feature.sum()
+
+                grad_point += alpha_grad * Gaussian2D.to_vec(
+                    point_alpha * dp_dmean, 
+                    point_alpha * dp_dconic,
+                    gaussian_alpha)
+
 
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
@@ -205,7 +211,9 @@ def backward_kernel(config: RasterConfig,
               warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
 
             if ti.static(compute_weight):
-              warp_add_vector(tile_weight[in_group_idx], weight)
+              weight = warp_reduce_f32(weight, add)
+              if is_warp_leader():
+                ti.atomic_add(tile_weight[in_group_idx], weight)
         # end of point group loop
 
         ti.simt.block.sync()
@@ -214,13 +222,13 @@ def backward_kernel(config: RasterConfig,
         if load_index >= block_start_idx:
           point_offset = tile_point_id[tile_idx] 
           if ti.static(points_requires_grad):
-            atomic_add_vector(grad_points[point_offset], tile_grad_point[tile_idx])
+            ti.atomic_add(grad_points[point_offset], tile_grad_point[tile_idx])
 
           if ti.static(features_requires_grad):
-            atomic_add_vector(grad_features[point_offset], tile_grad_feature[tile_idx])
+            ti.atomic_add(grad_features[point_offset], tile_grad_feature[tile_idx])
 
           if ti.static(compute_weight):
-            atomic_add_vector(point_weight[point_offset], tile_weight[tile_idx])
+            ti.atomic_add(point_weight[point_offset], tile_weight[tile_idx])
 
       # end of point group id loop
     # end of pixel loop

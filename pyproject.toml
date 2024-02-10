@@ -45,7 +45,8 @@ bench_sh = "taichi_splatting.benchmarks.bench_sh:main"
 
 [tool.setuptools.package-data]
 
-
+[tool.pyright]
+reportInvalidTypeForm = "none"
 
 [tool.ruff]
 indent-width = 2
