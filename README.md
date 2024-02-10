@@ -63,16 +63,19 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 
 ### Done
 * Benchmarks with original + taichi_3dgs rasterizer
-* A couple of different tile-mapping algorithms + benchmarks
 
 * Simple view culling 
 * Projection with autograd
-* Tile mapping 
-* Rasterizer forward pass
+* Tile mapping (optimized and improved culling) 
+* Rasterizer forward pass and optimized backward pass
+
 * Spherical harmonics with autograd
 * Gradient tests for most parts (float64)
 * Fit to image training example/test
 * Depth and depth-covariance rendering
+
+* Compute point visibility in backward pass (useful for model pruning)
+* Example training on images with split/prune operations
 
 
 

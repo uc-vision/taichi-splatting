@@ -18,7 +18,7 @@ from taichi_splatting.perspective import (
 @dataclass 
 class Rendering:
   image: torch.Tensor  # (H, W, C)
-  total_weight: torch.Tensor # (H, W, 1)
+  image_weight: torch.Tensor # (H, W, 1)
   
   depth: Optional[torch.Tensor] = None  # (H, W)
   depth_var: Optional[torch.Tensor] = None # (H, W)
