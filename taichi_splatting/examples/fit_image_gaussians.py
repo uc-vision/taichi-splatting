@@ -32,8 +32,8 @@ def parse_args():
 
   parser.add_argument('--split', action='store_true', help="Enable splitting of gaussians")
 
-  parser.add_argument('--grad-threshold', type=float, default=5e-5)
-  parser.add_argument('--size-threshold', type=float, default=8)
+  parser.add_argument('--grad-threshold', type=float, default=2e-7)
+  parser.add_argument('--vis-threshold', type=float, default=4)
 
   parser.add_argument('--profile', action='store_true')
   parser.add_argument('--epoch', type=int, default=100, help='Number of iterations per measurement/profiling')
@@ -60,6 +60,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
     h, w = ref_image.shape[:2]
 
     gradient = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
+    visibility = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
 
     for _ in range(epoch_size):
       opt.zero_grad()
@@ -67,18 +68,21 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       gaussians2d = project_gaussians2d(gaussians)
       gaussians2d.retain_grad()
 
-      gaussians.feature.retain_grad()
+      # gaussians.feature.retain_grad()
       
       depths = encode_depth32(gaussians.depth)
-      image, alpha = rasterize(gaussians2d=gaussians2d, 
+      raster = rasterize(gaussians2d=gaussians2d, 
         encoded_depths=depths,
         features=gaussians.feature, 
         image_size=(w, h), 
-        config=config)
+        config=config,
+        compute_weight=True)
 
-      loss = torch.nn.functional.l1_loss(image, ref_image) 
+      loss = torch.nn.functional.l1_loss(raster.image, ref_image) 
       loss.backward()
 
+
+      visibility += raster.point_weight
       check_finite(gaussians)
       opt.step()
 
@@ -86,7 +90,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
         gaussians.log_scaling.clamp_(min=-1, max=4)
         gradient += gaussians2d.grad[:, 0:2].norm(dim=-1) 
 
-    return image, gradient
+    return raster.image, gradient, visibility 
 
 
 def main():
@@ -106,13 +110,15 @@ def main():
     cv2.namedWindow('rendered', cv2.WINDOW_NORMAL)
     cv2.namedWindow('gradient', cv2.WINDOW_NORMAL)
 
+    cv2.resizeWindow('rendered', w, h)
+    cv2.resizeWindow('gradient', w, h)
 
   torch.manual_seed(cmd_args.seed)
 
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), scale_factor=0.1).to(torch.device('cuda:0'))
   learning_rates = dict(
-    position=0.1,
-    log_scaling=0.025,
+    position=0.2,
+    log_scaling=0.05,
     rotation=0.005,
     alpha_logit=0.1,
     feature=0.01
@@ -130,38 +136,44 @@ def main():
 
   def timed_epoch(*args, **kwargs):
     start = time.time()
-    image, grad = train_epoch(*args, **kwargs)
+    image, grad, vis = train_epoch(*args, **kwargs)
     torch.cuda.synchronize()
     end = time.time()
 
     cpsnr = psnr(ref_image, image)
     print(f'{cmd_args.epoch / (end - start):.1f} iters/sec CPSNR {cpsnr:.2f}')
-    return image, grad
+    return image, grad, vis
 
 
   train = with_benchmark(train_epoch) if cmd_args.profile else timed_epoch
 
   while True:
-    image, gradient = train(params.optimizer, params, ref_image, epoch_size=cmd_args.epoch, config=config)
+    image, gradient, visibility = train(params.optimizer, params, ref_image, epoch_size=cmd_args.epoch, config=config)
+
+
     with torch.no_grad():
 
       if cmd_args.show:
         gaussians2d = project_gaussians2d(params)
         depths = encode_depth32(params.depth)
-        grad_image, _ =  rasterize(gaussians2d, depths, gradient.unsqueeze(-1), image_size=(w, h), config=config)
-        display_image('gradient', (0.5 * grad_image / cmd_args.grad_threshold))
+        raster =  rasterize(gaussians2d, depths, gradient.unsqueeze(-1), image_size=(w, h), config=config, compute_weight=True)
+
+        
+        display_image('gradient', (0.5 * raster.image / (cmd_args.epoch * cmd_args.grad_threshold) ))
         display_image('rendered', image)
 
 
       if cmd_args.split:
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
+        grad_thresh = cmd_args.epoch * cmd_args.grad_threshold
+        vis_threshold = cmd_args.epoch * cmd_args.vis_threshold 
 
-        transparent = (params.alpha_logit < inverse_sigmoid(0.01))
-        split_mask = (gradient > cmd_args.grad_threshold
-          ) & torch.any(gaussians.log_scaling > math.log(cmd_args.size_threshold), dim=-1)
+        transparent = (visibility < vis_threshold) & (gradient < grad_thresh)
+        split_mask = torch.zeros_like(transparent, dtype=torch.bool)
+
+        split_mask = (gradient > grad_thresh) & (visibility > 2 * vis_threshold)
         
-        splits = split_gaussians2d(gaussians[split_mask], 
-                scaling=0.8)
+        splits = split_gaussians2d(gaussians[split_mask], scaling=0.8)
 
         params = params[~(split_mask | transparent)]
         params = params.append_tensors(splits.to_tensordict())

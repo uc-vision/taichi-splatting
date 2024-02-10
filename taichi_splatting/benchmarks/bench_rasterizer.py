@@ -62,9 +62,10 @@ def bench_rasterizer(args):
   benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
   gaussians.feature.requires_grad_(True)
+  
   def backward():
-    image, alpha = forward()
-    image.sum().backward()
+    raster = forward()
+    raster.image.sum().backward()
 
   benchmarked('backward (features)', backward, profile=args.profile, iters=args.iters)  
 
@@ -77,6 +78,16 @@ def bench_rasterizer(args):
   gaussians2d.requires_grad_(True)
 
   benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
+
+  
+  def compute_weight():
+    raster = rasterize_with_tiles(gaussians2d=gaussians2d, features=gaussians.feature, 
+      tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
+      image_size=args.image_size, config=config, compute_weight=True)
+    
+    raster.image.sum().backward()
+
+  benchmarked('backward (compute_weight)', compute_weight, profile=args.profile, iters=args.iters)  
 
 
 def main():
