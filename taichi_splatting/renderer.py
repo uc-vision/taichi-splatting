@@ -78,10 +78,13 @@ def render_gaussians(
     image_size=camera_params.image_size, config=config, compute_weight=compute_weight)
 
   depth, depth_var = None, None
+  feature_image = raster.image
+
   if render_depth:
     depth, depth_var = compute_depth_variance(raster.image, raster.image_weight)
+    feature_image = feature_image[..., 3:]
 
-  return Rendering(image=raster.image, 
+  return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 
                   depth=depth, 
                   depth_var=depth_var, 
