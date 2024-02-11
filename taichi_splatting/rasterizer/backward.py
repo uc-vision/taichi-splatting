@@ -2,7 +2,7 @@ from functools import cache
 import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
-from taichi_splatting.taichi_lib.concurrent import add, atomic_add_vector, block_reduce_i32, is_warp_leader, warp_add_vector, warp_reduce_f32
+from taichi_splatting.taichi_lib.concurrent import add, block_reduce_i32, is_warp_leader, warp_add_vector, warp_reduce_f32
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
 from taichi.math import ivec2, vec2

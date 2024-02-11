@@ -113,6 +113,7 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
 
       image_size: (2, ) tuple of ints, (width, height)
       config: Config - configuration parameters for rasterization
+      compute_weight: bool - whether to compute the visibility for each point in the image
 
     Returns:
       RasterOut - namedtuple with fields:
@@ -125,11 +126,11 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
                                       compute_weight, 
                                       features.shape[1])
 
-  image, alpha, point_weight = _module_function.apply(gaussians2d, features, 
+  image, image_weight, point_weight = _module_function.apply(gaussians2d, features, 
           overlap_to_point, tile_overlap_ranges, 
           image_size)
   
-  return RasterOut(image, alpha, point_weight)
+  return RasterOut(image, image_weight, point_weight)
 
 
 def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor, 
@@ -147,6 +148,7 @@ def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor,
 
       image_size: (2, ) tuple of ints, (width, height)
       config: Config - configuration parameters for rasterization
+      compute_weight: bool - whether to compute the visibility for each point in the image
 
     Returns:
       RasterOut - namedtuple with fields:

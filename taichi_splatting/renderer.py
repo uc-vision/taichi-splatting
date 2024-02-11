@@ -83,7 +83,8 @@ def render_gaussians(
 
   return Rendering(image=raster.image, 
                   image_weight=raster.image_weight, 
-                  depth=depth, depth_var=depth_var, 
+                  depth=depth, 
+                  depth_var=depth_var, 
                   point_weight=raster.point_weight if compute_weight else None)
 
 
