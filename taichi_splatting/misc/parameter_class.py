@@ -72,6 +72,11 @@ class ParameterClass():
     return self.tensors[name]
 
 
+  def to(self, device):
+    return ParameterClass(
+      self.tensors.to(device), self.optimizer.param_groups, self.get_state()
+    )
+
   def to_dict(self):
     return self.tensors.to_dict()
   

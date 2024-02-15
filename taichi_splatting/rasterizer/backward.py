@@ -163,7 +163,7 @@ def backward_kernel(config: RasterConfig,
 
           grad_point = Gaussian2D.vec(0.0)
           grad_feature = feature_vec(0.0)
-          weight = 0.0
+          contribution = 0.0
 
           has_grad = False
           for i, offset in ti.static(pixel_tile):
@@ -184,10 +184,12 @@ def backward_kernel(config: RasterConfig,
 
               grad_feature += weight * grad_pixel_feature[i, :]
 
+              feature_diff = (feature * T_i[i] - w_i[i, :] / (1. - alpha))
+              contribution = ti.abs(feature_diff).sum() * weight
+
               if ti.static(points_requires_grad):
                 # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
-                alpha_grad_from_feature = (feature * T_i[i] - w_i[i, :] / (1. - alpha)
-                                          ) * grad_pixel_feature[i, :]
+                alpha_grad_from_feature = feature_diff * grad_pixel_feature[i, :]
 
                 # w_{i-1} = w_i + c_i a_i T(i)
                 w_i[i, :] += feature * weight
@@ -211,9 +213,9 @@ def backward_kernel(config: RasterConfig,
               warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
 
             if ti.static(compute_weight):
-              weight = warp_reduce_f32(weight, add)
+              contribution = warp_reduce_f32(contribution, add)
               if is_warp_leader():
-                ti.atomic_add(tile_weight[in_group_idx], weight)
+                ti.atomic_add(tile_weight[in_group_idx], contribution)
         # end of point group loop
 
         ti.simt.block.sync()

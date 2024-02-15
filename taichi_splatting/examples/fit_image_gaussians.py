@@ -56,13 +56,13 @@ def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
 
-def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig = RasterConfig()):
+def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig = RasterConfig(), grad_alpha=0.9):
     h, w = ref_image.shape[:2]
 
-    gradient = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
+    grad_accum = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
     visibility = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
 
-    for _ in range(epoch_size):
+    for i in range(epoch_size):
       opt.zero_grad()
 
       gaussians2d = project_gaussians2d(gaussians)
@@ -88,9 +88,14 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
-        gradient += gaussians2d.grad[:, 0:2].norm(dim=-1) 
+        grad = gaussians2d.grad[:, 0:2].norm(dim=-1) 
 
-    return raster.image, gradient, visibility 
+        if i == 0:
+          grad_accum = grad
+        else:
+          grad_accum = grad_accum * (1 - grad_alpha) + grad * grad_alpha
+      
+    return raster.image, grad_accum, visibility 
 
 
 def main():
@@ -147,9 +152,14 @@ def main():
 
   train = with_benchmark(train_epoch) if cmd_args.profile else timed_epoch
 
+  epoch = 0
   while True:
-    image, gradient, visibility = train(params.optimizer, params, ref_image, epoch_size=cmd_args.epoch, config=config)
+    epoch_size = int((cmd_args.epoch + 1) * (1 + 4 / (epoch + 1)))
 
+    image, gradient, visibility = train(params.optimizer, params, ref_image, 
+                                        epoch_size=epoch_size, config=config)
+
+    grad_thresh =  cmd_args.grad_threshold
 
     with torch.no_grad():
 
@@ -159,26 +169,28 @@ def main():
         raster =  rasterize(gaussians2d, depths, gradient.unsqueeze(-1), image_size=(w, h), config=config, compute_weight=True)
 
         
-        display_image('gradient', (0.5 * raster.image / (cmd_args.epoch * cmd_args.grad_threshold) ))
+        display_image('gradient', (0.5 * raster.image / grad_thresh ))
         display_image('rendered', image)
 
 
       if cmd_args.split:
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
-        grad_thresh = cmd_args.epoch * cmd_args.grad_threshold
         vis_threshold = cmd_args.epoch * cmd_args.vis_threshold 
 
-        transparent = (visibility < vis_threshold) & (gradient < grad_thresh)
-        split_mask = torch.zeros_like(transparent, dtype=torch.bool)
 
-        split_mask = (gradient > grad_thresh) & (visibility > 2 * vis_threshold)
+        prune_mask = (visibility < vis_threshold) #& (gradient < grad_thresh)
+        split_mask = torch.zeros_like(prune_mask, dtype=torch.bool)
+
+        # split_mask = (gradient > grad_thresh) & (visibility > 2 * vis_threshold)
         
-        splits = split_gaussians2d(gaussians[split_mask], scaling=0.8)
+        # splits = split_gaussians2d(gaussians[split_mask], scaling=0.8)
 
-        params = params[~(split_mask | transparent)]
-        params = params.append_tensors(splits.to_tensordict())
-
-        print(f"Split {split_mask.sum()}, pruned {transparent.sum()} total {params.batch_size} points") 
+        # params = params[~(split_mask | transparent)]
+        # params = params.append_tensors(splits.to_tensordict())
+        params = params[~prune_mask]
+      
+        print(f"Split {split_mask.sum()}, pruned {prune_mask.sum()} total {params.batch_size} points") 
+        epoch += 1
 
 
 def with_benchmark(f):
