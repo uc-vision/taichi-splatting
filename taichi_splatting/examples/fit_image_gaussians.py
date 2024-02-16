@@ -29,7 +29,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
 
-  parser.add_argument('--split_rate', type=float, default=0.2)
+  parser.add_argument('--split_rate', type=float, default=0.4)
 
   parser.add_argument('--debug', action='store_true')
   parser.add_argument('--show', action='store_true')
