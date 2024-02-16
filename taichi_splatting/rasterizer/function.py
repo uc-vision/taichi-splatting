@@ -47,7 +47,7 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=torch.float32, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_weight = torch.zeros(gaussians.shape[0] if compute_weight else 0, 
+      point_weight = torch.zeros( (gaussians.shape[0], 2) if compute_weight else 0, 
                                  dtype=torch.float32, device=features.device)
 
       forward(gaussians, features, 

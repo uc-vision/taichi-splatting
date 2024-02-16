@@ -64,8 +64,7 @@ def psnr(a, b):
 def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig = RasterConfig(), grad_alpha=0.9):
     h, w = ref_image.shape[:2]
 
-    grad_accum = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
-    visibility = torch.zeros(gaussians.batch_size, device=gaussians.position.device)
+    contrib = torch.zeros((gaussians.batch_size[0], 2), device=gaussians.position.device)
 
     for i in range(epoch_size):
       opt.zero_grad()
@@ -87,20 +86,15 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       loss.backward()
 
 
-      visibility += raster.point_weight
+      contrib += raster.point_weight
       check_finite(gaussians)
       opt.step()
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
-        grad = gaussians2d.grad[:, 0:2].norm(dim=-1) 
 
-        if i == 0:
-          grad_accum = grad
-        else:
-          grad_accum = grad_accum * (1 - grad_alpha) + grad * grad_alpha
-      
-    return raster.image, grad_accum, visibility 
+      visibility, gradient = contrib.unbind(dim=1)
+    return raster.image, visibility, gradient 
 
 
 def main():
@@ -169,7 +163,7 @@ def main():
       if cmd_args.show:
         gaussians2d = project_gaussians2d(params)
         depths = encode_depth32(params.depth)
-        raster =  rasterize(gaussians2d, depths, gradient.unsqueeze(-1), image_size=(w, h), config=config, compute_weight=True)
+        raster =  rasterize(gaussians2d, depths, gradient.contiguous().unsqueeze(-1), image_size=(w, h), config=config, compute_weight=True)
 
         err = torch.abs(ref_image - image)
         
