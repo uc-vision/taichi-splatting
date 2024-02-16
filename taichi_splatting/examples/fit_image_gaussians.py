@@ -29,13 +29,13 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
 
-  parser.add_argument('--split_rate', type=float, default=0.01)
+  parser.add_argument('--split_rate', type=float, default=0.2)
 
   parser.add_argument('--debug', action='store_true')
   parser.add_argument('--show', action='store_true')
 
   parser.add_argument('--profile', action='store_true')
-  parser.add_argument('--epoch', type=int, default=100, help='Number of iterations per measurement/profiling')
+  parser.add_argument('--epoch', type=int, default=20, help='Number of iterations per measurement/profiling')
   
   return parser.parse_args()
 
@@ -185,7 +185,7 @@ def main():
 
         split_ratio = np.clip(cmd_args.target / gaussians.batch_size[0], 
                               a_min=0.5, a_max=2)
-        split_rate = cmd_args.split_rate
+        split_rate = cmd_args.split_rate / (0.1 * epoch + 1)
 
         grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio) )
         vis_thresh = torch.quantile(visibility, split_rate * 1/split_ratio )
