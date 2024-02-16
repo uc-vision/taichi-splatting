@@ -200,7 +200,8 @@ def backward_kernel(config: RasterConfig,
 
               contribution += vec2(
                 ((feature_diff * weight)**2).sum(),
-                ((alpha_grad_from_feature)**2).sum()
+                # ((alpha_grad_from_feature)**2).sum()
+                ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
               )
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
