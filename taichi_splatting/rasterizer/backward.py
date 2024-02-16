@@ -185,7 +185,7 @@ def backward_kernel(config: RasterConfig,
               grad_feature += weight * grad_pixel_feature[i, :]
 
               feature_diff = (feature * T_i[i] - w_i[i, :] / (1. - alpha))
-              contribution = ti.abs(feature_diff).sum() * weight
+              contribution = ((feature_diff* weight)**2).sum() 
 
               if ti.static(points_requires_grad):
                 # \frac{dC}{da_i} = c_i T(i) - \frac{1}{1 - a_i} w_i
