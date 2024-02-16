@@ -126,7 +126,7 @@ def main():
 
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), scale_factor=0.1).to(torch.device('cuda:0'))
   learning_rates = dict(
-    position=0.2,
+    position=0.1,
     log_scaling=0.05,
     rotation=0.005,
     alpha_logit=0.1,
