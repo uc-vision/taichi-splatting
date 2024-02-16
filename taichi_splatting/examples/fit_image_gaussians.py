@@ -29,7 +29,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
 
-  parser.add_argument('--split_rate', type=float, default=0.4)
+  parser.add_argument('--split_rate', type=float, default=0.2)
 
   parser.add_argument('--debug', action='store_true')
   parser.add_argument('--show', action='store_true')
@@ -86,12 +86,15 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       loss.backward()
 
 
-      contrib += raster.point_weight
       check_finite(gaussians)
       opt.step()
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
+
+        contrib =  raster.point_weight if i == 0 \
+            else (1 - grad_alpha) * contrib + grad_alpha * raster.point_weight
+
 
       visibility, gradient = contrib.unbind(dim=1)
     return raster.image, visibility, gradient 
