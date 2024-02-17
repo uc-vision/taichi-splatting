@@ -1,6 +1,6 @@
 import copy
 from functools import cached_property
-from typing import Dict
+from beartype.typing import Dict
 from beartype import beartype
 from beartype.typing import Callable, List, Dict, Optional
 from tensordict import TensorDict
@@ -28,8 +28,7 @@ class ParameterClass():
   def __init__(self, tensors:TensorDict, param_groups:List, param_state:Optional[Dict]=None):
 
     self.tensors = tensors
-    self.optimizer = optim.Adam(param_groups, foreach=True)
-    self.state_keys = ("exp_avg", "exp_avg_sq")
+    self.optimizer = optim.Adam(param_groups, foreach=True, betas=(0.7, 0.999))
 
     if param_state is not None:
       for k, v in param_state.items():
@@ -90,7 +89,7 @@ class ParameterClass():
     
   def _updated_state(self, f:Callable):
     def modify_state(state):
-      return {k : f(v) if k in self.state_keys else state[k]
+      return {k : f(v) if torch.is_tensor(v) and v.dim() > 0 else state[k]
                 for k, v in state.items()}
 
     return {name:modify_state(self.optimizer.state[param])

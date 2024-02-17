@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 import cv2
 import argparse
 import numpy as np
@@ -29,7 +30,8 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
 
-  parser.add_argument('--split_rate', type=float, default=0.5)
+  parser.add_argument('--split_rate', type=float, default=0.25)
+  parser.add_argument('--write_frames', type=Path, default=None)
 
   parser.add_argument('--debug', action='store_true')
   parser.add_argument('--show', action='store_true')
@@ -114,13 +116,14 @@ def main():
   print(f'Image size: {w}x{h}')
 
   if cmd_args.show:
-    cv2.namedWindow('rendered', cv2.WINDOW_NORMAL)
     cv2.namedWindow('gradient', cv2.WINDOW_NORMAL)
     cv2.namedWindow('err', cv2.WINDOW_NORMAL)
+    cv2.namedWindow('rendered', cv2.WINDOW_NORMAL)
 
-
-    cv2.resizeWindow('rendered', w, h)
     cv2.resizeWindow('gradient', w, h)
+    cv2.resizeWindow('err', w, h)
+    cv2.resizeWindow('rendered', w, h)
+
 
   torch.manual_seed(cmd_args.seed)
 
@@ -174,6 +177,14 @@ def main():
         display_image('rendered', image)
         display_image('err',  0.25 * err / err.mean(dim=(0, 1), keepdim=True))
 
+    
+      if cmd_args.write_frames:
+        filename = cmd_args.write_frames / f'{epoch:04d}.png'
+        filename.parent.mkdir(exist_ok=True, parents=True)
+        print(f'Writing {filename}')
+        cv2.imwrite(str(filename), 
+                    (image.detach().clamp(0, 1) * 255).cpu().numpy())
+
       cpsnr = psnr(ref_image, image)
       print(f'{epoch}: {epoch_size / epoch_time:.1f} iters/sec CPSNR {cpsnr:.2f}')
 
@@ -181,7 +192,7 @@ def main():
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
 
         split_ratio = np.clip(cmd_args.target / gaussians.batch_size[0], 
-                              a_min=0.5, a_max=2)
+                              a_min=0.25, a_max=4)
         split_rate = cmd_args.split_rate / (0.1 * epoch + 1)
 
         grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio) )
