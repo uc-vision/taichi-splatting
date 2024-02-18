@@ -90,6 +90,7 @@ def backward_kernel(config: RasterConfig,
       last_point_pixel = thread_index(0)
       T_i = thread_vector(1.0)
       grad_pixel_feature = thread_features(0.0)
+      pixel_feature = thread_features(0.0)
 
       for i, offset in ti.static(pixel_tile):
         pixel = ivec2(offset) + pixel_base
@@ -98,6 +99,7 @@ def backward_kernel(config: RasterConfig,
           last_point_pixel[i] = image_last_valid[pixel.y, pixel.x]
           T_i[i] = 1.0 - image_alpha[pixel.y, pixel.x]
           grad_pixel_feature[i, :] = grad_image_feature[pixel.y, pixel.x]
+          pixel_feature[i, :] = image_feature[pixel.y, pixel.x]
 
       last_point_thread = last_point_pixel.max()
       w_i = thread_features(0.0)
@@ -199,7 +201,8 @@ def backward_kernel(config: RasterConfig,
                   gaussian_alpha)
 
               contribution += vec2(
-                ((feature_diff * weight)**2).sum(),
+                # (((pixel_feature[i, :] - feature) * weight)**2).sum(),
+                (feature_diff**2).sum() * weight,
                 # ((alpha_grad_from_feature)**2).sum()
                 ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
               )
