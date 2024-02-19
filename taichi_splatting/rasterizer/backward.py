@@ -123,19 +123,11 @@ def backward_kernel(config: RasterConfig,
 
       # Loop through the range in groups of block_area
       for point_group_id in range(num_point_groups):
+        ti.simt.block.sync() 
         
         # load points and features into block shared memory
         group_offset_base = point_group_id * block_area
 
-        if ti.simt.block.sync_all_nonzero(ti.i32(end_offset - group_offset_base < last_point_thread)):
-          break
-
-        # if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= end_offset - group_offset_base)):
-        #     continue
-
-        # ti.simt.block.sync() 
-
-        
         block_end_idx = end_offset - group_offset_base
         block_start_idx = ti.max(block_end_idx - block_area, 0)
 
@@ -164,7 +156,7 @@ def backward_kernel(config: RasterConfig,
         for in_group_idx in range(point_group_size):
           point_index = end_offset - (group_offset_base + in_group_idx)
 
-          if ti.simt.warp.all_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
+          if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
             break
 
           # Could factor this out and only compute grad if needed
