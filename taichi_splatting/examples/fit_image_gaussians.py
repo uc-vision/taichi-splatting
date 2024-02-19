@@ -30,10 +30,8 @@ def parse_args():
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
-  parser.add_argument('--max_epoch', type=int, default=1000)
-
-  parser.add_argument('--split_rate', type=float, default=0.25, help='Rate of points to split each epoch (proportional to number of points)')
-  parser.add_argument('--split_reduction', type=float, default=0.95, help='When points is near target, reduce split rate by this factor each epoch')
+  parser.add_argument('--max_epoch', type=int, default=200)
+  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of points to split each epoch (proportional to number of points)')
 
   parser.add_argument('--write_frames', type=Path, default=None)
 
@@ -189,10 +187,12 @@ def main():
                               a_min=0.25, a_max=4)
         
         if min(split_ratio, 1/split_ratio) > 0.98:
-          split_rate *= cmd_args.split_reduction
+          factor = math.pow(split_rate, 1/(cmd_args.max_epoch - epoch))
+
+          split_rate *= factor
 
 
-        grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio) )
+        grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio))
         vis_thresh = torch.quantile(visibility, split_rate * 1/split_ratio )
 
     

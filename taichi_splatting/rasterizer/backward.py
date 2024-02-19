@@ -22,6 +22,7 @@ def backward_kernel(config: RasterConfig,
 
   thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
   block_area = tile_area // thread_pixels
+  
 
   # each thread is responsible for a small tile of pixels
   pixel_tile = tuple([ (i, 
@@ -78,19 +79,19 @@ def backward_kernel(config: RasterConfig,
       tile_feature = ti.simt.block.SharedArray((block_area, ), dtype=feature_vec)
 
       tile_grad_point = (ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
-        if points_requires_grad else None)
+        if ti.static(points_requires_grad) else None)
       
       tile_grad_feature = (ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
-        if features_requires_grad else None)
+        if ti.static(features_requires_grad) else None)
 
       tile_weight = (ti.simt.block.SharedArray((block_area,), dtype=ti.math.vec2) 
-        if compute_weight else None)
+        if ti.static(compute_weight) else None)
 
       
       last_point_pixel = thread_index(0)
       T_i = thread_vector(1.0)
       grad_pixel_feature = thread_features(0.0)
-      pixel_feature = thread_features(0.0)
+      #pixel_feature = thread_features(0.0)
 
       for i, offset in ti.static(pixel_tile):
         pixel = ivec2(offset) + pixel_base
@@ -99,7 +100,7 @@ def backward_kernel(config: RasterConfig,
           last_point_pixel[i] = image_last_valid[pixel.y, pixel.x]
           T_i[i] = 1.0 - image_alpha[pixel.y, pixel.x]
           grad_pixel_feature[i, :] = grad_image_feature[pixel.y, pixel.x]
-          pixel_feature[i, :] = image_feature[pixel.y, pixel.x]
+          #pixel_feature[i, :] = image_feature[pixel.y, pixel.x]
 
       last_point_thread = last_point_pixel.max()
       w_i = thread_features(0.0)
@@ -122,12 +123,19 @@ def backward_kernel(config: RasterConfig,
 
       # Loop through the range in groups of block_area
       for point_group_id in range(num_point_groups):
-
-        ti.simt.block.sync() 
-
+        
         # load points and features into block shared memory
         group_offset_base = point_group_id * block_area
 
+        if ti.simt.block.sync_all_nonzero(ti.i32(group_offset_base < last_point_thread)):
+          break
+
+        # if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= end_offset - group_offset_base)):
+        #     continue
+
+        # ti.simt.block.sync() 
+
+        
         block_end_idx = end_offset - group_offset_base
         block_start_idx = ti.max(block_end_idx - block_area, 0)
 
@@ -156,8 +164,8 @@ def backward_kernel(config: RasterConfig,
         for in_group_idx in range(point_group_size):
           point_index = end_offset - (group_offset_base + in_group_idx)
 
-          if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
-            continue
+          if ti.simt.warp.all_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
+            break
 
           # Could factor this out and only compute grad if needed
           # however, it does not seem to make any difference
@@ -200,12 +208,14 @@ def backward_kernel(config: RasterConfig,
                   point_alpha * dp_dconic,
                   gaussian_alpha)
 
-              contribution += vec2(
-                # (((pixel_feature[i, :] - feature) * weight)**2).sum(),
-                (feature_diff**2).sum() * weight,
-                # ((alpha_grad_from_feature)**2).sum()
-                ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
-              )
+
+              if ti.static(compute_weight):
+                contribution += vec2(
+                  # (((pixel_feature[i, :] - feature) * weight)**2).sum(),
+                  (feature_diff**2).sum() * weight,
+                  # ((alpha_grad_from_feature)**2).sum()
+                  ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
+                )
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
 

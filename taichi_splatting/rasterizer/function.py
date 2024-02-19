@@ -47,7 +47,7 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=torch.float32, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_weight = torch.zeros( (gaussians.shape[0], 2) if compute_weight else 0, 
+      point_weight = torch.zeros( (gaussians.shape[0], 2) if compute_weight else (0, 2), 
                                  dtype=torch.float32, device=features.device)
 
       forward(gaussians, features, 
@@ -75,15 +75,15 @@ def render_function(config:RasterConfig,
         grad_gaussians = torch.zeros_like(gaussians)
         grad_features = torch.zeros_like(features)
   
-        with restore_grad(grad_gaussians, grad_features):
+        # with restore_grad(gaussians, features):
 
-          backward(gaussians, features, 
-            ctx.tile_overlap_ranges, ctx.overlap_to_point,
-            image_feature, ctx.image_alpha, ctx.image_last_valid,
-            grad_image_feature.contiguous(),
-            grad_gaussians, grad_features, ctx.point_weight)
+        backward(gaussians, features, 
+          ctx.tile_overlap_ranges, ctx.overlap_to_point,
+          image_feature, ctx.image_alpha, ctx.image_last_valid,
+          grad_image_feature.contiguous(),
+          grad_gaussians, grad_features, ctx.point_weight)
 
-          return grad_gaussians, grad_features, None, None, None, None
+        return grad_gaussians, grad_features, None, None, None, None
   return _module_function
 
 
