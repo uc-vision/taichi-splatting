@@ -12,7 +12,7 @@ from taichi.math import ivec2, vec2
 def backward_kernel(config: RasterConfig,
                     points_requires_grad: bool,
                     features_requires_grad: bool, 
-                    compute_weight: bool,
+                    compute_split_heuristics: bool,
                     feature_size: int):
   
 
@@ -57,7 +57,7 @@ def backward_kernel(config: RasterConfig,
       grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
       grad_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
 
-      point_weight: ti.types.ndarray(vec2, ndim=1),  # (M)
+      point_split_heuristics: ti.types.ndarray(vec2, ndim=1),  # (M)
   ):
 
     camera_height, camera_width = image_feature.shape
@@ -84,8 +84,8 @@ def backward_kernel(config: RasterConfig,
       tile_grad_feature = (ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
         if ti.static(features_requires_grad) else None)
 
-      tile_weight = (ti.simt.block.SharedArray((block_area,), dtype=ti.math.vec2) 
-        if ti.static(compute_weight) else None)
+      tile_split_heuristics = (ti.simt.block.SharedArray((block_area,), dtype=ti.math.vec2) 
+        if ti.static(compute_split_heuristics) else None)
 
       
       last_point_pixel = thread_index(0)
@@ -145,8 +145,8 @@ def backward_kernel(config: RasterConfig,
           if ti.static(features_requires_grad):
             tile_grad_feature[tile_idx] = feature_vec(0.0)
           
-          if ti.static(compute_weight):
-            tile_weight[tile_idx] = vec2(0.0)
+          if ti.static(compute_split_heuristics):
+            tile_split_heuristics[tile_idx] = vec2(0.0)
 
         ti.simt.block.sync()
 
@@ -201,7 +201,7 @@ def backward_kernel(config: RasterConfig,
                   gaussian_alpha)
 
 
-              if ti.static(compute_weight):
+              if ti.static(compute_split_heuristics):
                 contribution += vec2(
                   # (((pixel_feature[i, :] - feature) * weight)**2).sum(),
                   (feature_diff**2).sum() * weight,
@@ -219,8 +219,8 @@ def backward_kernel(config: RasterConfig,
             if ti.static(features_requires_grad):
               warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
 
-            if ti.static(compute_weight):
-              warp_add_vector(tile_weight[in_group_idx], contribution)
+            if ti.static(compute_split_heuristics):
+              warp_add_vector(tile_split_heuristics[in_group_idx], contribution)
         # end of point group loop
 
         ti.simt.block.sync()
@@ -234,8 +234,8 @@ def backward_kernel(config: RasterConfig,
           if ti.static(features_requires_grad):
             ti.atomic_add(grad_features[point_offset], tile_grad_feature[tile_idx])
 
-          if ti.static(compute_weight):
-            ti.atomic_add(point_weight[point_offset], tile_weight[tile_idx])
+          if ti.static(compute_split_heuristics):
+            ti.atomic_add(point_split_heuristics[point_offset], tile_split_heuristics[tile_idx])
 
       # end of point group id loop
     # end of pixel loop

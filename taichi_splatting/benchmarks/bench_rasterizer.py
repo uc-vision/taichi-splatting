@@ -80,14 +80,14 @@ def bench_rasterizer(args):
   benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
 
   
-  def compute_weight():
+  def compute_split_heuristics():
     raster = rasterize_with_tiles(gaussians2d=gaussians2d, features=gaussians.feature, 
       tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-      image_size=args.image_size, config=config, compute_weight=True)
+      image_size=args.image_size, config=config, compute_split_heuristics=True)
     
     raster.image.sum().backward()
 
-  benchmarked('backward (compute_weight)', compute_weight, profile=args.profile, iters=args.iters)  
+  benchmarked('backward (compute_split_heuristics)', compute_split_heuristics, profile=args.profile, iters=args.iters)  
 
 
 def main():

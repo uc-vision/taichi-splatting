@@ -72,7 +72,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
         features=gaussians.feature, 
         image_size=(w, h), 
         config=config,
-        compute_weight=True)
+        compute_split_heuristics=True)
 
       loss = torch.nn.functional.l1_loss(raster.image, ref_image) #+ (1e-4 * gaussians.log_scaling).pow(2).sum()
       loss.backward()
@@ -83,8 +83,8 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
 
-        contrib =  raster.point_weight if i == 0 \
-            else (1 - grad_alpha) * contrib + grad_alpha * raster.point_weight
+        contrib =  raster.point_split_heuristics if i == 0 \
+            else (1 - grad_alpha) * contrib + grad_alpha * raster.point_split_heuristics
 
 
       visibility, gradient = contrib.unbind(dim=1)
@@ -161,7 +161,7 @@ def main():
       if cmd_args.show:
         gaussians2d = project_gaussians2d(params)
         depths = encode_depth32(params.depth)
-        raster =  rasterize(gaussians2d, depths, gradient.contiguous().unsqueeze(-1), image_size=(w, h), config=config, compute_weight=True)
+        raster =  rasterize(gaussians2d, depths, gradient.contiguous().unsqueeze(-1), image_size=(w, h), config=config, compute_split_heuristics=True)
 
         err = torch.abs(ref_image - image)
         
