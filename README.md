@@ -76,7 +76,7 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 
 * Compute point visibility in backward pass (useful for model pruning)
 * Example training on images with split/prune operations
-
+* Novel heuristics for split and prune operations computed optionally in backward pass 
 
 
 ### Todo
