@@ -157,7 +157,7 @@ def backward_kernel(config: RasterConfig,
           point_index = end_offset - (group_offset_base + in_group_idx)
 
           if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
-            break
+            continue
 
           # Could factor this out and only compute grad if needed
           # however, it does not seem to make any difference
