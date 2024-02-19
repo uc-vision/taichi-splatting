@@ -23,7 +23,7 @@ class Rendering:
   depth: Optional[torch.Tensor] = None  # (H, W)
   depth_var: Optional[torch.Tensor] = None # (H, W)
 
-  point_weight: Optional[torch.Tensor] = None  # (N, 1)
+  point_split_heuristics: Optional[torch.Tensor] = None  # (N, 1)
 
   
 
@@ -37,7 +37,7 @@ def render_gaussians(
   use_sh:bool = False,      
   render_depth:bool = False, 
   use_depth16:bool = False,
-  compute_weight:bool = False
+  compute_split_heuristics:bool = False
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 
@@ -51,7 +51,7 @@ def render_gaussians(
     use_sh: bool - whether to use spherical harmonics
     render_depth: bool - whether to render depth and depth variance
     use_depth16: bool - whether to use 16 bit depth encoding (otherwise 32 bit)
-    compute_weight: bool - whether to compute the visibility for each point in the image
+    compute_split_heuristics: bool - whether to compute the visibility for each point in the image
   
   Returns:
     images : Rendering - rendered images, with optional depth and depth variance and point weights
@@ -75,7 +75,7 @@ def render_gaussians(
     features = torch.cat([depthvars, features], dim=1)
     
   raster = rasterize(gaussians2d, depth_order, features,
-    image_size=camera_params.image_size, config=config, compute_weight=compute_weight)
+    image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)
 
   depth, depth_var = None, None
   feature_image = raster.image
@@ -88,7 +88,7 @@ def render_gaussians(
                   image_weight=raster.image_weight, 
                   depth=depth, 
                   depth_var=depth_var, 
-                  point_weight=raster.point_weight if compute_weight else None)
+                  point_split_heuristics=raster.point_split_heuristics if compute_split_heuristics else None)
 
 
 
