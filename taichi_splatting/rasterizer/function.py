@@ -62,9 +62,7 @@ def render_function(config:RasterConfig,
       ctx.image_size = image_size
       ctx.point_weight = point_weight
 
-      ctx.mark_non_differentiable(image_alpha, image_last_valid)
-      ctx.mark_non_differentiable(point_weight)
-
+      ctx.mark_non_differentiable(image_alpha, image_last_valid, point_weight, overlap_to_point, tile_overlap_ranges)
       ctx.save_for_backward(gaussians, features, image_feature)
             
       return image_feature, image_alpha, point_weight

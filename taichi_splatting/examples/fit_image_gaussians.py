@@ -7,10 +7,11 @@ import taichi as ti
 
 import torch
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
+from taichi_splatting.mapper.tile_mapper import map_to_tiles
 from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import project_gaussians2d, split_gaussians2d, uniform_split_gaussians2d
 
-from taichi_splatting.rasterizer.function import rasterize
+from taichi_splatting.rasterizer.function import rasterize, rasterize_with_tiles
 
 from taichi_splatting.misc.parameter_class import ParameterClass
 from taichi_splatting.tests.random_data import random_2d_gaussians
@@ -29,8 +30,11 @@ def parse_args():
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
+  parser.add_argument('--max_epoch', type=int, default=1000)
 
-  parser.add_argument('--split_rate', type=float, default=0.25)
+  parser.add_argument('--split_rate', type=float, default=0.25, help='Rate of points to split each epoch (proportional to number of points)')
+  parser.add_argument('--split_reduction', type=float, default=0.95, help='When points is near target, reduce split rate by this factor each epoch')
+
   parser.add_argument('--write_frames', type=Path, default=None)
 
   parser.add_argument('--debug', action='store_true')
@@ -40,15 +44,6 @@ def parse_args():
   parser.add_argument('--epoch', type=int, default=20, help='Number of iterations per measurement/profiling')
   
   return parser.parse_args()
-
-def sigmoid(x):
-  return 1 / (1 + math.exp(-x))
-
-def inverse_sigmoid(x):
-  return math.log(x / (1 - x))
-
-def split_ratio(n, target):
-  return 1 / (1 + math.exp(-inverse_sigmoid(n / target)))
 
 
 def display_image(name, image):
@@ -71,12 +66,9 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
     for i in range(epoch_size):
       opt.zero_grad()
 
-      gaussians2d = project_gaussians2d(gaussians)
-      gaussians2d.retain_grad()
-
-      # gaussians.feature.retain_grad()
-      
+      gaussians2d = project_gaussians2d(gaussians)  
       depths = encode_depth32(gaussians.depth)
+
       raster = rasterize(gaussians2d=gaussians2d, 
         encoded_depths=depths,
         features=gaussians.feature, 
@@ -84,9 +76,8 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
         config=config,
         compute_weight=True)
 
-      loss = torch.nn.functional.l1_loss(raster.image, ref_image) 
+      loss = torch.nn.functional.l1_loss(raster.image, ref_image) #+ (1e-4 * gaussians.log_scaling).pow(2).sum()
       loss.backward()
-
 
       check_finite(gaussians)
       opt.step()
@@ -157,12 +148,15 @@ def main():
 
   train = with_benchmark(timed_epoch) if cmd_args.profile else timed_epoch
 
-  epoch = 0
-  while True:
+  
+  split_rate = cmd_args.split_rate
+
+  for epoch in range(cmd_args.max_epoch):
     epoch_size = cmd_args.epoch
 
     image, gradient, visibility, epoch_time = train(params.optimizer, params, ref_image, 
                                         epoch_size=epoch_size, config=config)
+    
 
     with torch.no_grad():
 
@@ -193,7 +187,10 @@ def main():
 
         split_ratio = np.clip(cmd_args.target / gaussians.batch_size[0], 
                               a_min=0.25, a_max=4)
-        split_rate = cmd_args.split_rate / (0.1 * epoch + 1)
+        
+        if min(split_ratio, 1/split_ratio) > 0.98:
+          split_rate *= cmd_args.split_reduction
+
 
         grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio) )
         vis_thresh = torch.quantile(visibility, split_rate * 1/split_ratio )
@@ -211,9 +208,7 @@ def main():
 
         print(f" split {split_mask.sum()}, pruned {prune_mask.sum()} {params.batch_size} points")
 
- 
         
-      epoch += 1
 
 
 def with_benchmark(f):
