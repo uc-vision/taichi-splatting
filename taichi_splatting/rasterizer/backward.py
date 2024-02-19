@@ -127,7 +127,7 @@ def backward_kernel(config: RasterConfig,
         # load points and features into block shared memory
         group_offset_base = point_group_id * block_area
 
-        if ti.simt.block.sync_all_nonzero(ti.i32(group_offset_base < last_point_thread)):
+        if ti.simt.block.sync_all_nonzero(ti.i32(end_offset - group_offset_base < last_point_thread)):
           break
 
         # if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= end_offset - group_offset_base)):
