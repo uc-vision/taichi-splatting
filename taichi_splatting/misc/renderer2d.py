@@ -33,7 +33,7 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
 
 
 def point_basis(points:Gaussians2D):
-  scale = torch.exp(points.log_scaling) * points.axis_scale
+  scale = torch.exp(points.log_scaling) * F.normalize(points.axis_scale, dim=1)
 
   v1 = points.rotation / torch.norm(points.rotation, dim=1, keepdim=True)
   v2 = torch.stack([-v1[..., 1], v1[..., 0]], dim=-1)

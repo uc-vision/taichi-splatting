@@ -6,6 +6,9 @@ from taichi_splatting.perspective import CameraParams
 
 from taichi_splatting.torch_ops.transforms import join_rt
 from taichi_splatting.torch_ops import projection as torch_proj
+from taichi_splatting.torch_ops.util import check_finite
+
+import torch.nn.functional as F
 
 
 def random_camera(pos_scale:float=1., max_image_size:int = 1024) -> CameraParams:
@@ -80,7 +83,9 @@ def random_2d_gaussians(n, image_size:Tuple[int, int], scale_factor=1.0, alpha_r
   depth = torch.rand((n, 1)) * (depth_range[1] - depth_range[0]) + depth_range[0]
   
   density_scale = scale_factor * w / (1 + math.sqrt(n))
-  scaling = (torch.rand(n, 2) + 0.2) * density_scale 
+  scaling = F.normalize(torch.rand(n, 2) + 0.2, dim=1)
+
+  check_finite("sigmoid_scaling", torch_proj.inverse_sigmoid(scaling))
 
   rotation = torch.randn(n, 2) 
   rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)
@@ -91,8 +96,8 @@ def random_2d_gaussians(n, image_size:Tuple[int, int], scale_factor=1.0, alpha_r
   return Gaussians2D(
     position=position,
     depth=depth,
-    log_scaling=torch.full_like(position, fill_value=math.log(density_scale)),
-    axis_scale=scaling,
+    log_scaling=torch.full_like(depth, fill_value=math.log(density_scale)),
+    axis_scale=torch_proj.inverse_sigmoid(scaling),
 
     rotation=rotation,
     alpha_logit=torch_proj.inverse_sigmoid(alpha),
