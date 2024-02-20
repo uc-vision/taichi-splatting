@@ -44,6 +44,7 @@ class Gaussians3D():
   feature      : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
 
 
+
   def __post_init__(self):
     assert self.position.shape[1] == 3, f"Expected shape (N, 3), got {self.position.shape}"
     assert self.log_scaling.shape[1] == 3, f"Expected shape (N, 3), got {self.log_scaling.shape}"
@@ -66,7 +67,9 @@ class Gaussians3D():
 class Gaussians2D():
   position     : torch.Tensor # 2  - xy
   depth        : torch.Tensor # 1  - for sorting
-  log_scaling   : torch.Tensor # 2  - scale = exp(log_scalining) 
+  log_scaling   : torch.Tensor # 1  - scale = exp(log_scalining) 
+  axis_scale    : torch.Tensor # 2  - x and y scale
+
   rotation      : torch.Tensor # 2  - unit length imaginary number
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
   

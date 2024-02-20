@@ -91,7 +91,9 @@ def random_2d_gaussians(n, image_size:Tuple[int, int], scale_factor=1.0, alpha_r
   return Gaussians2D(
     position=position,
     depth=depth,
-    log_scaling=torch.log(scaling),
+    log_scaling=torch.full_like(position, fill_value=math.log(density_scale)),
+    axis_scale=scaling,
+
     rotation=rotation,
     alpha_logit=torch_proj.inverse_sigmoid(alpha),
     feature=torch.rand(n, 3),

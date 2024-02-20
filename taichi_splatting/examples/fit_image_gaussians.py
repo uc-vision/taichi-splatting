@@ -120,6 +120,7 @@ def main():
   learning_rates = dict(
     position=0.1,
     log_scaling=0.05,
+    axis_scale=0.001,
     rotation=0.005,
     alpha_logit=0.1,
     feature=0.01
