@@ -85,8 +85,6 @@ def random_2d_gaussians(n, image_size:Tuple[int, int], scale_factor=1.0, alpha_r
   density_scale = scale_factor * w / (1 + math.sqrt(n))
   scaling = F.normalize(torch.rand(n, 2) + 0.2, dim=1)
 
-  check_finite("sigmoid_scaling", torch_proj.inverse_sigmoid(scaling))
-
   rotation = torch.randn(n, 2) 
   rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)
 

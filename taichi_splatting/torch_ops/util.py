@@ -11,8 +11,11 @@ def check_finite(name, x):
     if x.grad is not None:
       check_finite(f'{name}.grad', x.grad)
 
-  if isinstance(x, Mapping):
+  elif isinstance(x, Mapping):
     for k, v in x.items():
       check_finite(f'{name}.{k}', v)
+
+  else:
+    raise AssertionError(f'Unsupported type {type(x)}')
 
 
