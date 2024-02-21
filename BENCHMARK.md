@@ -9,6 +9,13 @@ Charts showing overall averages across benchmark scenes. (details below!)
 
 ## Method
 
+### Implementations shown
+
+* gaussian-splatting - original (cuda) implementation for gaussian-splatting paper [diff_gaussian_rasterizer](https://github.com/graphdeco-inria/diff-gaussian-rasterization) 
+* taichi(original) - original taichi implementation [taichi_3d_gaussian_splatting](https://github.com/wanmeihuali/taichi_3d_gaussian_splatting) 
+* taichi-splatting(16) - our implementation with tile_size=16
+* taichi-splatting(32) - our implementation with tile_size=32
+
 ### Assets required
 
 The benchmark uses reconstructions from the official gaussian-splatting implementation. These can be found from the official [gaussian-splatting](https://github.com/graphdeco-inria/gaussian-splatting) page. Under [Pre-trained models](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/datasets/pretrained/models.zip).
