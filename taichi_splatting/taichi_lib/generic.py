@@ -300,8 +300,8 @@ def make_library(dtype=ti.f32):
       
       p = ti.exp(-0.5 * (dx2 * a + dy2 * c) - dxdy * b)
       dp_duv = vec2(
-          (b * d.y - a * (uv.x - xy.x)) * p,
-          (b * d.x - c * (uv.y - xy.y)) * p
+          (b * d.y + a * d.x) * p,
+          (b * d.x + c * d.y) * p
       )
       dp_dconic = vec3(-0.5 * dx2 * p, -dxdy * p, -0.5 * dy2 * p)
 
