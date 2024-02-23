@@ -285,7 +285,8 @@ def make_library(dtype=ti.f32):
       dx, dy = xy - uv
       a, b, c = uv_conic
 
-      p = ti.exp(-0.5 * (dx**2 * a + dy**2 * c) - dx * dy * b)
+      inner = 0.5 * (dx**2 * a + dy**2 * c) + dx * dy * b
+      p = ti.exp(-inner)
       return p
 
 
@@ -298,7 +299,9 @@ def make_library(dtype=ti.f32):
       dy2 = d.y**2
       dxdy = d.x * d.y
       
-      p = ti.exp(-0.5 * (dx2 * a + dy2 * c) - dxdy * b)
+      inner = 0.5 * (dx2 * a + dy2 * c) + dxdy * b
+      p = ti.exp(-inner)
+      
       dp_duv = vec2(
           (b * d.y + a * d.x) * p,
           (b * d.x + c * d.y) * p
