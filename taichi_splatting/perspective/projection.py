@@ -7,8 +7,16 @@ import torch
 from taichi_splatting.misc.autograd import restore_grad
 
 from .params import CameraParams
-from taichi_splatting.taichi_lib.generic import make_library
+from taichi_splatting.taichi_lib import get_library
 from taichi_splatting.taichi_lib.conversions import torch_taichi
+
+# Ignore this from taichi/pytorch integration 
+# taichi/lang/kernel_impl.py:763: UserWarning: The .grad attribute of a Tensor 
+# that is not a leaf Tensor is being accessed. Its .grad attribute won't be populated 
+# during autograd.backward()
+
+import warnings
+warnings.filterwarnings('ignore', '(.*)that is not a leaf Tensor is being accessed(.*)') 
 
 
 @cache
@@ -16,7 +24,7 @@ def project_to_image_function(torch_dtype=torch.float32,
                               blur_cov:float = 0.3):
   dtype = torch_taichi[torch_dtype]
 
-  lib = make_library(dtype)
+  lib = get_library(dtype)
   Gaussian3D, Gaussian2D = lib.Gaussian3D, lib.Gaussian2D
 
 

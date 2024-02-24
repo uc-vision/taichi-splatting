@@ -7,6 +7,7 @@ import torch
 from taichi_splatting.data_types import check_packed3d
 from taichi_splatting.misc.depth_variance import compute_depth_variance
 from taichi_splatting.misc.encode_depth import encode_depth
+from taichi_splatting.misc.radius import compute_radius
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
@@ -17,16 +18,26 @@ from taichi_splatting.perspective import (
 
 @dataclass 
 class Rendering:
-  image: torch.Tensor  # (H, W, C)
-  image_weight: torch.Tensor # (H, W, 1)
-  
-  depth: Optional[torch.Tensor] = None  # (H, W)
-  depth_var: Optional[torch.Tensor] = None # (H, W)
+  """ Collection of outputs from the renderer, 
+  including image map(s) and point statistics for each rendered point.
 
-  point_split_heuristics: Optional[torch.Tensor] = None  # (N, 1)
+  depth and depth var are optional, as they are only computed if render_depth=True
+  split_heuristics is computed in the backward pass if compute_split_heuristics=True
 
-  
+  radii is computed in the backward pass if compute_radii=True
+  """
+  image: torch.Tensor        # (H, W, C) - rendered image, C channels of features
+  image_weight: torch.Tensor # (H, W, 1) - weight of each pixel (total alpha)
 
+  # Information relevant to points rendered
+  points_in_view: torch.Tensor  # (N, 1) - indexes of points in view 
+  gaussians_2d: torch.Tensor    # (N, 6)   - 2D gaussians
+
+  split_heuristics: Optional[torch.Tensor] = None  # (N, 2) - split and prune heuristic
+  radii : Optional[torch.Tensor] = None  # (N, 1) - radius of each point
+
+  depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
+  depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
 
 
 def render_gaussians(
@@ -37,7 +48,9 @@ def render_gaussians(
   use_sh:bool = False,      
   render_depth:bool = False, 
   use_depth16:bool = False,
-  compute_split_heuristics:bool = False
+
+  compute_split_heuristics:bool = False,
+  compute_radii:bool = False
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 
@@ -60,7 +73,9 @@ def render_gaussians(
 
   check_packed3d(packed_gaussians)      
 
-  gaussians, features = cull_gaussians(packed_gaussians, features, camera_params, config.tile_size, config.margin_tiles)
+  indexes = gaussians_in_view(packed_gaussians, camera_params, config.tile_size, config.margin_tiles)
+  features, gaussians = features[indexes], packed_gaussians[indexes]
+
   if use_sh:
     features = evaluate_sh_at(features, gaussians.detach(), camera_params.camera_position)
   else:
@@ -84,17 +99,31 @@ def render_gaussians(
     depth, depth_var = compute_depth_variance(raster.image, raster.image_weight)
     feature_image = feature_image[..., 3:]
 
+  heuristics = raster.point_split_heuristics if compute_split_heuristics else None
+  radii = compute_radius(gaussians2d) if compute_radii else None
+
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 
                   depth=depth, 
                   depth_var=depth_var, 
-                  point_split_heuristics=raster.point_split_heuristics if compute_split_heuristics else None)
+                    
+                  split_heuristics=heuristics,
+                  points_in_view=indexes,
+                  gaussians_2d = gaussians2d,
+                  radii=radii)
+
+
+def viewspace_gradient(gaussians2d: torch.Tensor):
+  assert gaussians2d.shape[1] == 6, f"Expected 2D gaussians, got {gaussians2d.shape}"
+  assert gaussians2d.grad is not None, "Expected gradients on gaussians2d, run backward first with gaussians2d.retain_grad()"
+
+  xy_grad = gaussians2d.grad[:, :2]
+  return torch.norm(xy_grad, dim=1)
 
 
 
-def cull_gaussians(
+def gaussians_in_view(
   packed_gaussians: torch.Tensor,  # packed gaussians
-  features: torch.Tensor,  
   camera_params: CameraParams,
   tile_size: int = 16,
   margin_tiles: int = 3
@@ -103,5 +132,4 @@ def cull_gaussians(
     camera_params=camera_params, margin_pixels=margin_tiles * tile_size
   )
 
-  indexes = torch.nonzero(point_mask, as_tuple=True)[0]
-  return packed_gaussians[indexes], features[indexes]
+  return torch.nonzero(point_mask, as_tuple=True)[0]

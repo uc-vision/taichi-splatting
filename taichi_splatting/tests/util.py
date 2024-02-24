@@ -4,13 +4,7 @@ from beartype.typing import Sequence
 import torch
 from tqdm import tqdm
 
-# Ignore this from taichi/pytorch integration 
-# taichi/lang/kernel_impl.py:763: UserWarning: The .grad attribute of a Tensor 
-# that is not a leaf Tensor is being accessed. Its .grad attribute won't be populated 
-# during autograd.backward()
 
-import warnings
-warnings.filterwarnings('ignore') 
 
 
 def eval_with_grad(f, *args):

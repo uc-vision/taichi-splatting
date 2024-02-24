@@ -75,7 +75,9 @@ class ParameterClass():
 
   def to(self, device):
     return ParameterClass(
-      self.tensors.to(device), self.optimizer.param_groups, self.get_state()
+      as_parameters(self.tensors.to(device), self.optimized_keys()), 
+      self.optimizer.param_groups, 
+      self.get_state()
     )
 
   def to_dict(self):
@@ -102,11 +104,11 @@ class ParameterClass():
 
 
   def _updated_tensors(self, tensors):
-    params = as_parameters(tensors, self.optimized_keys())
-    updated_groups = [ replace_dict(group, params=[params[group["name"]]])
+    tensors = as_parameters(tensors, self.optimized_keys())
+    updated_groups = [ replace_dict(group, params=[tensors[group["name"]]])
       for group in self.optimizer.param_groups]
     
-    return replace_dict(tensors, **params), updated_groups
+    return tensors, updated_groups
 
   def __getitem__(self, idx):
     tensors, updated_groups = self._updated_tensors(self.tensors[idx])
@@ -131,9 +133,10 @@ class ParameterClass():
 
 
 def as_parameters(tensors, keys):
-    param_dict = {k: torch.nn.Parameter(x, requires_grad=True) 
-                        for k, x in tensors.items()
-                        if k in keys}
+    param_dict = {
+      k: torch.nn.Parameter(x.detach(), requires_grad=True) 
+            if k in keys else x 
+        for k, x in tensors.items()}
 
     cls = type(tensors)
     return cls.from_dict(param_dict) 
