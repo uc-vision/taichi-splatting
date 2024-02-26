@@ -22,7 +22,7 @@ def random_inputs(device='cpu', max_points=1000, dtype=torch.float32):
     n = torch.randint(size=(1,), low=1, high=max_points).item()
 
     gaussians = random_3d_gaussians(n=n, camera_params=camera)
-    check_finite(gaussians)
+    check_finite(gaussians, 'gaussians')
 
     return (x.to(device=device, dtype=dtype) for x in [gaussians, camera])
   return f

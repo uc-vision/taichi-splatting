@@ -1,9 +1,6 @@
 
 from functools import cache
-from typing import Optional
-from taichi_splatting.misc.autograd import restore_grad
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
-# from taichi_splatting.mapper.segmented_tile_mapper import map_to_tiles
 
 
 from .forward import RasterConfig, forward_kernel

@@ -77,7 +77,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       loss = torch.nn.functional.l1_loss(raster.image, ref_image) #+ (1e-4 * gaussians.log_scaling).pow(2).sum()
       loss.backward()
 
-      check_finite(gaussians)
+      check_finite(gaussians, 'gaussians', warn=True)
       opt.step()
 
       with torch.no_grad():

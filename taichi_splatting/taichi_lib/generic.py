@@ -75,6 +75,19 @@ def make_library(dtype=ti.f32):
   def get_position_g3d(vec:vec_g3d) -> vec3:
     return vec[0:3]
 
+  @ti.func
+  def get_position_g2d(vec:vec_g2d) -> vec2:
+    return vec[0:2]
+
+  @ti.func
+  def get_conic_g2d(vec:vec_g2d) -> vec3:
+    return vec[2:5]
+
+
+  @ti.func
+  def get_cov_g2d(vec:vec_g2d) -> vec3:
+    conic = get_conic_g2d(vec)
+    return inverse_cov(conic)
 
   @ti.func
   def from_vec_g3d(vec:vec_g3d) -> Gaussian3D:
@@ -101,6 +114,10 @@ def make_library(dtype=ti.f32):
   Gaussian2D.to_vec = to_vec_g2d
   Gaussian2D.from_vec = from_vec_g2d
   Gaussian2D.unpack = unpack_vec_g2d
+
+  Gaussian2D.get_position = get_position_g2d
+  Gaussian2D.get_conic = get_conic_g2d
+  Gaussian2D.get_cov = get_cov_g2d
 
 
   Gaussian3D.vec = vec_g3d
