@@ -12,11 +12,14 @@ from . import perspective
 
 __all__ = [
   'render_gaussians',
-  'render_sh_gaussians',
+  'Rendering',
+
   'map_to_tiles',
   'pad_to_tile',
+
   'Gaussians2D',
   'Gaussians3D',
+  
   'RasterConfig',
   'evaluate_sh_at',
   'compute_radius',

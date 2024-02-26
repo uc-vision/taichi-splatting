@@ -203,9 +203,7 @@ def backward_kernel(config: RasterConfig,
 
               if ti.static(compute_split_heuristics):
                 contribution += vec2(
-                  # (((pixel_feature[i, :] - feature) * weight)**2).sum(),
                   (feature_diff**2).sum() * weight,
-                  # ((alpha_grad_from_feature)**2).sum()
                   ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
                 )
 
