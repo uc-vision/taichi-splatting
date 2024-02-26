@@ -129,13 +129,17 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
       key_idx = cumulative_overlap_counts[idx]
       depth = depths[idx]
 
+      assert depth >= 0, f"depth {depth} cannot be negative!"
+
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
         if query.test_tile(tile_uv):
           tile = tile_uv + query.min_tile
           tile_id = tile.x + tile.y * tiles_wide
       
+          key = make_sort_key(depth, tile_id)
+
           # sort based on tile_id, depth
-          overlap_sort_key[key_idx] = make_sort_key(depth, tile_id)
+          overlap_sort_key[key_idx] = key
           overlap_to_point[key_idx] = idx # map overlap index back to point index
           key_idx += 1
 
@@ -178,13 +182,11 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
       # as sometimes there are no overlaps for a tile
       tile_ranges = torch.zeros((*tile_shape, 2), dtype=torch.int32, device=gaussians.device)
 
-
       if total_overlap > 0:
         overlap_key, overlap_to_point = sort_tile_depths(
           depths, gaussians, cum_overlap_counts, total_overlap, image_size)
         
         find_ranges_kernel(overlap_key, tile_ranges.view(-1, 2))
-
       else:
         overlap_to_point = torch.empty((0, ), dtype=torch.int32, device=gaussians.device)
 

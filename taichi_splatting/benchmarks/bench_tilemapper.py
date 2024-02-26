@@ -37,7 +37,6 @@ def bench_rasterizer(args):
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
         device_memory_GB=0.1, debug=args.debug)
   
-     
   torch.manual_seed(args.seed)
 
   depth_range = (0.1, 100.)

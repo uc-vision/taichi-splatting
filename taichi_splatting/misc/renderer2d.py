@@ -24,7 +24,7 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
         conic-based representation of the Gaussians2D object.
          
     """
-    alpha = torch.sigmoid(points.alpha_logit)
+    alpha = torch.sigmoid(points.alpha_logit) 
     inv_cov = torch.inverse(point_covariance(points))
 
     conic = torch.stack([inv_cov[..., 0, 0], inv_cov[..., 0, 1], inv_cov[..., 1, 1]], dim=-1)
@@ -67,7 +67,7 @@ def split_by_samples(points: Gaussians2D, samples: torch.Tensor, depth_noise:flo
   
   return replace(gaussians,
     position = gaussians.position + point_samples,
-    depth = gaussians.depth + torch.randn_like(gaussians.depth) * depth_noise,
+    depth = torch.clamp_min(gaussians.depth + torch.randn_like(gaussians.depth) * depth_noise, 1e-6),
     batch_size=(num_points * n, ))
    
 
