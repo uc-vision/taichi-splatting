@@ -1,4 +1,4 @@
-from .renderer import render_gaussians
+from .renderer import render_gaussians, Rendering
 from .data_types import Gaussians2D, Gaussians3D, RasterConfig
 from .mapper.tile_mapper import map_to_tiles, pad_to_tile
 from .rasterizer import rasterize, rasterize_with_tiles
