@@ -5,7 +5,7 @@ from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.concurrent import block_reduce_i32, warp_add_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
-from taichi.math import ivec2, vec2
+from taichi.math import ivec2, vec2, vec3
 
 
 @cache
@@ -46,7 +46,7 @@ def backward_kernel(config: RasterConfig,
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
       
       # saved from forward
-      image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
+      # image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
       image_alpha: ti.types.ndarray(ti.f32, ndim=2),       # H, W
       image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
 
@@ -57,10 +57,10 @@ def backward_kernel(config: RasterConfig,
       grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
       grad_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
 
-      point_split_heuristics: ti.types.ndarray(vec2, ndim=1),  # (M)
+      point_split_heuristics: ti.types.ndarray(vec3, ndim=1),  # (M)
   ):
 
-    camera_height, camera_width = image_feature.shape
+    camera_height, camera_width = image_alpha.shape
 
     # round up
     tiles_wide = (camera_width + tile_size - 1) // tile_size 
@@ -84,7 +84,7 @@ def backward_kernel(config: RasterConfig,
       tile_grad_feature = (ti.simt.block.SharedArray((block_area,), dtype=feature_vec)
         if ti.static(features_requires_grad) else None)
 
-      tile_split_heuristics = (ti.simt.block.SharedArray((block_area,), dtype=ti.math.vec2) 
+      tile_split_heuristics = (ti.simt.block.SharedArray((block_area,), dtype=vec3) 
         if ti.static(compute_split_heuristics) else None)
 
       
@@ -146,7 +146,7 @@ def backward_kernel(config: RasterConfig,
             tile_grad_feature[tile_idx] = feature_vec(0.0)
           
           if ti.static(compute_split_heuristics):
-            tile_split_heuristics[tile_idx] = vec2(0.0)
+            tile_split_heuristics[tile_idx] = vec3(0.0)
 
         ti.simt.block.sync()
 
@@ -165,7 +165,7 @@ def backward_kernel(config: RasterConfig,
 
           grad_point = Gaussian2D.vec(0.0)
           grad_feature = feature_vec(0.0)
-          contribution = vec2(0.0)
+          contribution = vec3(0.0)
 
           has_grad = False
           for i, offset in ti.static(pixel_tile):
@@ -202,11 +202,10 @@ def backward_kernel(config: RasterConfig,
 
 
               if ti.static(compute_split_heuristics):
-                contribution += vec2(
-                  # (((pixel_feature[i, :] - feature) * weight)**2).sum(),
-                  (feature_diff**2).sum() * weight,
-                  # ((alpha_grad_from_feature)**2).sum()
-                  ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
+                contribution += vec3(
+                  ti.abs(feature_diff ** 2).sum() * weight,
+                  ti.abs(alpha_grad * dp_dmean).sum() * weight,
+                  weight
                 )
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):

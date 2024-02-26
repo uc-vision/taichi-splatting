@@ -44,7 +44,7 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=torch.float32, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_split_heuristics = torch.zeros( (gaussians.shape[0], 2) if compute_split_heuristics else (0, 2), 
+      point_split_heuristics = torch.zeros( (gaussians.shape[0], 3) if compute_split_heuristics else (0, 3), 
                                  dtype=torch.float32, device=features.device)
 
       forward(gaussians, features, 
@@ -76,7 +76,8 @@ def render_function(config:RasterConfig,
 
         backward(gaussians, features, 
           ctx.tile_overlap_ranges, ctx.overlap_to_point,
-          image_feature, ctx.image_alpha, ctx.image_last_valid,
+          # image_feature, 
+          ctx.image_alpha, ctx.image_last_valid,
           grad_image_feature.contiguous(),
           grad_gaussians, grad_features, ctx.point_split_heuristics)
 
@@ -114,7 +115,7 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
       RasterOut - namedtuple with fields:
         image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
         image_weight: (H, W) torch tensor, where H, W are the image height and width
-        point_split_heuristics: (N, ) torch tensor, where N is the number of gaussians  
+        point_split_heuristics: (N, 3) torch tensor, where N is the number of gaussians  
   """
   _module_function = render_function(config, gaussians2d.requires_grad,
                                       features.requires_grad,
