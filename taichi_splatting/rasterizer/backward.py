@@ -22,7 +22,6 @@ def backward_kernel(config: RasterConfig,
   Gaussian2D, vec2 = lib.Gaussian2D, lib.vec2
   warp_add_vector = warp_add_vector_32 if dtype == ti.f32 else warp_add_vector_64
 
-
   feature_vec = ti.types.vector(feature_size, dtype=dtype)
   tile_size = config.tile_size
   tile_area = tile_size * tile_size
@@ -162,15 +161,8 @@ def backward_kernel(config: RasterConfig,
         ti.simt.block.sync()
 
         for in_group_idx in range(point_group_size):
-
-
           point_index = end_offset - (group_offset_base + in_group_idx)
 
-          # if not ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(point_index <= last_point_thread)):
-          #   continue
-
-          # Could factor this out and only compute grad if needed
-          # however, it does not seem to make any difference
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
 
           grad_point = Gaussian2D.vec(0.0)
