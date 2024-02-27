@@ -21,24 +21,10 @@ def check_sh_degree(sh_features):
 
 @cache
 def sh_function(degree:int=3, dimension:int=3, 
-                input_size:int=3,
                 dtype=torch.float32):
   
   ti_dtype = torch_taichi[dtype]
-
-  if input_size == 3:
-    point_vec = ti.types.vector(3, ti_dtype)
-
-    @ti.func 
-    def get_position(point:point_vec) -> point_vec:
-      return point
-    
-  elif input_size == 11:
-    point_vec = ti.types.vector(11, ti_dtype)
-
-    @ti.func 
-    def get_position(point:point_vec) -> point_vec:
-      return point[0:3]
+  point_vec = ti.types.vector(3, ti_dtype)
 
 
 
@@ -136,9 +122,8 @@ def sh_function(degree:int=3, dimension:int=3,
       
       for i in range(params.shape[0]):
           cam_pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
-          pos = get_position(points[i])
 
-          coeffs = rsh_cart(ti.math.normalize(cam_pos - pos))
+          coeffs = rsh_cart(ti.math.normalize(cam_pos -  points[i]))
           params_i = params[i]
 
           for d in ti.static(range(dimension)):
@@ -171,17 +156,17 @@ def sh_function(degree:int=3, dimension:int=3,
 
 
 @beartype
-def evaluate_sh_at(params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
-                gaussians:torch.Tensor,     # N, 11 or N, 3 (packed gaussian or xyz)
+def evaluate_sh_at(sh_params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
+                positions:torch.Tensor,     # N, 3 (packed gaussian or xyz)
                 camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
-    degree = check_sh_degree(params)
+    degree = check_sh_degree(sh_params)
 
     _module_function = sh_function(degree=degree, 
-                                   dimension=params.shape[1], 
-                                   input_size=gaussians.shape[1],
-                                   dtype=params.dtype)
-    return _module_function.apply(params.contiguous(), gaussians.contiguous(), camera_pos.contiguous())
+                                   dimension=sh_params.shape[1], 
+                                   input_size=positions.shape[1],
+                                   dtype=sh_params.dtype)
+    return _module_function.apply(sh_params.contiguous(), positions.contiguous(), camera_pos.contiguous())
 
 
 

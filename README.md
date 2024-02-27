@@ -78,7 +78,7 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 * Rasterizer forward pass and optimized backward pass
 
 * Spherical harmonics with autograd
-* Gradient tests for most parts (float64)
+* Gradient tests for most parts (float64) - including rasterizer!
 * Fit to image training example/test
 * Depth and depth-covariance rendering
 
