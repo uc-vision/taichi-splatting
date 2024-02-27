@@ -28,11 +28,12 @@ def make_inputs(seed, device=torch.device('cuda:0')):
     torch.random.manual_seed(seed)
 
     # n = torch.randint(1, 2, (1, ), device=device).item()
-    image_size = (16, 16)
-    config = RasterConfig(tile_size=8, pixel_stride=(1, 1))
+    image_size = (8, 8)
+    config = RasterConfig(tile_size=4, pixel_stride=(1, 1))
 
-    gaussians = random_2d_gaussians(10, image_size, scale_factor=10.0, alpha_range=(0.5, 1.0)).to(device=device)  
+    gaussians = random_2d_gaussians(1, image_size, scale_factor=0.1, alpha_range=(0.1, 0.5)).to(device=device)  
     gaussians2d = project_gaussians2d(gaussians)
+
     overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, encode_depth32(gaussians.depth), image_size, config)
     gaussians2d, colors = [x.to(dtype=torch.float64) for x in [gaussians2d, gaussians.feature]]
 
@@ -55,10 +56,10 @@ def test_rasterizer_gradcheck(iters = 100, device=torch.device('cuda:0')):
 
   for seed in tqdm(seeds, desc="rasterizer_gradcheck"):
       inputs, render = make_inputs(seed)
-      torch.autograd.gradcheck(render, inputs, eps=1e-6, rtol=1.0, check_grad_dtypes=True, check_undefined_grad=True)
+      torch.autograd.gradcheck(render, inputs, eps=1e-6, check_grad_dtypes=True, check_undefined_grad=True)
 
 def main():
-  torch.set_printoptions(precision=10)
+  torch.set_printoptions(precision=10, sci_mode=False)
 
   ti.init(arch=ti.cuda, default_fp=ti.f64)
   test_rasterizer_gradcheck()
