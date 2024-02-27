@@ -1,16 +1,14 @@
 
 
 import argparse
-from functools import partial
 
 from tqdm import tqdm
 from taichi_splatting.data_types import RasterConfig
-from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import  project_gaussians2d
 from taichi_splatting.rasterizer.function import rasterize_with_tiles
 from taichi_splatting.tests.random_data import random_2d_gaussians
 
-from taichi_splatting.mapper.tile_mapper import map_to_tiles
+import numpy as np
 
 import torch
 import taichi as ti
@@ -21,6 +19,9 @@ def display_image(name, image):
     image = (image.detach().clamp(0, 1) * 255).to(torch.uint8)
     image = image.cpu().numpy()
 
+    if image.shape[-1] == 2:
+      image = np.concatenate([image, np.zeros_like(image[..., :1])], axis=-1)
+
     cv2.imshow(name, image)
     cv2.waitKey(1)
 
@@ -29,10 +30,12 @@ def make_inputs(seed, device=torch.device('cuda:0')):
     torch.random.manual_seed(seed)
 
     n = torch.randint(1, 50, (1,)).item()
+    channels = torch.randint(1, 4, (1,)).item()
+
     image_size = (8, 8)
     config = RasterConfig(tile_size=8, pixel_stride=(1, 1))
 
-    gaussians = random_2d_gaussians(n, image_size, num_channels=3, scale_factor=2.0, alpha_range=(0.4, 0.8)).to(device=device)  
+    gaussians = random_2d_gaussians(n, image_size, num_channels=channels, scale_factor=1.0, alpha_range=(0.2, 0.8)).to(device=device)  
     gaussians2d = project_gaussians2d(gaussians)
     
     overlap_to_point = torch.arange(0, n, device=device, dtype=torch.int32)
@@ -46,8 +49,8 @@ def make_inputs(seed, device=torch.device('cuda:0')):
                      image_size=image_size, config=config).image
     
     return (gaussians2d[:, 0:2].requires_grad_(True), 
-            gaussians2d[:, 2:5].requires_grad_(False), 
-            gaussians2d[:, 5:6].requires_grad_(False), 
+            gaussians2d[:, 2:5].requires_grad_(True), 
+            gaussians2d[:, 5:6].requires_grad_(True), 
             colors.requires_grad_(False)), rasterize
 
 
