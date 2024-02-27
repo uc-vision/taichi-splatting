@@ -89,7 +89,6 @@ class ParameterClass():
     return self.tensors.batch_size
 
 
-    
   def _updated_state(self, f:Callable):
     def modify_state(state):
       return {k : f(v) if torch.is_tensor(v) and v.dim() > 0 else state[k]
