@@ -48,6 +48,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
       pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, (1, 1), tiles_wide)
+      pixelf = ti.cast(pixel, ti.f32) + 0.5
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
       T_i = 1.0
@@ -95,7 +96,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
             break
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          gaussian_alpha = conic_pdf(ti.cast(pixel, ti.f32) + 0.5, uv, uv_conic)
+          gaussian_alpha = conic_pdf(pixelf, uv, uv_conic)
           alpha = point_alpha * gaussian_alpha
 
             
