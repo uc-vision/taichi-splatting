@@ -3,14 +3,17 @@ from functools import cache
 import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
-from taichi_splatting.taichi_lib.f32 import conic_pdf, Gaussian2D
+from taichi_splatting.taichi_lib import get_library
 
 
 
 @cache
-def forward_kernel(config: RasterConfig, feature_size: int):
+def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
-  feature_vec = ti.types.vector(feature_size, dtype=ti.f32)
+  lib = get_library(dtype)
+  Gaussian2D = lib.Gaussian2D
+
+  feature_vec = ti.types.vector(feature_size, dtype=dtype)
   tile_size = config.tile_size
   tile_area = tile_size * tile_size
 
@@ -28,7 +31,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
       # outputs
       image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
       # needed for backward
-      image_alpha: ti.types.ndarray(ti.f32, ndim=2),       # H, W
+      image_alpha: ti.types.ndarray(dtype, ndim=2),       # H, W
       image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
   ):
 
@@ -48,10 +51,10 @@ def forward_kernel(config: RasterConfig, feature_size: int):
     
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
       pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, (1, 1), tiles_wide)
-      pixelf = ti.cast(pixel, ti.f32) + 0.5
+      pixelf = ti.cast(pixel, dtype) + 0.5
 
       # The initial value of accumulated alpha (initial value of accumulated multiplication)
-      T_i = 1.0
+      T_i = dtype(1.0)
       accum_feature = feature_vec(0.)
 
       # open the shared memory
@@ -96,7 +99,7 @@ def forward_kernel(config: RasterConfig, feature_size: int):
             break
 
           uv, uv_conic, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
-          gaussian_alpha = conic_pdf(pixelf, uv, uv_conic)
+          gaussian_alpha = lib.conic_pdf(pixelf, uv, uv_conic)
           alpha = point_alpha * gaussian_alpha
 
             

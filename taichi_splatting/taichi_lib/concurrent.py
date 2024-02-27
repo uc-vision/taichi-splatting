@@ -78,12 +78,17 @@ def add(a, b):
 
 
 @ti.func
-def warp_add_vector(dest:ti.template(), val: ti.template()):
+def warp_add_vector_32(dest:ti.template(), val: ti.template()):
   if warp_reduce_vector(val, add):
     # ti.atomic_add(dest, val) 
     # taichi spits out a LLVM assertion when using shared memory
     atomic_add_vector(dest, val)
 
+
+@ti.func
+def warp_add_vector_64(dest:ti.template(), val: ti.template()):
+  # placeholder for testing 64 bit functions only
+  return atomic_add_vector(dest, val)
 
 
 @ti.func

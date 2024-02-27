@@ -11,7 +11,7 @@ from beartype.typing import Tuple, NamedTuple
 
 import torch
 from beartype import beartype
-
+from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 RasterOut = NamedTuple('RasterOut', 
     [('image', torch.Tensor), 
@@ -23,13 +23,15 @@ def render_function(config:RasterConfig,
                     points_requires_grad:bool,
                     features_requires_grad:bool, 
                     compute_split_heuristics:bool,
-                    feature_size:int):
+                    feature_size:int,
+                    dtype=torch.float32):
   
+
     
-  forward = forward_kernel(config, feature_size=feature_size)
+  forward = forward_kernel(config, feature_size=feature_size, dtype=torch_taichi[dtype])
   backward = backward_kernel(config, points_requires_grad,
                              features_requires_grad, 
-                             compute_split_heuristics, feature_size)
+                             compute_split_heuristics, feature_size, dtype=torch_taichi[dtype])
 
   class _module_function(torch.autograd.Function):
     @staticmethod
@@ -38,14 +40,15 @@ def render_function(config:RasterConfig,
                 image_size: Tuple[Integral, Integral]
                 ) -> torch.Tensor:
         
+
       shape = (image_size[1], image_size[0])
       image_feature = torch.empty((*shape, features.shape[1]),
-                                  dtype=torch.float32, device=features.device)
-      image_alpha = torch.empty(shape, dtype=torch.float32, device=features.device)
+                                  dtype=dtype, device=features.device)
+      image_alpha = torch.empty(shape, dtype=dtype, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
       point_split_heuristics = torch.zeros( (gaussians.shape[0], 2) if compute_split_heuristics else (0, 2), 
-                                 dtype=torch.float32, device=features.device)
+                                 dtype=dtype, device=features.device)
 
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,
@@ -119,7 +122,8 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
   _module_function = render_function(config, gaussians2d.requires_grad,
                                       features.requires_grad,
                                       compute_split_heuristics, 
-                                      features.shape[1])
+                                      features.shape[1],
+                                      dtype=gaussians2d.dtype)
 
   image, image_weight, point_split_heuristics = _module_function.apply(gaussians2d, features, 
           overlap_to_point, tile_overlap_ranges, 
