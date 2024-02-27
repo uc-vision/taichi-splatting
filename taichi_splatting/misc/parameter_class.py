@@ -1,5 +1,4 @@
 import copy
-from beartype.typing import Dict
 from beartype import beartype
 from beartype.typing import Callable,  Dict, Optional
 from tensordict import TensorDict
@@ -26,13 +25,13 @@ class ParameterClass():
 
   def __init__(self, tensors:TensorDict, 
                learning_rates:Dict[str, float], 
-               param_state:Optional[Dict, torch.Tensor]=None):
+               param_state:Optional[Dict[str, torch.Tensor]]=None):
 
     self.tensors = as_parameters(tensors, learning_rates.keys())  
     self.learning_rates = learning_rates
 
     param_groups = [
-      dict(params=[param_dict[name]], lr=lr * base_lr, name=name)
+      dict(params=[self.tensors[name]], lr=lr, name=name)
         for name, lr in learning_rates.items()
     ]
 
