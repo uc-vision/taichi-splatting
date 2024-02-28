@@ -84,6 +84,7 @@ def render_gaussians(
     depth_range=(camera_params.near_plane, camera_params.far_plane),
     use_depth16 = use_depth16)
   
+  
   if render_depth:
     features = torch.cat([depthvars, features], dim=1)
     

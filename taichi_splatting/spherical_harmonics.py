@@ -164,7 +164,6 @@ def evaluate_sh_at(sh_params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3
 
     _module_function = sh_function(degree=degree, 
                                    dimension=sh_params.shape[1], 
-                                   input_size=positions.shape[1],
                                    dtype=sh_params.dtype)
     return _module_function.apply(sh_params.contiguous(), positions.contiguous(), camera_pos.contiguous())
 
