@@ -79,6 +79,13 @@ class ParameterClass():
       self.learning_rates, 
       self._updated_state(lambda x: x.to(device))
     )
+  
+  def set_learning_rate(self, **kwargs):
+    for k, v in kwargs.items():
+      self.learning_rates[k] = v 
+      for param in self.optimizer.param_groups:
+        if param['name'] == k:
+          param['lr'] = v
 
   def to_dict(self):
     return self.tensors.to_dict()
