@@ -37,14 +37,16 @@ def bench_sh(args):
   with torch.no_grad():
     sh_features = torch.randn(args.n, 3, (args.degree+1)**2, device=args.device).to(args.device)
     points = torch.randn(args.n, 3, device=args.device).to(args.device)
+
+    indexes = torch.arange(args.n, device=args.device)
     
     camera_pos = torch.zeros(3, device=args.device)
 
-    forward = partial(spherical_harmonics.evaluate_sh_at, sh_features, points, camera_pos)
+    forward = partial(spherical_harmonics.evaluate_sh_at, sh_features, points, indexes, camera_pos)
     benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
   def backward():
-    colors = spherical_harmonics.evaluate_sh_at(sh_features, points, camera_pos)
+    colors = spherical_harmonics.evaluate_sh_at(sh_features, points, indexes, camera_pos)
     loss = colors.sum()
     loss.backward()
 
