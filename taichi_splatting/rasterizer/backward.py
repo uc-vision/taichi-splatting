@@ -2,7 +2,7 @@ from functools import cache
 import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
-from taichi_splatting.taichi_lib.concurrent import block_reduce_i32, warp_add_vector
+from taichi_splatting.taichi_lib.concurrent import WARP_SIZE, block_reduce_i32, warp_add_vector
 
 from taichi_splatting.taichi_lib.f32 import conic_pdf_with_grad, Gaussian2D
 from taichi.math import ivec2, vec2
@@ -23,6 +23,8 @@ def backward_kernel(config: RasterConfig,
   thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
   block_area = tile_area // thread_pixels
   
+  assert block_area >= WARP_SIZE, \
+    f"pixel_stride {config.pixel_stride} and tile_size, {config.tile_size} must allow at least one warp sized ({WARP_SIZE}) tile"
 
   # each thread is responsible for a small tile of pixels
   pixel_tile = tuple([ (i, 

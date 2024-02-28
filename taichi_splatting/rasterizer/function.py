@@ -1,6 +1,7 @@
 
 from functools import cache
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
+from taichi_splatting.taichi_lib.concurrent import WARP_SIZE
 
 
 from .forward import RasterConfig, forward_kernel
@@ -30,6 +31,13 @@ def render_function(config:RasterConfig,
   backward = backward_kernel(config, points_requires_grad,
                              features_requires_grad, 
                              compute_split_heuristics, feature_size)
+  
+
+  tile_area = config.tile_size * config.tile_size
+  pixel_area = config.pixel_stride[0] * config.pixel_stride[1]
+
+
+  
 
   class _module_function(torch.autograd.Function):
     @staticmethod

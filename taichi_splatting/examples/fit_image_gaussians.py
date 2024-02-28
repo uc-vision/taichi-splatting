@@ -27,6 +27,7 @@ def parse_args():
   parser.add_argument('image_file', type=str)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--tile_size', type=int, default=16)
+  parser.add_argument('--pixel_tile', type=str, help='Pixel tile for backward pass default "2,2"')
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
@@ -41,7 +42,12 @@ def parse_args():
   parser.add_argument('--profile', action='store_true')
   parser.add_argument('--epoch', type=int, default=20, help='Number of iterations per measurement/profiling')
   
-  return parser.parse_args()
+  args = parser.parse_args()
+
+  if args.pixel_tile:
+    args.pixel_tile = tuple(map(int, args.pixel_tile.split(',')))
+
+  return args
 
 
 def display_image(name, image):
@@ -133,7 +139,8 @@ def main():
   print(f'attributes - trainable: {trainable} other: {keys - trainable}')
 
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
-  config = RasterConfig(tile_size=cmd_args.tile_size, gaussian_scale=3.0)
+  
+  config = RasterConfig(tile_size=cmd_args.tile_size, gaussian_scale=3.0, pixel_stride=cmd_args.pixel_tile or (2, 2))
 
 
 
