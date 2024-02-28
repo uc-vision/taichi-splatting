@@ -48,7 +48,7 @@ def backward_kernel(config: RasterConfig,
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
       
       # saved from forward
-      image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
+      # image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
       image_alpha: ti.types.ndarray(ti.f32, ndim=2),       # H, W
       image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
 
@@ -62,7 +62,7 @@ def backward_kernel(config: RasterConfig,
       point_split_heuristics: ti.types.ndarray(vec2, ndim=1),  # (M)
   ):
 
-    camera_height, camera_width = image_feature.shape
+    camera_height, camera_width = image_alpha.shape
 
     # round up
     tiles_wide = (camera_width + tile_size - 1) // tile_size 

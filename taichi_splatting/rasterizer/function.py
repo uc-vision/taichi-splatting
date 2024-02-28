@@ -84,7 +84,8 @@ def render_function(config:RasterConfig,
 
         backward(gaussians, features, 
           ctx.tile_overlap_ranges, ctx.overlap_to_point,
-          image_feature, ctx.image_alpha, ctx.image_last_valid,
+          # image_feature, 
+          ctx.image_alpha, ctx.image_last_valid,
           grad_image_feature.contiguous(),
           grad_gaussians, grad_features, ctx.point_split_heuristics)
 
