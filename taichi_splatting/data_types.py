@@ -53,6 +53,9 @@ class Gaussians3D():
 
   def packed(self):
     return torch.cat([self.position, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
+  
+  def shape_tensors(self):
+    return (self.position, self.log_scaling, self.rotation, self.alpha_logit)
 
   @property
   def scale(self):
@@ -61,6 +64,14 @@ class Gaussians3D():
   @property
   def alpha(self):
     return torch.sigmoid(self.alpha_logit)
+  
+  def requires_grad_(self, requires_grad):
+    self.position.requires_grad_(requires_grad)
+    self.log_scaling.requires_grad_(requires_grad)
+    self.rotation.requires_grad_(requires_grad)
+    self.alpha_logit.requires_grad_(requires_grad)
+    self.feature.requires_grad_(requires_grad)
+    return self
 
 @tensorclass
 class Gaussians2D():

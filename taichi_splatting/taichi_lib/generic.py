@@ -10,7 +10,7 @@ def make_library(dtype=ti.f32):
   for the same code. Primarily for enabling gradient (gradcheck) testing using f64.
   """
 
-  
+  vec1 = ti.types.vector(1, dtype)
   vec2 = ti.types.vector(2, dtype)
   vec3 = ti.types.vector(3, dtype)
   vec4 = ti.types.vector(4, dtype)
@@ -102,6 +102,8 @@ def make_library(dtype=ti.f32):
   def unpack_activate_g3d(vec:vec_g3d):
     position, log_scaling, rotation, alpha_logit = unpack_vec_g3d(vec)
     return position, ti.exp(log_scaling), ti.math.normalize(rotation), sigmoid(alpha_logit)
+  
+
 
 
   @ti.func

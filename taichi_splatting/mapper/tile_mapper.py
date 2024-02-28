@@ -31,7 +31,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
 
     @ti.func
     def make_sort_key(depth, tile_id):
-        assert depth >= 0, f"depth {depth} cannot be negative as i32!"
+        assert depth >= 0, f"depth {depth} cannot be negative for int 32 key!"
 
         return ti.cast(depth, ti.i64) | (ti.cast(tile_id, ti.i64) << 32)
   

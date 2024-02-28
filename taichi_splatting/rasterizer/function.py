@@ -1,6 +1,7 @@
 
 from functools import cache
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
+from taichi_splatting.taichi_lib.concurrent import WARP_SIZE
 
 
 from .forward import RasterConfig, forward_kernel
@@ -63,14 +64,14 @@ def render_function(config:RasterConfig,
       ctx.point_split_heuristics = point_split_heuristics
 
       ctx.mark_non_differentiable(image_alpha, image_last_valid, point_split_heuristics, overlap_to_point, tile_overlap_ranges)
-      ctx.save_for_backward(gaussians, features, image_feature)
+      ctx.save_for_backward(gaussians, features)
             
       return image_feature, image_alpha, point_split_heuristics
 
     @staticmethod
     def backward(ctx, grad_image_feature:torch.Tensor, 
                  grad_alpha:torch.Tensor, grad_point_split_heuristics:torch.Tensor):
-        gaussians, features, image_feature = ctx.saved_tensors
+        gaussians, features = ctx.saved_tensors
 
         grad_gaussians = torch.zeros_like(gaussians)
         grad_features = torch.zeros_like(features)
@@ -79,7 +80,7 @@ def render_function(config:RasterConfig,
 
         backward(gaussians, features, 
           ctx.tile_overlap_ranges, ctx.overlap_to_point,
-          image_feature, ctx.image_alpha, ctx.image_last_valid,
+          ctx.image_alpha, ctx.image_last_valid,
           grad_image_feature.contiguous(),
           grad_gaussians, grad_features, ctx.point_split_heuristics)
 

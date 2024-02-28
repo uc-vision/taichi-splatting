@@ -38,18 +38,18 @@ def bench_projection(args):
   with torch.no_grad():
     camera_params = random_camera()
     gaussians = random_3d_gaussians(args.n, camera_params)
+    indexes = torch.arange(args.n, device=args.device)
 
     gaussians, camera_params = gaussians.to(args.device), camera_params.to(args.device)
-    packed = gaussians.packed()
 
-    project_forward = partial(projection.apply, packed, camera_params.T_image_camera, camera_params.T_camera_world)
+    project_forward = partial(projection.project_to_image, gaussians, indexes, camera_params.T_image_camera, camera_params.T_camera_world)
     benchmarked('forward', project_forward, profile=args.profile, iters=args.iters)  
 
 
-  packed.requires_grad_(True)
+  gaussians.requires_grad_(True)
 
   def project_backward():
-    points, depth = projection.apply(packed, camera_params.T_image_camera, camera_params.T_camera_world)
+    points, depth = projection.project_to_image(gaussians, indexes, camera_params.T_image_camera, camera_params.T_camera_world)
     loss = points.sum() + depth.sum()
     loss.backward()
 
@@ -57,7 +57,7 @@ def bench_projection(args):
   benchmarked('backward (gaussians)', project_backward, profile=args.profile, iters=args.iters)  
 
 
-  packed.requires_grad_(False)    
+  gaussians.requires_grad_(False)
   camera_params.T_camera_world.requires_grad_(True)
   benchmarked('backward (extrinsics)', project_backward, profile=args.profile, iters=args.iters)  
 
@@ -65,7 +65,7 @@ def bench_projection(args):
   camera_params.T_image_camera.requires_grad_(True)
   benchmarked('backward (intrinsics)', project_backward, profile=args.profile, iters=args.iters)  
 
-  packed.requires_grad_(True)    
+  gaussians.requires_grad_(True)
   camera_params.T_camera_world.requires_grad_(True)
   camera_params.T_image_camera.requires_grad_(True)
   benchmarked('backward (everything)', project_backward, profile=args.profile, iters=args.iters)  

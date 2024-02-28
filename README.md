@@ -1,6 +1,6 @@
 # Taichi Splatting
 
-Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python library. 
+Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python library. Currently very usable but in active development, so likely will break with new versions! 
 
 This work is originally derived off [Taichi 3D Gaussian Splatting](https://github.com/wanmeihuali/taichi_3d_gaussian_splatting), with significant re-organisation and changes.
 
@@ -78,7 +78,7 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 * Rasterizer forward pass and optimized backward pass
 
 * Spherical harmonics with autograd
-* Gradient tests for most parts (float64)
+* Gradient tests for most parts (float64) - including rasterizer!
 * Fit to image training example/test
 * Depth and depth-covariance rendering
 

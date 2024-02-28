@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from beartype.typing import Optional
 import torch
 
-from taichi_splatting.data_types import check_packed3d
+from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.misc.depth_variance import compute_depth_variance
 from taichi_splatting.misc.encode_depth import encode_depth
 from taichi_splatting.misc.radius import compute_radius
@@ -41,8 +41,7 @@ class Rendering:
 
 
 def render_gaussians(
-  packed_gaussians: torch.Tensor,
-  features: torch.Tensor,
+  gaussians: Gaussians3D,
   camera_params: CameraParams, 
   config:RasterConfig = RasterConfig(),      
   use_sh:bool = False,      
@@ -71,23 +70,24 @@ def render_gaussians(
     
   """
 
-  check_packed3d(packed_gaussians)      
 
-  indexes = gaussians_in_view(packed_gaussians, camera_params, config.tile_size, config.margin_tiles)
-  features, gaussians = features[indexes], packed_gaussians[indexes]
+  indexes = gaussians_in_view(gaussians.position, camera_params, config.tile_size, config.margin_tiles)
+  # view_gaussians = gaussians[indexes] 
 
   if use_sh:
-    features = evaluate_sh_at(features, gaussians.detach(), camera_params.camera_position)
+    features = evaluate_sh_at(gaussians.feature, gaussians.position.detach(), indexes, camera_params.camera_position)
   else:
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
-  gaussians2d, depthvars = project_to_image(gaussians, camera_params)
+  gaussians2d, depthvars = project_to_image(gaussians, indexes, camera_params)
   depth_order = encode_depth(depthvars, 
     depth_range=(camera_params.near_plane, camera_params.far_plane),
     use_depth16 = use_depth16)
   
+  
   if render_depth:
     features = torch.cat([depthvars, features], dim=1)
+
     
   raster = rasterize(gaussians2d, depth_order, features,
     image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)
@@ -123,12 +123,12 @@ def viewspace_gradient(gaussians2d: torch.Tensor):
 
 
 def gaussians_in_view(
-  packed_gaussians: torch.Tensor,  # packed gaussians
+  positions: torch.Tensor, 
   camera_params: CameraParams,
   tile_size: int = 16,
   margin_tiles: int = 3
 ):
-  point_mask = frustum_culling(packed_gaussians,
+  point_mask = frustum_culling(positions,
     camera_params=camera_params, margin_pixels=margin_tiles * tile_size
   )
 

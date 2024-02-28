@@ -1,9 +1,13 @@
 from beartype.typing import Tuple
+
 import torch
+import torch.nn.functional as F
 
 from taichi_splatting.perspective import CameraParams
 from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.torch_ops.transforms import make_homog, quat_to_mat, transform33, transform44
+
+
 
 def inverse_sigmoid(x:torch.Tensor):
   return torch.log(x / (1 - x))
@@ -71,11 +75,16 @@ def project_perspective_gaussian(
 def cov_to_conic(cov: torch.Tensor) -> torch.Tensor:
   """ Convert covariance matrix to conic form
   """
-  inv_cov = torch.inverse(cov)
-  return torch.stack(
-     [inv_cov[..., 0, 0], 
-      inv_cov[..., 0, 1], 
-      inv_cov[..., 1, 1]], dim=-1)
+  x, y, z = cov[..., 0, 0], cov[..., 0, 1], cov[..., 1, 1]
+  inv_det = 1 / (x * z - y * y)
+  return torch.stack([inv_det * z, -inv_det * y, inv_det * x], -1)
+
+
+  # inv_cov = torch.inverse(cov)
+  # return torch.stack(
+  #    [inv_cov[..., 0, 0], 
+  #     inv_cov[..., 0, 1], 
+  #     inv_cov[..., 1, 1]], dim=-1)
 
 
 def unpack_activate(vec: torch.Tensor
@@ -92,27 +101,32 @@ def unpack_activate(vec: torch.Tensor
   )
 
 
-def apply(gaussians, T_image_camera, T_camera_world, blur_cov=0.3):
-  position, scale, rotation, alpha = unpack_activate(gaussians)
+def apply(position, log_scaling, rotation, alpha_logit, indexes,
+           T_image_camera, T_camera_world, blur_cov=0.3):
+  
+  position, log_scaling, rotation, alpha_logit = [
+     x[indexes] for x in (position, log_scaling, rotation, alpha_logit)] 
 
   T_camera_world = T_camera_world.squeeze(0)
   T_image_camera = T_image_camera.squeeze(0)
 
   point_in_camera = transform44(T_camera_world,  make_homog(position))[:, :3]
   uv = transform33(T_image_camera, point_in_camera) / point_in_camera[:, 2:3]
-  cov_in_camera = covariance_in_camera(T_camera_world, rotation, scale)
+
+
+  cov_in_camera = covariance_in_camera(T_camera_world, F.normalize(rotation, dim=-1), log_scaling.exp())
   uv_cov = project_perspective_gaussian(T_image_camera, point_in_camera, cov_in_camera)
 
   uv_cov += torch.eye(2, device=uv_cov.device, dtype=uv_cov.dtype) * blur_cov
 
-  points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha], axis=-1)
+  points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha_logit.sigmoid()], axis=-1)
   depths = torch.stack([point_in_camera[:, 2], cov_in_camera[:, 2, 2], point_in_camera[:, 2] ** 2], axis=-1)
 
   return points, depths.contiguous()
 
+
 def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
   ) -> Tuple[torch.Tensor, torch.Tensor]:  
 
-  vec = gaussians.packed()
-  return apply(vec, 
+  return apply(*gaussians.shape_tensors(),
           camera_params.T_image_camera, camera_params.T_camera_world)

@@ -2,7 +2,7 @@ from functools import cache
 import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
-from taichi_splatting.taichi_lib.concurrent import block_reduce_i32, warp_add_vector_32, warp_add_vector_64
+from taichi_splatting.taichi_lib.concurrent import WARP_SIZE, block_reduce_i32, warp_add_vector_32, warp_add_vector_64
 
 from taichi_splatting.taichi_lib import get_library
 from taichi.math import ivec2
@@ -29,6 +29,8 @@ def backward_kernel(config: RasterConfig,
   thread_pixels = config.pixel_stride[0] * config.pixel_stride[1]
   block_area = tile_area // thread_pixels
   
+  assert block_area >= WARP_SIZE, \
+    f"pixel_stride {config.pixel_stride} and tile_size, {config.tile_size} must allow at least one warp sized ({WARP_SIZE}) tile"
 
   # each thread is responsible for a small tile of pixels
   pixel_tile = tuple([ (i, 
@@ -52,7 +54,6 @@ def backward_kernel(config: RasterConfig,
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
       
       # saved from forward
-      image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
       image_alpha: ti.types.ndarray(dtype, ndim=2),       # H, W
       image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
 
@@ -60,13 +61,13 @@ def backward_kernel(config: RasterConfig,
       grad_image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
 
       # output gradients
-      grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
+      grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, C)
       grad_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
 
       point_split_heuristics: ti.types.ndarray(vec2, ndim=1),  # (M)
   ):
 
-    camera_height, camera_width = image_feature.shape
+    camera_height, camera_width = image_alpha.shape
 
     # round up
     tiles_wide = (camera_width + tile_size - 1) // tile_size 

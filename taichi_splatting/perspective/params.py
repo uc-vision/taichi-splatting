@@ -20,8 +20,12 @@ class CameraParams:
     T_image_camera = torch.eye(4, 
       device=self.T_image_camera.device, dtype=self.T_image_camera.dtype)
     T_image_camera[0:3, 0:3] = self.T_image_camera
-
     return T_image_camera @ self.T_camera_world
+  
+  def requires_grad_(self, requires_grad: bool):
+    self.T_image_camera.requires_grad_(requires_grad)
+    self.T_camera_world.requires_grad_(requires_grad)
+    return self
 
   near_plane: float
   far_plane: float

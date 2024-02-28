@@ -17,14 +17,17 @@ def random_inputs(max_dim=3, max_deg=3, max_n=100, device='cpu', dtype=torch.flo
     torch.random.manual_seed(seed)
     dimension = torch.randint(1, max_dim + 1, (1,)).item()
     degree = torch.randint(1, max_deg + 1, (1, )).item()
-    n = torch.randint(1, max_n + 1, (1,) ).item()
+    n = torch.randint(1, max_n + 2, (1,) ).item()
 
     params = torch.rand(n, dimension, (degree + 1)**2, device=device, dtype=dtype)
 
     points = torch.randn(n, 3, device=device, dtype=dtype)
     camera_pos = torch.randn(3, device=device, dtype=dtype)
 
-    return (params, points, camera_pos)
+    indexes = torch.randint(0, n, (n  // 2, ), device=device)
+
+    return (params.requires_grad_(True), points.requires_grad_(True), 
+            indexes, camera_pos.requires_grad_(True))
   return f
 
 def test_sh(iters = 100, device='cpu'):
@@ -41,7 +44,7 @@ def test_sh(iters = 100, device='cpu'):
 
 
 def gradcheck(func, args, **kwargs):
-  args = [x.requires_grad_(True) for x in args]
+  args = [x.detach().requires_grad_(x.requires_grad) for x in args]
   torch.autograd.gradcheck(func, args, **kwargs)
 
 def test_sh_gradcheck(iters = 100, device='cpu'):
