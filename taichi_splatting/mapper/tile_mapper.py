@@ -31,6 +31,8 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
 
     @ti.func
     def make_sort_key(depth, tile_id):
+        assert depth >= 0, f"depth {depth} cannot be negative as i32!"
+
         return ti.cast(depth, ti.i64) | (ti.cast(tile_id, ti.i64) << 32)
   
     @ti.func
@@ -129,7 +131,6 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
       key_idx = cumulative_overlap_counts[idx]
       depth = depths[idx]
 
-      assert depth >= 0, f"depth {depth} cannot be negative!"
 
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
         if query.test_tile(tile_uv):
