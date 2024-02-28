@@ -27,7 +27,8 @@ def random_inputs(device='cpu', max_points=1000, dtype=torch.float32) -> Callabl
     gaussians = random_3d_gaussians(n=n, camera_params=camera)
     check_finite(gaussians, 'gaussians')
 
-    return (x.to(device=device, dtype=dtype) for x in [gaussians, camera])
+    return (x.to(device=device, dtype=dtype).requires_grad_(True)
+             for x in [gaussians, camera])
   return f
 
 
@@ -51,8 +52,8 @@ def compare_outputs(out1, out2):
 
 def compare_grads(grad1, grad2):
   
-  position1, log_scaling1, rotation1, alpha_logit1, image_camera1, camera_world1 = grad1
-  position2, log_scaling2, rotation2, alpha_logit2, image_camera2, camera_world2 = grad2
+  position1, log_scaling1, rotation1, alpha_logit1, _, image_camera1, camera_world1 = grad1
+  position2, log_scaling2, rotation2, alpha_logit2, _, image_camera2, camera_world2 = grad2
 
   compare("position grad", position1, position2)
   compare("log_scaling grad", log_scaling1, log_scaling2)
@@ -68,6 +69,7 @@ def test_projection(iters = 100, dtype=torch.float64):
   for i in tqdm(range(iters)):
     gaussians, camera = gen_inputs(i)
     inputs = (*gaussians.shape_tensors(), 
+      torch.arange(gaussians.batch_size[0], device=gaussians.device), 
       camera.T_image_camera, camera.T_camera_world)
 
     out1, grad1 = eval_with_grad(ti_proj.apply, *inputs)
@@ -87,10 +89,10 @@ def test_projection_grad(iters = 100):
 
   for i in tqdm(range(iters), desc="projection_gradcheck"):
       gaussians, camera = gen_inputs(i)
+      indexes =  torch.arange(gaussians.batch_size[0], device=gaussians.device)
 
-
-      inputs = [x.requires_grad_(True) for x in (*gaussians.shape_tensors(), 
-        camera.T_image_camera, camera.T_camera_world)]
+      inputs = [*gaussians.shape_tensors(), indexes, 
+                camera.T_image_camera, camera.T_camera_world]
       
       try:
         torch.autograd.gradcheck(ti_proj.apply, inputs)

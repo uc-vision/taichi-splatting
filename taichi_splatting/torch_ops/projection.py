@@ -101,7 +101,11 @@ def unpack_activate(vec: torch.Tensor
   )
 
 
-def apply(position, log_scaling, rotation, alpha_logit, T_image_camera, T_camera_world, blur_cov=0.3):
+def apply(position, log_scaling, rotation, alpha_logit, indexes,
+           T_image_camera, T_camera_world, blur_cov=0.3):
+  
+  position, log_scaling, rotation, alpha_logit = [
+     x[indexes] for x in (position, log_scaling, rotation, alpha_logit)] 
 
   T_camera_world = T_camera_world.squeeze(0)
   T_image_camera = T_image_camera.squeeze(0)
