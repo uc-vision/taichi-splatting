@@ -72,14 +72,14 @@ def render_gaussians(
 
 
   indexes = gaussians_in_view(gaussians.position, camera_params, config.tile_size, config.margin_tiles)
-  gaussians = gaussians[indexes] 
+  # view_gaussians = gaussians[indexes] 
 
   if use_sh:
-    features = evaluate_sh_at(gaussians.feature, gaussians.position.detach(), camera_params.camera_position)
+    features = evaluate_sh_at(gaussians.feature, gaussians.position.detach(), indexes, camera_params.camera_position)
   else:
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
-  gaussians2d, depthvars = project_to_image(gaussians, camera_params)
+  gaussians2d, depthvars = project_to_image(gaussians, indexes, camera_params)
   depth_order = encode_depth(depthvars, 
     depth_range=(camera_params.near_plane, camera_params.far_plane),
     use_depth16 = use_depth16)
@@ -87,6 +87,7 @@ def render_gaussians(
   
   if render_depth:
     features = torch.cat([depthvars, features], dim=1)
+
     
   raster = rasterize(gaussians2d, depth_order, features,
     image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)

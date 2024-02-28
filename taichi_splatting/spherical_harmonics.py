@@ -117,14 +117,16 @@ def sh_function(degree:int=3, dimension:int=3,
   @ti.kernel    
   def evaluate_sh_at_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
                           points:ti.types.ndarray(point_vec, ndim=1), 
+                          indexes :ti.types.ndarray(ti.i64, ndim=1),
                           camera_pos:ti.types.ndarray(ti_dtype, ndim=1),
                           out:ti.types.ndarray(vec, ndim=1)):
       
-      for i in range(params.shape[0]):
+      for i in range(indexes.shape[0]):
           cam_pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
+          idx = indexes[i]
 
-          coeffs = rsh_cart(ti.math.normalize(cam_pos -  points[i]))
-          params_i = params[i]
+          coeffs = rsh_cart(ti.math.normalize(cam_pos -  points[idx]))
+          params_i = params[idx]
 
           for d in ti.static(range(dimension)):
               out[i][d] = ti.math.clamp(
@@ -134,12 +136,16 @@ def sh_function(degree:int=3, dimension:int=3,
 
   class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, params:torch.Tensor, points:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
+    def forward(ctx, params:torch.Tensor, points:torch.Tensor, indexes:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
-        out = torch.empty(points.shape[0], params.shape[1], dtype=dtype, device=params.device)
-        evaluate_sh_at_kernel(params, points, camera_pos, out)
+        out = torch.empty(indexes.shape[0], params.shape[1], dtype=dtype, device=params.device)
+        evaluate_sh_at_kernel(params, points, indexes, camera_pos, out)
 
         ctx.save_for_backward(params, points, camera_pos, out)
+        
+        ctx.indexes = indexes
+        ctx.mark_non_differentiable(indexes)
+
         return out
 
     @staticmethod
@@ -148,16 +154,18 @@ def sh_function(degree:int=3, dimension:int=3,
 
         with restore_grad(params, points, camera_pos, out):
           out.grad = doutput.contiguous()
-          evaluate_sh_at_kernel.grad(params, points, camera_pos, out)
+          evaluate_sh_at_kernel.grad(params, points, ctx.indexes, camera_pos, out)
 
-          return params.grad, points.grad, camera_pos.grad
+          return params.grad, points.grad, None, camera_pos.grad
         
   return _module_function
 
 
 @beartype
-def evaluate_sh_at(sh_params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3, for RGB)
-                positions:torch.Tensor,     # N, 3 (packed gaussian or xyz)
+def evaluate_sh_at(sh_params:torch.Tensor,  # M, K (degree + 1)^2,  (usually K=3, for RGB)
+                positions:torch.Tensor,     # M, 3 (packed gaussian or xyz)
+
+                indexes:torch.Tensor,        # N, 1 (indexes to gaussians) 0 to M
                 camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
     degree = check_sh_degree(sh_params)
@@ -165,7 +173,7 @@ def evaluate_sh_at(sh_params:torch.Tensor,  # N, K (degree + 1)^2,  (usually K=3
     _module_function = sh_function(degree=degree, 
                                    dimension=sh_params.shape[1], 
                                    dtype=sh_params.dtype)
-    return _module_function.apply(sh_params.contiguous(), positions.contiguous(), camera_pos.contiguous())
+    return _module_function.apply(sh_params.contiguous(), positions.contiguous(), indexes.contiguous(), camera_pos.contiguous())
 
 
 

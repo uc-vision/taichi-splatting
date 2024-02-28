@@ -28,10 +28,12 @@ def project_to_image_function(torch_dtype=torch.float32,
 
   @ti.kernel
   def project_perspective_kernel(  
-    position: ti.types.ndarray(lib.vec3, ndim=1),  # (N, 3) 
-    log_scale: ti.types.ndarray(lib.vec3, ndim=1),  # (N, 3)
-    rotation: ti.types.ndarray(lib.vec4,  ndim=1),  # (N, 4)
-    alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (N)
+    position: ti.types.ndarray(lib.vec3, ndim=1),  # (M, 3) 
+    log_scale: ti.types.ndarray(lib.vec3, ndim=1),  # (M, 3)
+    rotation: ti.types.ndarray(lib.vec4,  ndim=1),  # (M, 4)
+    alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
+
+    indexes: ti.types.ndarray(ti.i64, ndim=1),  # (N) indexes of points to render from 0 to M
 
     T_image_camera: ti.types.ndarray(ndim=2),  # (3, 3) camera projection
     T_camera_world: ti.types.ndarray(ndim=2),  # (4, 4)
@@ -40,7 +42,8 @@ def project_to_image_function(torch_dtype=torch.float32,
     depth_var: ti.types.ndarray(lib.vec3, ndim=1),  # (N, 3)
   ):
 
-    for idx in range(position.shape[0]):
+    for i in range(indexes.shape[0]):
+      idx = indexes[i]
 
       camera_image = lib.mat3_from_ndarray(T_image_camera)
       camera_world = lib.mat4_from_ndarray(T_camera_world)
@@ -59,9 +62,8 @@ def project_to_image_function(torch_dtype=torch.float32,
       uv_cov += lib.vec3([blur_cov, 0, blur_cov]) 
       uv_conic = lib.inverse_cov(uv_cov)
 
-      depth_var[idx] = lib.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
-
-      points[idx] = lib.Gaussian2D.to_vec(
+      depth_var[i] = lib.vec3(point_in_camera.z, cov_in_camera[2, 2], point_in_camera.z ** 2)
+      points[i] = lib.Gaussian2D.to_vec(
           uv=uv.xy,
           uv_conic=uv_conic,
           alpha=lib.sigmoid(alpha_logit[idx][0]),
@@ -72,10 +74,11 @@ def project_to_image_function(torch_dtype=torch.float32,
   class _module_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, position, log_scaling, rotation, alpha_logit,
+                indexes,
                 T_image_camera, T_camera_world):
       dtype, device = T_image_camera.dtype, T_image_camera.device
 
-      n = position.shape[0]
+      n = indexes.shape[0]
 
       points = torch.empty((n, lib.Gaussian2D.vec.n), dtype=dtype, device=device)
       depth_vars = torch.empty((n, 3), dtype=dtype, device=device)
@@ -84,9 +87,13 @@ def project_to_image_function(torch_dtype=torch.float32,
 
 
       project_perspective_kernel(*gaussian_tensors, 
+            indexes,
             T_image_camera, T_camera_world,
             points, depth_vars)
       
+      ctx.indexes = indexes
+      
+      ctx.mark_non_differentiable(indexes)
       ctx.save_for_backward(*gaussian_tensors,
          T_image_camera, T_camera_world, points, depth_vars)
       
@@ -104,29 +111,32 @@ def project_to_image_function(torch_dtype=torch.float32,
         
         project_perspective_kernel.grad(
           *gaussian_tensors,  
+          ctx.indexes,
           T_image_camera, T_camera_world, 
           points, depth_vars)
 
-        return *[tensor.grad for tensor in gaussian_tensors], T_image_camera.grad, T_camera_world.grad
+        return *[tensor.grad for tensor in gaussian_tensors], None, T_image_camera.grad, T_camera_world.grad
 
   return _module_function
 
 @beartype
 def apply(position:torch.Tensor, log_scaling:torch.Tensor,
           rotation:torch.Tensor, alpha_logit:torch.Tensor,
-
-   T_image_camera:torch.Tensor, T_camera_world:torch.Tensor):
+          indexes:torch.Tensor,
+          T_image_camera:torch.Tensor, T_camera_world:torch.Tensor):
+  
   _module_function = project_to_image_function(position.dtype)
   return _module_function.apply(
     position.contiguous(),
     log_scaling.contiguous(),
     rotation.contiguous(),
     alpha_logit.contiguous(),
+    indexes.contiguous(),
         
     T_image_camera.contiguous(), T_camera_world.contiguous())
 
 @beartype
-def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
+def project_to_image(gaussians:Gaussians3D, indexes:torch.Tensor, camera_params: CameraParams, 
                      ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ 
   Project 3D gaussians to 2D gaussians in image space using perspective projection.
@@ -144,6 +154,7 @@ def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
 
   return apply(
       *gaussians.shape_tensors(),
+      indexes,
       camera_params.T_image_camera, 
       camera_params.T_camera_world,
   )
