@@ -54,20 +54,14 @@ def backward_kernel(config: RasterConfig,
       overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
       
       # saved from forward
-<<<<<<< HEAD
-      # image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
       image_alpha: ti.types.ndarray(ti.f32, ndim=2),       # H, W
-=======
-      image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
-      image_alpha: ti.types.ndarray(dtype, ndim=2),       # H, W
->>>>>>> main
       image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
 
       # input gradients
       grad_image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
 
       # output gradients
-      grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
+      grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, C)
       grad_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
 
       point_split_heuristics: ti.types.ndarray(vec2, ndim=1),  # (M)
