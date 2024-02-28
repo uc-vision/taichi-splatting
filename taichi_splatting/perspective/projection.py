@@ -31,7 +31,7 @@ def project_to_image_function(torch_dtype=torch.float32,
     position: ti.types.ndarray(lib.vec3, ndim=1),  # (N, 3) 
     log_scale: ti.types.ndarray(lib.vec3, ndim=1),  # (N, 3)
     rotation: ti.types.ndarray(lib.vec4,  ndim=1),  # (N, 4)
-    alpha_logit: ti.types.ndarray(ti.f32, ndim=1),  # (N)
+    alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (N)
 
     T_image_camera: ti.types.ndarray(ndim=2),  # (3, 3) camera projection
     T_camera_world: ti.types.ndarray(ndim=2),  # (4, 4)
@@ -50,7 +50,7 @@ def project_to_image_function(torch_dtype=torch.float32,
     
       
       cov_in_camera = lib.gaussian_covariance_in_camera(
-          camera_world, ti.math.normalize(rotation), ti.exp(log_scale[idx]))
+          camera_world, ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]))
 
       uv_cov = lib.upper(lib.project_perspective_gaussian(
           camera_image, point_in_camera, cov_in_camera))
@@ -64,21 +64,23 @@ def project_to_image_function(torch_dtype=torch.float32,
       points[idx] = lib.Gaussian2D.to_vec(
           uv=uv.xy,
           uv_conic=uv_conic,
-          alpha=lib.sigmoid(alpha_logit[idx]),
+          alpha=lib.sigmoid(alpha_logit[idx][0]),
       )
 
 
 
   class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, gaussian_tensors, 
+    def forward(ctx, position, log_scaling, rotation, alpha_logit,
                 T_image_camera, T_camera_world):
       dtype, device = T_image_camera.dtype, T_image_camera.device
 
-      n = gaussian_tensors[0].shape[0]
+      n = position.shape[0]
 
-      points = torch.empty((n, Gaussian2D.vec.n), dtype=dtype, device=device)
+      points = torch.empty((n, lib.Gaussian2D.vec.n), dtype=dtype, device=device)
       depth_vars = torch.empty((n, 3), dtype=dtype, device=device)
+
+      gaussian_tensors = (position, log_scaling, rotation, alpha_logit)
 
 
       project_perspective_kernel(*gaussian_tensors, 
@@ -96,9 +98,10 @@ def project_to_image_function(torch_dtype=torch.float32,
       gaussian_tensors = ctx.saved_tensors[:4]
       T_image_camera, T_camera_world, points, depth_vars = ctx.saved_tensors[4:]
 
-      with restore_grad(  T_image_camera, T_camera_world, points, depth_vars):
+      with restore_grad(*gaussian_tensors,  T_image_camera, T_camera_world, points, depth_vars):
         points.grad = dpoints.contiguous()
         depth_vars.grad = ddepth_vars.contiguous()
+        
         project_perspective_kernel.grad(
           *gaussian_tensors,  
           T_image_camera, T_camera_world, 
@@ -109,14 +112,16 @@ def project_to_image_function(torch_dtype=torch.float32,
   return _module_function
 
 @beartype
-def apply(gaussians:Gaussians3D,  
+def apply(position:torch.Tensor, log_scaling:torch.Tensor,
+          rotation:torch.Tensor, alpha_logit:torch.Tensor,
+
    T_image_camera:torch.Tensor, T_camera_world:torch.Tensor):
-  _module_function = project_to_image_function(gaussians.dtype)
+  _module_function = project_to_image_function(position.dtype)
   return _module_function.apply(
-    gaussians.position.contiguous(),
-    gaussians.log_scaling.contiguous(),
-    gaussians.rotation.contiguous(),
-    gaussians.alpha_logit.contiguous(),
+    position.contiguous(),
+    log_scaling.contiguous(),
+    rotation.contiguous(),
+    alpha_logit.contiguous(),
         
     T_image_camera.contiguous(), T_camera_world.contiguous())
 
@@ -138,7 +143,7 @@ def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
   """
 
   return apply(
-      gaussians,
+      *gaussians.shape_tensors(),
       camera_params.T_image_camera, 
       camera_params.T_camera_world,
   )

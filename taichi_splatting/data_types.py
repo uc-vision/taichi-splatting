@@ -53,6 +53,9 @@ class Gaussians3D():
 
   def packed(self):
     return torch.cat([self.position, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
+  
+  def shape_tensors(self):
+    return (self.position, self.log_scaling, self.rotation, self.alpha_logit)
 
   @property
   def scale(self):
