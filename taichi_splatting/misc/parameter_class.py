@@ -54,10 +54,10 @@ class ParameterClass():
 
   @beartype
   def set_learning_rate(self, **kwargs:float):
-    self.learning_rates = replace_dict(self.learning_rates, **kwargs)
+    learning_rates = replace_dict(self.learning_rates, **kwargs)
 
     for group in self.optimizer.param_groups:
-      group['lr'] = self.learning_rates[group['name']]
+      group['lr'] = learning_rates[group['name']]
 
     return self
 
