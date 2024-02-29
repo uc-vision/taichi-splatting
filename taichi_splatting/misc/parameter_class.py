@@ -28,7 +28,6 @@ class ParameterClass():
                param_state:Optional[Dict[str, torch.Tensor]]=None):
 
     self.tensors = as_parameters(tensors, learning_rates.keys())  
-    self.learning_rates = learning_rates
 
     param_groups = [
       dict(params=[self.tensors[name]], lr=lr, name=name)
@@ -47,7 +46,20 @@ class ParameterClass():
   def create(tensors:TensorDict, learning_rates:Dict[str, float], base_lr=1.0):
     learning_rates = {k: v * base_lr for k, v in learning_rates.items()}
     return ParameterClass(tensors, learning_rates)
+  
+  @property
+  def learning_rates(self):
+    return {group['name']: group['lr'] for group in self.optimizer.param_groups}
 
+
+  @beartype
+  def set_learning_rate(self, **kwargs:float):
+    self.learning_rates = replace_dict(self.learning_rates, **kwargs)
+
+    for group in self.optimizer.param_groups:
+      group['lr'] = self.learning_rates[group['name']]
+
+    return self
 
   def zero_grad(self):
     self.optimizer.zero_grad()
@@ -120,6 +132,7 @@ class ParameterClass():
 
 
 def as_parameters(tensors, keys):
+  
     param_dict = {
       k: torch.nn.Parameter(x.detach(), requires_grad=True) 
             if k in keys else x 
