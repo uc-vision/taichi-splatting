@@ -8,15 +8,17 @@ from taichi_splatting.torch_ops.transforms import join_rt
 from taichi_splatting.torch_ops import projection as torch_proj
 
 
-def random_camera(pos_scale:float=1., max_image_size:int = 1024) -> CameraParams:
+def random_camera(pos_scale:float=1., image_size_range:int = (256, 1024)) -> CameraParams:
   q = torch.randn((1, 4))
   t = torch.randn((3)) * pos_scale
 
   T_world_camera = join_rt(torch_proj.quat_to_mat(q), t)
   T_camera_world = torch.inverse(T_world_camera)
 
+  min_size, max_size = image_size_range
   w, h = [x.item() for x in torch.randint(size=(2,), 
-            low=max_image_size // 5, high=max_image_size)]
+            low=min_size, high=max_size)]
+  
   cx, cy = torch.tensor([w/2, h/2]) + torch.randn(2) * (w / 20) 
 
   fov = torch.deg2rad(torch.rand(1) * 70 + 30)
