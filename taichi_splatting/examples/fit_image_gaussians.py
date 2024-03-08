@@ -7,11 +7,10 @@ import taichi as ti
 
 import torch
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
-from taichi_splatting.mapper.tile_mapper import map_to_tiles
 from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import project_gaussians2d, split_gaussians2d, uniform_split_gaussians2d
 
-from taichi_splatting.rasterizer.function import rasterize, rasterize_with_tiles
+from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.misc.parameter_class import ParameterClass
 from taichi_splatting.tests.random_data import random_2d_gaussians
@@ -197,9 +196,7 @@ def main():
         
         if min(split_ratio, 1/split_ratio) > 0.98:
           factor = math.pow(split_rate, 1/(cmd_args.max_epoch - epoch))
-
           split_rate *= factor
-
 
         grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio))
         vis_thresh = torch.quantile(visibility, split_rate * 1/split_ratio )

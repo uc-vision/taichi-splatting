@@ -57,7 +57,6 @@ def point_covariance(gaussians):
 def split_by_samples(points: Gaussians2D, samples: torch.Tensor, depth_noise:float=1e-2) -> Gaussians2D:
   num_points, n, _ = samples.shape
 
-
   basis = point_basis(points)
   point_samples = (samples.view(-1, 2).unsqueeze(1) @ basis.repeat_interleave(repeats=n, dim=0)).squeeze(1)
 

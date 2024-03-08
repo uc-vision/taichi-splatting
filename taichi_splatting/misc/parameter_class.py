@@ -27,7 +27,7 @@ class ParameterClass():
                learning_rates:Dict[str, float], 
                param_state:Optional[Dict[str, torch.Tensor]]=None):
 
-    self.tensors = as_parameters(tensors, learning_rates.keys())  
+    self.tensors:TensorDict = as_parameters(tensors, learning_rates.keys())  
 
     param_groups = [
       dict(params=[self.tensors[name]], lr=lr, name=name)
@@ -118,7 +118,7 @@ class ParameterClass():
     state = self._updated_state(lambda x: x[idx])
     return ParameterClass(self.tensors[idx], self.learning_rates, state)
   
-  def append_tensors(self, tensors):
+  def append_tensors(self, tensors:TensorDict):
     assert tensors.keys() == self.tensors.keys(), f"{tensors.keys()} != {self.tensors.keys()}"
     n = tensors.batch_size[0]
 
