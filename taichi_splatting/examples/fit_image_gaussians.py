@@ -30,7 +30,7 @@ def parse_args():
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
-  parser.add_argument('--max_epoch', type=int, default=200)
+  parser.add_argument('--max_epoch', type=int, default=100)
   parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of points to split each epoch (proportional to number of points)')
 
   parser.add_argument('--write_frames', type=Path, default=None)
@@ -206,7 +206,9 @@ def main():
         split_mask = torch.zeros_like(prune_mask, dtype=torch.bool)
 
         split_mask = (gradient > grad_thresh) & (visibility > vis_thresh)
-        splits = split_gaussians2d(gaussians[split_mask], scaling=0.8)
+        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.1)
+
+        # splits = split_gaussians2d(gaussians[split_mask])
 
         params = params[~(split_mask | prune_mask)]
         params = params.append_tensors(splits.to_tensordict())

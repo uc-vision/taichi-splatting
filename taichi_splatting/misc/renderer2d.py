@@ -97,7 +97,7 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None
   return split_by_samples(points, samples, depth_noise)
 
 
-def uniform_split_gaussians2d(points: Gaussians2D, n:int=3, scaling:Optional[float]=None, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:
+def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:
   """ Split along most significant axis """
   axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
   values = torch.linspace(-1, 1, n, device=points.position.device)
