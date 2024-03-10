@@ -81,6 +81,8 @@ def render_gaussians(
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
   gaussians2d, depthvars = project_to_image(gaussians, indexes, camera_params)
+
+
   depth_order = encode_depth(depthvars, 
     depth_range=(camera_params.near_plane, camera_params.far_plane),
     use_depth16 = use_depth16)

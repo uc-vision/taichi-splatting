@@ -50,6 +50,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
     
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
+
       pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, (1, 1), tiles_wide)
       pixelf = ti.cast(pixel, dtype) + 0.5
 
@@ -67,6 +68,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
       pixel_saturated = False
       last_point_idx = start_offset
+
 
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):

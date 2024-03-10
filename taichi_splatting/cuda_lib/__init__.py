@@ -9,17 +9,26 @@ sources = [str(Path(__file__).parent  / filename)
 
 cuda_lib = load("cuda_lib", sources=sources, verbose=True)
 
+def check_cuda(name, arg):
+  assert arg.is_cuda, f"{name}: device must be a cuda device, got {arg.device}"
+
 
 def full_cumsum(x:torch.Tensor) -> Tuple[torch.Tensor, int]:
+  check_cuda("full_cumsum", x)
+
   if x.shape[0] == 0:
     return x.new_zeros((1, )), 0
   
   out = x.new_empty((x.shape[0] + 1, *x.shape[1:]))
+
   total = cuda_lib.full_cumsum(x, out)
   return out, total
 
 segmented_sort_pairs = cuda_lib.segmented_sort_pairs
 def radix_sort_pairs(keys:torch.Tensor, values:torch.Tensor, start_bit=0, end_bit=None, unsigned=False):
+  check_cuda("keys", keys)
+  check_cuda("values", values)
+
   if end_bit is None:
     end_bit = -1
 
@@ -39,7 +48,7 @@ if __name__ == "__main__":
   print(k1)
   print(v1)
 
-  k2, v2 = sort_pairs(k.long(), v)
+  k2, v2 = radix_sort_pairs(k.long(), v)
   print(k2, k2.dtype)
   print(v2)
 

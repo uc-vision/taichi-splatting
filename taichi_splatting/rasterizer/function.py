@@ -50,6 +50,7 @@ def render_function(config:RasterConfig,
 
       point_split_heuristics = torch.zeros( (gaussians.shape[0], 2) if compute_split_heuristics else (0, 2), 
                                  dtype=dtype, device=features.device)
+      
 
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,

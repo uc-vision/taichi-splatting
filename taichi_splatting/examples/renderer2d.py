@@ -11,6 +11,7 @@ from taichi_splatting.data_types import Gaussians2D
 from taichi_splatting.misc.encode_depth import encode_depth32
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
+from taichi_splatting.rasterizer.function import RasterOut
 
 
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
@@ -120,23 +121,20 @@ def resample_inplace(points: Gaussians2D, scale:float=0.625, depth_noise:float=1
     return points
 
 
-
-
-
 def render_gaussians(
       gaussians: Gaussians2D,
       image_size: Tuple[Integral, Integral],
       raster_config: RasterConfig = RasterConfig()
-    ):
+    ) -> RasterOut:
   
   gaussians2d = project_gaussians2d(gaussians)
   
-  image, alpha = rasterize(gaussians2d=gaussians2d, 
+  raster = rasterize(gaussians2d=gaussians2d, 
     encoded_depths= encode_depth32(gaussians.depth),
     features=gaussians.feature, 
     image_size=image_size, 
     config=raster_config)
   
-  return image
+  return raster
 
 

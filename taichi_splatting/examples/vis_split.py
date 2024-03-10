@@ -22,18 +22,12 @@ def main():
     while True: 
       gaussians = random_2d_gaussians(5, (640, 480), scale_factor=0.2, alpha_range=(1.0, 1.0)).cuda()
 
-      image = render_gaussians(gaussians, (640, 480))
-      display_image('image', image)
-
+      rendering = render_gaussians(gaussians, (640, 480))
+      display_image('image', rendering.image)
       splits = split_gaussians2d(gaussians, 2, scaling=0.8)
-      # splits = gaussians.apply(
-      #     partial(torch.Tensor.repeat_interleave, repeats=2, dim=0),
-      #     batch_size=(gaussians.batch_size[0] * 2, ))
-      
-      # resample_inplace(splits)
 
-      image = render_gaussians(splits, (640, 480))
-      display_image('image', image)
+      rendering = render_gaussians(splits, (640, 480))
+      display_image('image', rendering.image)
 
 if __name__ == "__main__":
     main()
