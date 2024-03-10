@@ -3,6 +3,7 @@ from dataclasses import replace
 from functools import partial
 import math
 from numbers import Integral
+from typing import Optional
 from beartype.typing import Tuple
 import torch
 import torch.nn.functional as F
@@ -70,7 +71,7 @@ def split_by_samples(points: Gaussians2D, samples: torch.Tensor, depth_noise:flo
     batch_size=(num_points * n, ))
    
 
-def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:float=0.8, depth_noise:float=1e-2) -> Gaussians2D:
+def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, depth_noise:float=1e-2) -> Gaussians2D:
   """
   Toy implementation of the splitting operation used in gaussian-splatting,
   returns a scaled, randomly sampled splitting of the gaussians.
@@ -85,8 +86,10 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:float=0.8, depth_noi
   """
 
   samples = torch.randn((points.batch_size[0], n, 2), device=points.position.device) 
+  if scaling is None:
+    scaling = 1 / math.sqrt(n)
 
-  factor = math.log(1 / (scaling * n))
+  factor = math.log(math.sqrt(1 / n))
   points = replace(points, 
       log_scaling = points.log_scaling + factor,
       batch_size = points.batch_size)
@@ -94,13 +97,16 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:float=0.8, depth_noi
   return split_by_samples(points, samples, depth_noise)
 
 
-def uniform_split_gaussians2d(points: Gaussians2D, n:int=3, scaling:float=0.8, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:
+def uniform_split_gaussians2d(points: Gaussians2D, n:int=3, scaling:Optional[float]=None, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:
   """ Split along most significant axis """
   axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
   values = torch.linspace(-1, 1, n, device=points.position.device)
 
   samples = values.view(1, -1, 1) * axis.view(-1, 1, 2)
   samples += torch.randn_like(samples) * noise
+
+  if scaling is None:
+    scaling = 1 / math.sqrt(n)
 
   factor = math.log(1 / (scaling * n))
   points = replace(points, 

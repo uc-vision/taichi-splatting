@@ -24,7 +24,7 @@ def main():
 
       rendering = render_gaussians(gaussians, (640, 480))
       display_image('image', rendering.image)
-      splits = split_gaussians2d(gaussians, 2, scaling=0.8)
+      splits = split_gaussians2d(gaussians, 10)
 
       rendering = render_gaussians(splits, (640, 480))
       display_image('image', rendering.image)
