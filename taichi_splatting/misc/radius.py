@@ -48,7 +48,7 @@ def compute_radius_func(torch_dtype=torch.float32, gaussian_scale:float=3.0):
         radii.grad = grad_radius.contiguous()
         radius_kernel.grad(gaussians2d, radii)
 
-        return radii.grad
+        return gaussians2d.grad
 
   return _module_function
 

@@ -26,6 +26,7 @@ def project_to_image_function(torch_dtype=torch.float32,
   dtype = torch_taichi[torch_dtype]
   lib = get_library(dtype)
 
+
   @ti.kernel
   def project_perspective_kernel(  
     position: ti.types.ndarray(lib.vec3, ndim=1),  # (M, 3) 
@@ -123,9 +124,10 @@ def project_to_image_function(torch_dtype=torch.float32,
 def apply(position:torch.Tensor, log_scaling:torch.Tensor,
           rotation:torch.Tensor, alpha_logit:torch.Tensor,
           indexes:torch.Tensor,
-          T_image_camera:torch.Tensor, T_camera_world:torch.Tensor):
+          T_image_camera:torch.Tensor, T_camera_world:torch.Tensor,
+          blur_cov:float=0.3):
   
-  _module_function = project_to_image_function(position.dtype)
+  _module_function = project_to_image_function(position.dtype, blur_cov)
   return _module_function.apply(
     position.contiguous(),
     log_scaling.contiguous(),
@@ -157,6 +159,7 @@ def project_to_image(gaussians:Gaussians3D, indexes:torch.Tensor, camera_params:
       indexes,
       camera_params.T_image_camera, 
       camera_params.T_camera_world,
+      blur_cov = camera_params.blur_cov
   )
 
 
