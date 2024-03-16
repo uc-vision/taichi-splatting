@@ -72,6 +72,9 @@ class Gaussians3D():
     self.alpha_logit.requires_grad_(requires_grad)
     self.feature.requires_grad_(requires_grad)
     return self
+  
+  def replace(self, **kwargs):
+    return replace(self, **kwargs, batch_size=self.batch_size[0])
 
 @tensorclass
 class Gaussians2D():
