@@ -11,6 +11,12 @@ class CameraParams:
   T_image_camera: torch.Tensor # (3, 3) camera projection matrix
   T_camera_world  : torch.Tensor # (4, 4) camera view matrix
 
+  near_plane: float
+  far_plane: float
+  image_size: Tuple[Integral, Integral]
+
+  blur_cov:float = 0.3
+
   @property
   def device(self):
     return self.T_image_camera.device
@@ -27,9 +33,6 @@ class CameraParams:
     self.T_camera_world.requires_grad_(requires_grad)
     return self
 
-  near_plane: float
-  far_plane: float
-  image_size: Tuple[Integral, Integral]
 
   def __repr__(self):
     w, h = self.image_size
@@ -51,7 +54,8 @@ class CameraParams:
       T_camera_world=self.T_camera_world.to(device=device, dtype=dtype),
       near_plane=self.near_plane,
       far_plane=self.far_plane,
-      image_size=self.image_size
+      image_size=self.image_size,
+      blur_cov=self.blur_cov
     )
 
   def __post_init__(self):

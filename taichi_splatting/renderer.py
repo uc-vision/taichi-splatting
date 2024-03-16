@@ -1,9 +1,8 @@
 
 
 from dataclasses import dataclass
-from beartype.typing import Optional
 from beartype import beartype
-
+from beartype.typing import Optional, Tuple
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
@@ -40,6 +39,16 @@ class Rendering:
 
   depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
   depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
+
+  @property
+  def image_size(self) -> Tuple[int, int]:
+    h, w, _ = self.image.shape
+    return (w, h)
+  
+
+  @property
+  def num_points(self) -> int:
+    return self.points_in_view.shape[0]
 
 @beartype
 def render_gaussians(
