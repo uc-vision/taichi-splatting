@@ -74,7 +74,7 @@ class Gaussians3D():
     return self
   
   def replace(self, **kwargs):
-    return replace(self, **kwargs, batch_size=self.batch_size[0])
+    return replace(self, **kwargs, batch_size=self.batch_size)
 
 @tensorclass
 class Gaussians2D():
