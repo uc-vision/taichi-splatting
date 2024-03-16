@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from beartype.typing import Optional
+from beartype import beartype
+
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
@@ -39,7 +41,7 @@ class Rendering:
   depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
   depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
 
-
+@beartype
 def render_gaussians(
   gaussians: Gaussians3D,
   camera_params: CameraParams, 
@@ -81,16 +83,24 @@ def render_gaussians(
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
   gaussians2d, depthvars = project_to_image(gaussians, indexes, camera_params)
+  return render_projected(indexes, gaussians2d, features, depthvars, camera_params, config, 
+                   render_depth=render_depth, use_depth16=use_depth16,
+                   compute_split_heuristics=compute_split_heuristics, compute_radii=compute_radii)
 
+
+def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor, 
+      features:torch.Tensor, depthvars:torch.Tensor, 
+      camera_params: CameraParams, config:RasterConfig,      
+
+      render_depth:bool = False,  use_depth16:bool = False,
+      compute_split_heuristics:bool = False, compute_radii:bool = False):
 
   depth_order = encode_depth(depthvars, 
     depth_range=(camera_params.near_plane, camera_params.far_plane),
     use_depth16 = use_depth16)
   
-  
   if render_depth:
     features = torch.cat([depthvars, features], dim=1)
-
     
   raster = rasterize(gaussians2d, depth_order, features,
     image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)
