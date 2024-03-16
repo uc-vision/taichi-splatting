@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from beartype.typing import Tuple
 from beartype import beartype
 from tensordict import tensorclass
