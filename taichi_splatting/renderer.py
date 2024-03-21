@@ -110,8 +110,8 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
   
   if render_depth:
     features = torch.cat([depthvars, features], dim=1)
-    
-  raster = rasterize(gaussians2d, depth_order, features,
+
+  raster = rasterize(gaussians2d, depth_order, features.contiguous(),
     image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)
 
   depth, depth_var = None, None
