@@ -120,7 +120,9 @@ def project_to_image_function(torch_dtype=torch.float32):
           points, depth_vars,
           ctx.blur_cov)
 
-        return *[tensor.grad for tensor in gaussian_tensors], None, T_image_camera.grad, T_camera_world.grad
+        return (*[tensor.grad for tensor in gaussian_tensors], 
+                None, T_image_camera.grad, T_camera_world.grad,
+                None)
 
   return _module_function
 

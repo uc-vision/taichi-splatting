@@ -34,7 +34,7 @@ class ParameterClass():
         for name, lr in learning_rates.items()
     ]
 
-    self.optimizer = optim.Adam(param_groups, foreach=True, betas=(0.7, 0.999))
+    self.optimizer = optim.Adam(param_groups, foreach=True, betas=(0.7, 0.99), amsgrad=True)
 
     if param_state is not None:
       for k, v in param_state.items():
