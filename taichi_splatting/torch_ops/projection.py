@@ -129,4 +129,5 @@ def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
   ) -> Tuple[torch.Tensor, torch.Tensor]:  
 
   return apply(*gaussians.shape_tensors(),
-          camera_params.T_image_camera, camera_params.T_camera_world)
+          camera_params.T_image_camera, camera_params.T_camera_world, 
+          camera_params.blur_cov)

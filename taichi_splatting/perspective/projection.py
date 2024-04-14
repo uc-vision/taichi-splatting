@@ -21,8 +21,7 @@ warnings.filterwarnings('ignore', '(.*)that is not a leaf Tensor is being access
 
 
 @cache
-def project_to_image_function(torch_dtype=torch.float32, 
-                              blur_cov:float = 0.3):
+def project_to_image_function(torch_dtype=torch.float32):
   dtype = torch_taichi[torch_dtype]
   lib = get_library(dtype)
 
@@ -41,6 +40,7 @@ def project_to_image_function(torch_dtype=torch.float32,
     
     points: ti.types.ndarray(lib.Gaussian2D.vec, ndim=1),  # (N, 6)
     depth_var: ti.types.ndarray(lib.vec3, ndim=1),  # (N, 3)
+    blur_cov:ti.f32
   ):
 
     for i in range(indexes.shape[0]):
@@ -76,7 +76,8 @@ def project_to_image_function(torch_dtype=torch.float32,
     @staticmethod
     def forward(ctx, position, log_scaling, rotation, alpha_logit,
                 indexes,
-                T_image_camera, T_camera_world):
+                T_image_camera, T_camera_world,
+                blur_cov):
       dtype, device = T_image_camera.dtype, T_image_camera.device
 
       n = indexes.shape[0]
@@ -90,9 +91,11 @@ def project_to_image_function(torch_dtype=torch.float32,
       project_perspective_kernel(*gaussian_tensors, 
             indexes,
             T_image_camera, T_camera_world,
-            points, depth_vars)
+            points, depth_vars,
+            blur_cov)
       
       ctx.indexes = indexes
+      ctx.blur_cov = blur_cov
       
       ctx.mark_non_differentiable(indexes)
       ctx.save_for_backward(*gaussian_tensors,
@@ -114,9 +117,12 @@ def project_to_image_function(torch_dtype=torch.float32,
           *gaussian_tensors,  
           ctx.indexes,
           T_image_camera, T_camera_world, 
-          points, depth_vars)
+          points, depth_vars,
+          ctx.blur_cov)
 
-        return *[tensor.grad for tensor in gaussian_tensors], None, T_image_camera.grad, T_camera_world.grad
+        return (*[tensor.grad for tensor in gaussian_tensors], 
+                None, T_image_camera.grad, T_camera_world.grad,
+                None)
 
   return _module_function
 
@@ -127,7 +133,7 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
           T_image_camera:torch.Tensor, T_camera_world:torch.Tensor,
           blur_cov:float=0.3):
   
-  _module_function = project_to_image_function(position.dtype, blur_cov)
+  _module_function = project_to_image_function(position.dtype)
   return _module_function.apply(
     position.contiguous(),
     log_scaling.contiguous(),
@@ -135,7 +141,10 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
     alpha_logit.contiguous(),
     indexes.contiguous(),
         
-    T_image_camera.contiguous(), T_camera_world.contiguous())
+    T_image_camera.contiguous(), 
+    T_camera_world.contiguous(),
+    
+    blur_cov)
 
 @beartype
 def project_to_image(gaussians:Gaussians3D, indexes:torch.Tensor, camera_params: CameraParams, 
@@ -159,6 +168,7 @@ def project_to_image(gaussians:Gaussians3D, indexes:torch.Tensor, camera_params:
       indexes,
       camera_params.T_image_camera, 
       camera_params.T_camera_world,
+
       blur_cov = camera_params.blur_cov
   )
 
