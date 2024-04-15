@@ -73,6 +73,18 @@ class ParameterClass():
   def step(self):
     self.optimizer.step()
 
+  def step_sparse(self, indexes:torch.Tensor):
+    self.to_sparse(indexes)
+    self.optimizer.step()
+
+
+  def to_sparse(self, indexes:torch.Tensor):
+    for k in self.optimized_keys():
+      v = self.tensors[k]
+      v.grad = torch.sparse_coo_tensor(indexes.view(1, -1), values=v.grad[indexes], size=v.shape)
+
+
+
   def keys(self):
     return self.tensors.keys()
 
