@@ -19,21 +19,20 @@ Examples:
 A document describing some performance benchmarks of taichi-splatting [here](BENCHMARK.md). Through various optimizations, in particular optimizing the summation of gradients in the backward gradient kernel. Taichi-splatting achieves a very large speedup (often an order of magnitude) over the original taichi_3d_gaussian_splatting, and is faster than the reference diff_guassian_rasterization for a complete optimization pass (forward+backward), in particular much faster at higher resolutions.
 
 
-## Major dependencies
-
-* taichi-nightly
-
-Some bug fixes which have occurred after the 1.7.0 release:
-`pip install --upgrade -i https://pypi.taichi.graphics/simple/ taichi-nightly`
-
-* torch >= 1.8 (probably works with earlier versions, too)
-
 ## Installing
 
-* Install taichi-nightly as above (note that the external repo cannot be listed in the pyproject.toml)
-* Clone down with `git clone` and install with `pip install ./taichi-spatting`
-* `pip install taichi-splatting`
+### External dependencies
+Create an environment (for example conda with mambaforge) with the following dependencies:
 
+* python >= 3.10
+* pytorch - from either conda  Follow instructions [https://pytorch.org/](here).
+* taichi-nightly `pip install --upgrade -i https://pypi.taichi.graphics/simple/ taichi-nightly`
+
+### Install
+
+One of:
+* `pip install taichi-splatting`
+* Clone down with `git clone` and install with `pip install ./taichi-splatting`
 
 ## Executables
 
