@@ -71,7 +71,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       opt.zero_grad()
 
       gaussians2d = project_gaussians2d(gaussians)  
-      depths = encode_depth32(gaussians.depth)
+      depths = encode_depth32(gaussians.z_depth)
 
       raster = rasterize(gaussians2d=gaussians2d, 
         encoded_depths=depths,
@@ -103,6 +103,8 @@ def main():
   cmd_args = parse_args()
   
   ref_image = cv2.imread(cmd_args.image_file)
+  assert ref_image is not None, f'Could not read {cmd_args.image_file}'
+
   h, w = ref_image.shape[:2]
 
   ti.init(arch=ti.cuda, log_level=ti.INFO, 
@@ -170,7 +172,7 @@ def main():
 
       if cmd_args.show:
         gaussians2d = project_gaussians2d(params)
-        depths = encode_depth32(params.depth)
+        depths = encode_depth32(params.z_depth)
         raster =  rasterize(gaussians2d, depths, gradient.contiguous().unsqueeze(-1), image_size=(w, h), config=config, compute_split_heuristics=True)
 
         err = torch.abs(ref_image - image)

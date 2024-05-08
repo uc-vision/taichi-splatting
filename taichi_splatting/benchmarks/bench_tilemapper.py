@@ -52,7 +52,7 @@ def bench_rasterizer(args):
 
     def map_to_tiles():
       encoded_depth = encode_depth(
-        gaussians.depth, depth_range, use_depth16=args.depth16)
+        gaussians.z_depth, depth_range, use_depth16=args.z_depth16)
       return module.map_to_tiles(gaussians2d, 
         encoded_depth=encoded_depth, 
         image_size=args.image_size, 
