@@ -2,6 +2,9 @@
 
 Rasterizer for Guassian Splatting using Taichi and PyTorch - embedded in python library. Currently very usable but in active development, so likely will break with new versions! 
 
+Trainer: [here](https://github.com/uc-vision/splat-trainer)
+Viewer: [here](https://github.com/uc-vision/splat-trainer)
+
 This work is originally derived off [Taichi 3D Gaussian Splatting](https://github.com/wanmeihuali/taichi_3d_gaussian_splatting), with significant re-organisation and changes.
 
 Key differences are the rendering algorithm is decomposed into separate operations (projection, shading functions, tile mapping and rasterization) which can be combined in different ways in order to facilitate a more flexible use, and gradients can be enabled on "all the things" as required for the application (and not when disabled, to save performance).
@@ -83,15 +86,17 @@ A benchmark for a full rendererer (in the same repository as above) with real re
 
 * Compute point visibility in backward pass (useful for model pruning)
 * Example training on images with split/prune operations
-* Novel heuristics for split and prune operations computed optionally in backward pass 
+* Novel heuristics for split and prune operations computed optionally in backward pass
+
 
 
 ### Todo
 
-* Depth covariance example
-
-* 3D training code (likely different repository)
 * Backward projection autograd takes a while to compile and is not cached properly
+* 16 bit representations of parameters
+* Depth rendering/regularization method (e.g. 2DGS or related method)
+* Some ideas for optimized tilemapper with flat representations (no inner loop)
+
 
 ### Improvements
 
