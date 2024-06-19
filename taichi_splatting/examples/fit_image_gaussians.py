@@ -1,6 +1,7 @@
 from functools import partial
 import math
 from pathlib import Path
+from beartype import beartype
 import cv2
 import argparse
 import numpy as np
@@ -33,6 +34,8 @@ def parse_args():
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
   parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of points to split each epoch (proportional to number of points)')
+  parser.add_argument('--opacity_reg', type=float, default=0.0001)
+  parser.add_argument('--scale_reg', type=float, default=0.0001)
 
   parser.add_argument('--write_frames', type=Path, default=None)
 
@@ -40,7 +43,7 @@ def parse_args():
   parser.add_argument('--show', action='store_true')
 
   parser.add_argument('--profile', action='store_true')
-  parser.add_argument('--epoch', type=int, default=20, help='Number of iterations per measurement/profiling')
+  parser.add_argument('--epoch_size', type=int, default=20, help='Number of iterations per measurement/profiling')
   
   args = parser.parse_args()
 
@@ -61,11 +64,14 @@ def display_image(name, image):
 def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
-
-def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig = RasterConfig(), grad_alpha=0.9):
+def train_epoch(opt, gaussians, ref_image, epoch_size=100, 
+        config:RasterConfig = RasterConfig(), grad_alpha=0.9, 
+        opacity_reg=0.0,
+        scale_reg=0.0):
+    
     h, w = ref_image.shape[:2]
 
-    contrib = torch.zeros((gaussians.batch_size[0], 2), device=gaussians.position.device)
+    split_heuristics = torch.zeros((gaussians.batch_size[0], 2), device=gaussians.position.device)
 
     for i in range(epoch_size):
       opt.zero_grad()
@@ -80,7 +86,15 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
         config=config,
         compute_split_heuristics=True)
 
-      loss = torch.nn.functional.l1_loss(raster.image, ref_image) #+ (1e-4 * gaussians.log_scaling).pow(2).sum()
+
+      opacity = torch.sigmoid(gaussians.alpha_logit).unsqueeze(-1)
+      scale = torch.exp(gaussians.log_scaling)
+
+
+      loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
+              + opacity_reg * opacity.mean()
+              + scale_reg * scale.mean())
+
       loss.backward()
 
       check_finite(gaussians, 'gaussians', warn=True)
@@ -89,12 +103,12 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100, config:RasterConfig =
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
 
-        contrib =  raster.point_split_heuristics if i == 0 \
-            else (1 - grad_alpha) * contrib + grad_alpha * raster.point_split_heuristics
+        split_heuristics =  raster.point_split_heuristics if i == 0 \
+            else (1 - grad_alpha) * split_heuristics + grad_alpha * raster.point_split_heuristics
 
 
-      visibility, gradient = contrib.unbind(dim=1)
-    return raster.image, visibility, gradient 
+      prune_cost, densify_score = split_heuristics.unbind(dim=1)
+    return raster.image, prune_cost, densify_score 
 
 
 def main():
@@ -159,13 +173,13 @@ def main():
   train = with_benchmark(timed_epoch) if cmd_args.profile else timed_epoch
 
   
-  split_rate = cmd_args.split_rate
-
   for epoch in range(cmd_args.max_epoch):
-    epoch_size = cmd_args.epoch
+    epoch_size = cmd_args.epoch_size
 
-    image, gradient, visibility, epoch_time = train(params.optimizer, params, ref_image, 
-                                        epoch_size=epoch_size, config=config)
+    image, densify_score, prune_cost, epoch_time = train(params.optimizer, params, ref_image, 
+                                        epoch_size=epoch_size, config=config, 
+                                        opacity_reg=cmd_args.opacity_reg,
+                                        scale_reg=cmd_args.scale_reg)
     
 
     with torch.no_grad():
@@ -173,7 +187,8 @@ def main():
       if cmd_args.show:
         gaussians2d = project_gaussians2d(params)
         depths = encode_depth32(params.z_depth)
-        raster =  rasterize(gaussians2d, depths, gradient.contiguous().unsqueeze(-1), image_size=(w, h), config=config, compute_split_heuristics=True)
+        raster =  rasterize(gaussians2d, depths, densify_score.contiguous().unsqueeze(-1), 
+                            image_size=(w, h), config=config, compute_split_heuristics=True)
 
         err = torch.abs(ref_image - image)
         
@@ -195,28 +210,24 @@ def main():
       if cmd_args.target:
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
 
-        split_ratio = np.clip(cmd_args.target / gaussians.batch_size[0], 
-                              a_min=0.25, a_max=4)
+        t = epoch / cmd_args.max_epoch 
+        n = gaussians.batch_size[0]
         
-        if min(split_ratio, 1/split_ratio) > 0.98:
-          factor = math.pow(split_rate, 1/(cmd_args.max_epoch - epoch))
-          split_rate *= factor
+        target_gaussians = cmd_args.n * (1 - t) + t * cmd_args.target
+        target_prune = cmd_args.split_rate * n
 
-        grad_thresh = torch.quantile(gradient, 1 - (split_rate * split_ratio))
-        vis_thresh = torch.quantile(visibility, split_rate * 1/split_ratio )
+        prune_thresh = torch.quantile(prune_cost, target_prune / n)
+        prune_mask = (prune_cost <= prune_thresh) 
 
-    
-        prune_mask = (visibility <= vis_thresh)  & (gradient <  grad_thresh)
-        split_mask = torch.zeros_like(prune_mask, dtype=torch.bool)
+        target_split = (target_gaussians - n) + prune_mask.sum() 
+        split_thresh = torch.quantile(densify_score, target_split / n)
+        split_mask = (densify_score >= split_thresh) 
 
-        split_mask = (gradient > grad_thresh) & (visibility > vis_thresh)
-        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.1)
+        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.0)
 
-        # splits = split_gaussians2d(gaussians[split_mask])
 
         params = params[~(split_mask | prune_mask)]
         params = params.append_tensors(splits.to_tensordict())
-        # # # params = params[~prune_mask]
 
         print(f" split {split_mask.sum()}, pruned {prune_mask.sum()} {params.batch_size} points")
 

@@ -86,6 +86,16 @@ class Gaussians2D():
   
   feature      : torch.Tensor # N  - (any rgb, label etc)
 
+  @property
+  def opacity(self):
+    return self.alpha_logit.sigmoid()
+  
+  @property
+  def scaling(self):
+    return torch.exp(self.log_scaling)
+
+
+
 
 
 
