@@ -33,7 +33,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--split_rate', type=float, default=0.3, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=0.0001)
 
@@ -172,10 +172,12 @@ def main():
     
 
 
-  def split_prune(n, target, n_prune, prune_cost, densify_score):
-      prune_mask = take_n(prune_cost, n_prune, descending=True)
+  def split_prune(n, target, n_prune, densify_score, prune_cost):
+      prune_mask = take_n(prune_cost, n_prune, descending=False)
 
-      target_split = ((target - n) + n_prune) // 2
+      densify_score[prune_mask] = -1
+
+      target_split = ((target - n) + n_prune) 
       split_mask = take_n(densify_score, target_split, descending=True)
 
       return split_mask, prune_mask
@@ -238,11 +240,11 @@ def main():
         n = gaussians.batch_size[0]
 
         split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
-                    n_prune=int(cmd_args.split_rate * n* (1 - t)),
-                    prune_cost=prune_cost, densify_score=densify_score)
+                    n_prune=int(cmd_args.split_rate * n * (1 - t)**2),
+                    densify_score=densify_score, prune_cost=prune_cost)
 
     
-        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.0)
+        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.1)
 
 
         params = params[~(split_mask | prune_mask)]
