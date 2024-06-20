@@ -33,7 +33,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--split_rate', type=float, default=0.3, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=0.0001)
 
@@ -232,10 +232,12 @@ def main():
       if cmd_args.target:
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
 
-        t = math.pow((epoch + 1) / (cmd_args.max_epoch - 1), 1)
+        t = (epoch + 1) / (cmd_args.max_epoch - 1)
+        t_points = min(math.pow(t * 2 , 0.5), 1.0)
+
         n = gaussians.batch_size[0]
 
-        split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t) + t * cmd_args.target),
+        split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
                     n_prune=int(cmd_args.split_rate * n* (1 - t)),
                     prune_cost=prune_cost, densify_score=densify_score)
 
