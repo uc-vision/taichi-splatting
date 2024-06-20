@@ -33,7 +33,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of points to split each epoch (proportional to number of points)')
+  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=0.0001)
 
@@ -159,6 +159,28 @@ def main():
   
   config = RasterConfig(tile_size=cmd_args.tile_size, gaussian_scale=3.0, pixel_stride=cmd_args.pixel_tile or (2, 2))
 
+  @beartype
+  def take_n(t:torch.Tensor, n:int, descending=False):
+    """ Return mask of n largest or smallest values in a tensor."""
+    idx = torch.argsort(t, descending=descending)[:n]
+
+    # convert to mask
+    mask = torch.zeros_like(t, dtype=torch.bool)
+    mask[idx] = True
+
+    return mask
+    
+
+
+  def split_prune(n, target, n_prune, prune_cost, densify_score):
+      prune_mask = take_n(prune_cost, n_prune, descending=True)
+
+      target_split = ((target - n) + n_prune) // 2
+      split_mask = take_n(densify_score, target_split, descending=True)
+
+      return split_mask, prune_mask
+
+
 
 
   def timed_epoch(*args, **kwargs):
@@ -205,24 +227,19 @@ def main():
                     (image.detach().clamp(0, 1) * 255).cpu().numpy())
 
       cpsnr = psnr(ref_image, image)
-      print(f'{epoch}: {epoch_size / epoch_time:.1f} iters/sec CPSNR {cpsnr:.2f}')
+      print(f'{epoch + 1}: {epoch_size / epoch_time:.1f} iters/sec CPSNR {cpsnr:.2f}')
 
       if cmd_args.target:
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
 
-        t = epoch / cmd_args.max_epoch 
+        t = math.pow((epoch + 1) / (cmd_args.max_epoch - 1), 1)
         n = gaussians.batch_size[0]
-        
-        target_gaussians = cmd_args.n * (1 - t) + t * cmd_args.target
-        target_prune = cmd_args.split_rate * n
 
-        prune_thresh = torch.quantile(prune_cost, target_prune / n)
-        prune_mask = (prune_cost <= prune_thresh) 
+        split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t) + t * cmd_args.target),
+                    n_prune=int(cmd_args.split_rate * n* (1 - t)),
+                    prune_cost=prune_cost, densify_score=densify_score)
 
-        target_split = (target_gaussians - n) + prune_mask.sum() 
-        split_thresh = torch.quantile(densify_score, target_split / n)
-        split_mask = (densify_score >= split_thresh) 
-
+    
         splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.0)
 
 
