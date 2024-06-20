@@ -137,7 +137,7 @@ class ParameterClass():
     return ParameterClass(self.tensors[idx], self.learning_rates, state, optimizer=self.create_optimizer)
   
   def append_tensors(self, tensors:TensorDict):
-    assert tensors.keys() == self.tensors.keys(), f"{tensors.keys()} != {self.tensors.keys()}"
+    assert set(tensors.keys()) == set(self.tensors.keys()), f"{tensors.keys()} != {self.tensors.keys()}"
     n = tensors.batch_size[0]
 
     state = self._updated_state(lambda x: torch.cat(

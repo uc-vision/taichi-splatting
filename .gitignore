@@ -12,6 +12,9 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+*.nfs*
+
+wandb/
 build/
 develop-eggs/
 dist/
