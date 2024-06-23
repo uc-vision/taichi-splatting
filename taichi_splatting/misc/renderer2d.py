@@ -55,6 +55,9 @@ def point_covariance(gaussians):
   return torch.bmm(basis.transpose(1, 2), basis)
 
 
+
+
+
 def split_by_samples(points: Gaussians2D, samples: torch.Tensor, depth_noise:float=1e-2) -> Gaussians2D:
   num_points, n, _ = samples.shape
 
@@ -95,6 +98,13 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None
       batch_size = points.batch_size)
 
   return split_by_samples(points, samples, depth_noise)
+
+
+def sample_gaussians(points: Gaussians2D) -> torch.Tensor:
+  samples = torch.randn_like(points.position)
+  return (samples.unsqueeze(1) @ point_basis(points)).squeeze(1)
+
+
 
 
 def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:

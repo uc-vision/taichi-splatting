@@ -10,7 +10,7 @@ import taichi as ti
 import torch
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.encode_depth import encode_depth32
-from taichi_splatting.misc.renderer2d import project_gaussians2d, split_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, split_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.rasterizer.function import rasterize
 
@@ -53,6 +53,8 @@ def parse_args():
   return args
 
 
+
+
 def display_image(name, image):
     image = (image.detach().clamp(0, 1) * 255).to(torch.uint8)
     image = image.cpu().numpy()
@@ -67,7 +69,10 @@ def psnr(a, b):
 def train_epoch(opt, gaussians, ref_image, epoch_size=100, 
         config:RasterConfig = RasterConfig(), grad_alpha=0.9, 
         opacity_reg=0.0,
-        scale_reg=0.0):
+        scale_reg=0.0,
+        noise_threshold=0.05,
+        noise_lr=100.0, 
+        k = 100):
     
     h, w = ref_image.shape[:2]
 
@@ -79,6 +84,9 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       gaussians2d = project_gaussians2d(gaussians)  
       depths = encode_depth32(gaussians.z_depth)
 
+      opacity = torch.sigmoid(gaussians.alpha_logit).unsqueeze(-1)
+
+
       raster = rasterize(gaussians2d=gaussians2d, 
         encoded_depths=depths,
         features=gaussians.feature, 
@@ -87,10 +95,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
         compute_split_heuristics=True)
 
 
-      opacity = torch.sigmoid(gaussians.alpha_logit).unsqueeze(-1)
       scale = torch.exp(gaussians.log_scaling)
-
-
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * opacity.mean()
               + scale_reg * scale.mean())
@@ -105,6 +110,13 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
 
         split_heuristics =  raster.point_split_heuristics if i == 0 \
             else (1 - grad_alpha) * split_heuristics + grad_alpha * raster.point_split_heuristics
+        
+        opacity = torch.sigmoid(gaussians.alpha_logit)
+        op_factor = torch.sigmoid(k * (noise_threshold - opacity)).unsqueeze(1)
+
+        noise = sample_gaussians(gaussians) * op_factor * noise_lr
+        gaussians.position += noise
+
 
 
       prune_cost, densify_score = split_heuristics.unbind(dim=1)
@@ -170,17 +182,14 @@ def main():
 
     return mask
     
-
-
   def split_prune(n, target, n_prune, densify_score, prune_cost):
       prune_mask = take_n(prune_cost, n_prune, descending=False)
-
-      densify_score[prune_mask] = -1
 
       target_split = ((target - n) + n_prune) 
       split_mask = take_n(densify_score, target_split, descending=True)
 
-      return split_mask, prune_mask
+      both = (split_mask & prune_mask)
+      return split_mask ^ both, prune_mask ^ both
 
 
 
@@ -240,10 +249,13 @@ def main():
         n = gaussians.batch_size[0]
 
         split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
-                    n_prune=int(cmd_args.split_rate * n * (1 - t)**3),
+                    n_prune=int(cmd_args.split_rate * n * (1 - t)**2),
                     densify_score=densify_score, prune_cost=prune_cost)
 
-    
+        if prune_mask.sum() > 0:
+          print(f"thresholds: split {densify_score[split_mask].min()} prune {prune_cost[prune_mask].max()}")
+
+
         splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.1)
 
 
