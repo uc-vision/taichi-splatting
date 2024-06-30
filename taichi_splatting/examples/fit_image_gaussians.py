@@ -72,7 +72,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
         config:RasterConfig = RasterConfig(), grad_alpha=0.9, 
         opacity_reg=0.0,
         scale_reg=0.0,
-        noise_threshold=0.01,
+        noise_threshold=0.05,
         noise_lr=100.0, 
         k = 100):
     
@@ -160,8 +160,8 @@ def main():
     alpha_logit=0.1,
     feature=0.01
   )
-  create_optimizer = partial(SparseVectorAdam, betas=(0.9, 0.999))
-  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.9, 0.999), amsgrad=False, weight_decay=0.0)
+  create_optimizer = partial(SparseVectorAdam, betas=(0.5, 0.999))
+  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=False, weight_decay=0.0)
 
 
   params = ParameterClass.create(gaussians.to_tensordict(), learning_rates, base_lr=1.0, optimizer=create_optimizer)
