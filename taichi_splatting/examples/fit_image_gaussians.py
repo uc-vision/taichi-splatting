@@ -13,7 +13,6 @@ from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, split_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.misc.sparse_adam import SparseAdam
-from taichi_splatting.misc.sparse_vector_adam import SparseVectorAdam
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.misc.parameter_class import ParameterClass
@@ -107,7 +106,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       check_finite(gaussians, 'gaussians', warn=True)
 
       # opt.step()
-      opt.step(visibility = torch.arange(gaussians.batch_size[0], device=gaussians.position.device))
+      opt.step(vis_indexes = torch.arange(gaussians.batch_size[0], device=gaussians.position.device))
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
@@ -160,7 +159,7 @@ def main():
     alpha_logit=0.1,
     feature=0.01
   )
-  create_optimizer = partial(SparseVectorAdam, betas=(0.5, 0.999))
+  create_optimizer = partial(SparseAdam, betas=(0.7, 0.999))
   # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=False, weight_decay=0.0)
 
 
