@@ -152,18 +152,21 @@ def main():
   torch.manual_seed(cmd_args.seed)
 
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), scale_factor=0.1).to(torch.device('cuda:0'))
-  learning_rates = dict(
-    position=0.1,
-    log_scaling=0.05,
-    rotation=0.005,
-    alpha_logit=0.1,
-    feature=0.01
+  parameter_groups = dict(
+    position=dict(lr=0.1),
+    log_scaling=dict(lr=0.05),
+    rotation=dict(lr=0.005),
+    alpha_logit=dict(lr=0.1),
+    feature=dict(lr=0.01)
   )
+
   create_optimizer = partial(SparseAdam, betas=(0.7, 0.999))
   # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=False, weight_decay=0.0)
 
 
-  params = ParameterClass.create(gaussians.to_tensordict(), learning_rates, base_lr=1.0, optimizer=create_optimizer)
+  params = ParameterClass.create(gaussians.to_tensordict(), 
+        parameter_groups, base_lr=1.0, optimizer=create_optimizer)
+  
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
 

@@ -9,7 +9,7 @@ def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
 
 
 @cache
-def adam_kernel(betas=(0.9, 0.999), eps=1e-08):
+def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0):
   b1, b2 = betas
 
   @ti.kernel
@@ -22,8 +22,11 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08):
       idx = indexes[i]
 
       for j in range(param.shape[1]):
-
         g = grad[idx, j]
+
+        if ti.static(weight_decay != 0.0):
+          g += weight_decay * param[idx, j]
+
 
         avg = lerp(b1, exp_avg[idx, j], g)
         avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
@@ -38,7 +41,9 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08):
 
 
 class SparseAdam(torch.optim.Optimizer):
-  def __init__(self, params, lr=0.001, betas=(0.9, 0.999), eps=1e-08):
+  def __init__(self, params, lr=0.001, 
+               betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0):
+    
     if not 0.0 <= lr:
       raise ValueError(f"Invalid learning rate: {lr}")
     if not 0.0 <= eps:
@@ -48,7 +53,7 @@ class SparseAdam(torch.optim.Optimizer):
     if not 0.0 <= betas[1] < 1.0:
       raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
 
-    defaults = dict(lr=lr, betas=betas, eps=eps)
+    defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
     super().__init__(params, defaults)
 
   @torch.no_grad()
@@ -75,5 +80,7 @@ class SparseAdam(torch.optim.Optimizer):
       exp_avg = state["exp_avg"]
       exp_avg_sq = state["exp_avg_sq"]
 
-      kernel = adam_kernel(betas=group["betas"], eps=group["eps"])
+      kernel = adam_kernel(betas=group["betas"], 
+                           eps=group["eps"], 
+                           weight_decay=group["weight_decay"])
       kernel(param, grad, exp_avg, exp_avg_sq, vis_indexes, group["lr"])
