@@ -12,6 +12,8 @@ from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, split_gaussians2d, uniform_split_gaussians2d
 
+from taichi_splatting.misc.sparse_adam import SparseAdam
+from taichi_splatting.misc.sparse_vector_adam import SparseVectorAdam
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.misc.parameter_class import ParameterClass
@@ -33,7 +35,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--split_rate', type=float, default=0.5, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=0.0001)
 
@@ -70,7 +72,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
         config:RasterConfig = RasterConfig(), grad_alpha=0.9, 
         opacity_reg=0.0,
         scale_reg=0.0,
-        noise_threshold=0.05,
+        noise_threshold=0.01,
         noise_lr=100.0, 
         k = 100):
     
@@ -103,7 +105,9 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       loss.backward()
 
       check_finite(gaussians, 'gaussians', warn=True)
-      opt.step()
+
+      # opt.step()
+      opt.step(visibility = torch.arange(gaussians.batch_size[0], device=gaussians.position.device))
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
@@ -116,8 +120,6 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
 
         noise = sample_gaussians(gaussians) * op_factor * noise_lr
         gaussians.position += noise
-
-
 
       prune_cost, densify_score = split_heuristics.unbind(dim=1)
     return raster.image, prune_cost, densify_score 
@@ -158,7 +160,8 @@ def main():
     alpha_logit=0.1,
     feature=0.01
   )
-  create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
+  create_optimizer = partial(SparseVectorAdam, betas=(0.9, 0.999))
+  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.9, 0.999), amsgrad=False, weight_decay=0.0)
 
 
   params = ParameterClass.create(gaussians.to_tensordict(), learning_rates, base_lr=1.0, optimizer=create_optimizer)
@@ -251,9 +254,6 @@ def main():
         split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
                     n_prune=int(cmd_args.split_rate * n * (1 - t)**2),
                     densify_score=densify_score, prune_cost=prune_cost)
-
-        if prune_mask.sum() > 0:
-          print(f"thresholds: split {densify_score[split_mask].min()} prune {prune_cost[prune_mask].max()}")
 
 
         splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.1)

@@ -47,7 +47,8 @@ class ParameterClass():
 
   @beartype
   @staticmethod
-  def create(tensors:TensorDict, learning_rates:Dict[str, float], base_lr=1.0, optimizer = default_optimizer):
+  def create(tensors:TensorDict, learning_rates:Dict[str, float], base_lr=1.0,
+               optimizer = default_optimizer):
     learning_rates = {k: v * base_lr for k, v in learning_rates.items()}
     
     return ParameterClass(tensors, learning_rates, optimizer=optimizer)
@@ -70,19 +71,8 @@ class ParameterClass():
     self.optimizer.zero_grad()
 
 
-  def step(self):
-    self.optimizer.step()
-
-  def step_sparse(self, indexes:torch.Tensor):
-    self.to_sparse(indexes)
-    self.optimizer.step()
-
-
-  def to_sparse(self, indexes:torch.Tensor):
-    for k in self.optimized_keys():
-      v = self.tensors[k]
-      v.grad = torch.sparse_coo_tensor(indexes.view(1, -1), values=v.grad[indexes], size=v.shape)
-
+  def step(self, **kwargs):
+    self.optimizer.step(**kwargs)
 
 
   def keys(self):
