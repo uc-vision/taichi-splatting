@@ -140,12 +140,12 @@ def main():
   print(f'Image size: {w}x{h}')
 
   if cmd_args.show:
-    cv2.namedWindow('gradient', cv2.WINDOW_NORMAL)
-    cv2.namedWindow('err', cv2.WINDOW_NORMAL)
+    # cv2.namedWindow('gradient', cv2.WINDOW_NORMAL)
+    # cv2.namedWindow('err', cv2.WINDOW_NORMAL)
     cv2.namedWindow('rendered', cv2.WINDOW_NORMAL)
 
-    cv2.resizeWindow('gradient', w, h)
-    cv2.resizeWindow('err', w, h)
+    # cv2.resizeWindow('gradient', w, h)
+    # cv2.resizeWindow('err', w, h)
     cv2.resizeWindow('rendered', w, h)
 
 
@@ -223,16 +223,15 @@ def main():
     with torch.no_grad():
 
       if cmd_args.show:
-        gaussians2d = project_gaussians2d(params)
-        depths = encode_depth32(params.z_depth)
-        raster =  rasterize(gaussians2d, depths, densify_score.contiguous().unsqueeze(-1), 
-                            image_size=(w, h), config=config, compute_split_heuristics=True)
+        # gaussians2d = project_gaussians2d(params)
+        # depths = encode_depth32(params.z_depth)
+        # raster =  rasterize(gaussians2d, depths, densify_score.contiguous().unsqueeze(-1), 
+        #                     image_size=(w, h), config=config, compute_split_heuristics=True)
 
         err = torch.abs(ref_image - image)
         
-        display_image('gradient', (0.5 * raster.image / raster.image.mean() ))
         display_image('rendered', image)
-        display_image('err',  0.25 * err / err.mean(dim=(0, 1), keepdim=True))
+        # display_image('err',  0.25 * err / err.mean(dim=(0, 1), keepdim=True))
 
     
       if cmd_args.write_frames:
