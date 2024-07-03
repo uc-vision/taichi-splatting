@@ -105,8 +105,10 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
 
       check_finite(gaussians, 'gaussians', warn=True)
 
+
+      visible = torch.nonzero(raster.point_split_heuristics[:, 0]).squeeze(1)
       # opt.step()
-      opt.step(vis_indexes = torch.arange(gaussians.batch_size[0], device=gaussians.position.device))
+      opt.step(vis_indexes = visible)
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_(min=-1, max=4)
