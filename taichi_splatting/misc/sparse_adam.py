@@ -13,13 +13,19 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0):
   b1, b2 = betas
 
   @ti.kernel
-  def kernel(param: ti.types.ndarray(dtype=ti.f32, ndim=2), grad: ti.types.ndarray(dtype=ti.f32, ndim=2),
-             exp_avg: ti.types.ndarray(dtype=ti.f32, ndim=2), exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=2),
+  def kernel(param: ti.types.ndarray(dtype=ti.f32, ndim=2), 
+             grad: ti.types.ndarray(dtype=ti.f32, ndim=2),
+             step: ti.types.ndarray(dtype=ti.f32, ndim=1),
+             exp_avg: ti.types.ndarray(dtype=ti.f32, ndim=2), 
+             exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=2),
              indexes: ti.types.ndarray(dtype=ti.int64, ndim=1),
              lr: ti.f32):
 
     for i in indexes:
       idx = indexes[i]
+
+      bias1 =  (1.0 - ti.pow(b1, 1 + step[idx]))
+      bias2 = (1.0 - ti.pow(b2, 1 + step[idx]))
 
       for j in range(param.shape[1]):
         g = grad[idx, j]
@@ -28,14 +34,17 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0):
           g += weight_decay * param[idx, j]
 
 
-        avg = lerp(b1, exp_avg[idx, j], g)
-        avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
+        avg = lerp(b1, exp_avg[idx, j], g) 
+        avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g) 
 
-        step = lr * avg / (ti.sqrt(avg_sq) + eps)
 
-        param[idx, j] -= step
+        param[idx, j] -= lr * (avg / bias1) / (ti.sqrt(avg_sq / bias2) + eps)
+
         exp_avg[idx, j] = avg
         exp_avg_sq[idx, j] = avg_sq
+
+      step[idx] += 1
+
 
   return kernel
 
@@ -73,9 +82,11 @@ class SparseAdam(torch.optim.Optimizer):
       # Lazy state initialization
       state = self.state[param]
       if len(state) == 0:
-        state['step'] = torch.tensor(0.0, dtype=torch.float32)
+        state['step'] = torch.zeros((param.shape[0]), dtype=torch.float32, device=param.device)
         state['exp_avg'] = torch.zeros_like(param)
         state['exp_avg_sq'] = torch.zeros_like(param)
+
+      step = state["step"]
 
       exp_avg = state["exp_avg"]
       exp_avg_sq = state["exp_avg_sq"]
@@ -83,4 +94,4 @@ class SparseAdam(torch.optim.Optimizer):
       kernel = adam_kernel(betas=group["betas"], 
                            eps=group["eps"], 
                            weight_decay=group["weight_decay"])
-      kernel(param, grad, exp_avg, exp_avg_sq, vis_indexes, group["lr"])
+      kernel(param, grad, step, exp_avg, exp_avg_sq, vis_indexes, group["lr"])

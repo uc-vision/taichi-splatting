@@ -13,6 +13,8 @@ from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, split_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.misc.sparse_adam import SparseAdam
+from schedulefree import AdamWScheduleFree
+
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.misc.parameter_class import ParameterClass
@@ -71,8 +73,8 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
         config:RasterConfig = RasterConfig(), grad_alpha=0.9, 
         opacity_reg=0.0,
         scale_reg=0.0,
-        noise_threshold=0.05,
-        noise_lr=100.0, 
+        noise_threshold=0.01,
+        noise_lr=10.0, 
         k = 100):
     
     h, w = ref_image.shape[:2]
@@ -120,7 +122,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
         op_factor = torch.sigmoid(k * (noise_threshold - opacity)).unsqueeze(1)
 
         noise = sample_gaussians(gaussians) * op_factor * noise_lr
-        gaussians.position += noise
+        # gaussians.position += noise
 
       prune_cost, densify_score = split_heuristics.unbind(dim=1)
     return raster.image, prune_cost, densify_score 
@@ -163,7 +165,9 @@ def main():
   )
 
   create_optimizer = partial(SparseAdam, betas=(0.7, 0.999))
-  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=False, weight_decay=0.0)
+  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), weight_decay=0.0)
+  # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
+
 
 
   params = ParameterClass.create(gaussians.to_tensordict(), 
