@@ -36,7 +36,7 @@ def parse_args():
   parser.add_argument('--max_epoch', type=int, default=100)
   parser.add_argument('--split_rate', type=float, default=0.2, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
-  parser.add_argument('--scale_reg', type=float, default=0.0002)
+  parser.add_argument('--scale_reg', type=float, default=0.00001)
 
   parser.add_argument('--noise_scale', type=float, default=100.0)
 
@@ -106,7 +106,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       scale = torch.exp(gaussians.log_scaling)
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * opacity.mean()
-              + scale_reg * scale.mean())
+              + scale_reg * scale.pow(2).mean())
 
       loss.backward()
 
@@ -235,7 +235,7 @@ def main():
                                         epoch_size=epoch_size, config=config, 
                                         opacity_reg=cmd_args.opacity_reg,
                                         scale_reg=cmd_args.scale_reg,
-                                        noise_lr=cmd_args.noise_scale * (1 - t))
+                                        noise_lr=cmd_args.noise_scale * (1 - t)**2)
     
 
     with torch.no_grad():
