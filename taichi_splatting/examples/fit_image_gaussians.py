@@ -36,7 +36,7 @@ def parse_args():
   parser.add_argument('--max_epoch', type=int, default=100)
   parser.add_argument('--split_rate', type=float, default=0.2, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
-  parser.add_argument('--scale_reg', type=float, default=0.0001)
+  parser.add_argument('--scale_reg', type=float, default=0.0002)
 
   parser.add_argument('--noise_scale', type=float, default=100.0)
 
@@ -118,7 +118,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       opt.step(vis_indexes = visible)
 
       with torch.no_grad():
-        gaussians.log_scaling.clamp_(min=-1, max=5)
+        gaussians.log_scaling.clamp_max(5)
 
         split_heuristics =  raster.point_split_heuristics if i == 0 \
             else (1 - grad_alpha) * split_heuristics + grad_alpha * raster.point_split_heuristics
