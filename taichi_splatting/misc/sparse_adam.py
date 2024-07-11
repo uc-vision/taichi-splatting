@@ -57,7 +57,7 @@ class SparseAdam(torch.optim.Optimizer):
     super().__init__(params, defaults)
 
   @torch.no_grad()
-  def step(self, vis_indexes: torch.Tensor):
+  def step(self, visible_indexes: torch.Tensor):
     for group in self.param_groups:
 
       assert len(group["params"]) == 1, "more than one tensor in group"
@@ -80,7 +80,6 @@ class SparseAdam(torch.optim.Optimizer):
       exp_avg = state["exp_avg"]
       exp_avg_sq = state["exp_avg_sq"]
 
-      kernel = adam_kernel(betas=group["betas"], 
-                           eps=group["eps"], 
+      kernel = adam_kernel(betas=group["betas"], eps=group["eps"], 
                            weight_decay=group["weight_decay"])
-      kernel(param, grad, exp_avg, exp_avg_sq, vis_indexes, group["lr"])
+      kernel(param, grad, exp_avg, exp_avg_sq, visible_indexes, group["lr"])
