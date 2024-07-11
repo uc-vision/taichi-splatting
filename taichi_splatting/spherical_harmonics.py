@@ -125,7 +125,7 @@ def sh_function(degree:int=3, dimension:int=3,
           cam_pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
           idx = indexes[i]
 
-          coeffs = rsh_cart(ti.math.normalize(cam_pos -  points[idx]))
+          coeffs = rsh_cart(ti.math.normalize(points[idx] - cam_pos))
           params_i = params[idx]
 
           for d in ti.static(range(dimension)):
