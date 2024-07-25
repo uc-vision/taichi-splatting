@@ -34,9 +34,11 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--split_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
-  parser.add_argument('--opacity_reg', type=float, default=0.0001)
-  parser.add_argument('--scale_reg', type=float, default=0.0001)
+  parser.add_argument('--split_rate', type=float, default=0.2, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--opacity_reg', type=float, default=0.001)
+  parser.add_argument('--scale_reg', type=float, default=0.00001)
+
+  parser.add_argument('--noise_scale', type=float, default=100.0)
 
   parser.add_argument('--write_frames', type=Path, default=None)
 
@@ -52,6 +54,11 @@ def parse_args():
     args.pixel_tile = tuple(map(int, args.pixel_tile.split(',')))
 
   return args
+
+
+def log_iterp(t, a, b):
+  return math.exp(math.log(b) * t + math.log(a) * (1 - t))
+
 
 
 
@@ -99,7 +106,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       scale = torch.exp(gaussians.log_scaling)
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * opacity.mean()
-              + scale_reg * scale.mean())
+              + scale_reg * scale.pow(2).mean())
 
       loss.backward()
 
@@ -111,7 +118,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       opt.step(vis_indexes = visible)
 
       with torch.no_grad():
-        gaussians.log_scaling.clamp_(min=-1, max=4)
+        gaussians.log_scaling.clamp_max(5)
 
         split_heuristics =  raster.point_split_heuristics if i == 0 \
             else (1 - grad_alpha) * split_heuristics + grad_alpha * raster.point_split_heuristics
@@ -152,18 +159,21 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
+  lr_range = (0.5, 0.1)
 
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), scale_factor=0.1).to(torch.device('cuda:0'))
   parameter_groups = dict(
-    position=dict(lr=0.1),
-    log_scaling=dict(lr=0.05),
+    position=dict(lr=lr_range[0]),
+    log_scaling=dict(lr=0.025),
     rotation=dict(lr=0.005),
-    alpha_logit=dict(lr=0.1),
+    alpha_logit=dict(lr=0.05),
     feature=dict(lr=0.01)
   )
 
   create_optimizer = partial(SparseAdam, betas=(0.7, 0.999))
-  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=False, weight_decay=0.0)
+  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
+  # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
+
 
 
   params = ParameterClass.create(gaussians.to_tensordict(), 
@@ -215,11 +225,17 @@ def main():
   
   for epoch in range(cmd_args.max_epoch):
     epoch_size = cmd_args.epoch_size
+    t = (epoch + 1) / (cmd_args.max_epoch - 1)
+
+
+    params.set_learning_rate(position = log_iterp(t, *lr_range))
+
 
     image, densify_score, prune_cost, epoch_time = train(params.optimizer, params, ref_image, 
                                         epoch_size=epoch_size, config=config, 
                                         opacity_reg=cmd_args.opacity_reg,
-                                        scale_reg=cmd_args.scale_reg)
+                                        scale_reg=cmd_args.scale_reg,
+                                        noise_lr=cmd_args.noise_scale * (1 - t)**2)
     
 
     with torch.no_grad():
@@ -249,17 +265,17 @@ def main():
       if cmd_args.target and epoch < cmd_args.max_epoch - 1:
         gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
 
-        t = (epoch + 1) / (cmd_args.max_epoch - 1)
-        t_points = min(math.pow(t * 2 , 0.5), 1.0)
+        t_points = min(math.pow(t * 2, 0.5), 1.0)
 
         n = gaussians.batch_size[0]
 
-        split_mask, prune_mask = split_prune(n = n, target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
+        split_mask, prune_mask = split_prune(n = n, 
+                    target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
                     n_prune=int(cmd_args.split_rate * n * (1 - t)**2),
                     densify_score=densify_score, prune_cost=prune_cost)
 
 
-        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.1)
+        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.0)
 
 
         params = params[~(split_mask | prune_mask)]

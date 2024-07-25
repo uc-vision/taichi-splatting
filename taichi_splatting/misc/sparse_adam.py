@@ -27,13 +27,11 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0):
         if ti.static(weight_decay != 0.0):
           g += weight_decay * param[idx, j]
 
-
         avg = lerp(b1, exp_avg[idx, j], g)
         avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
 
-        step = lr * avg / (ti.sqrt(avg_sq) + eps)
+        param[idx, j] -= lr * avg / (ti.sqrt(avg_sq) + eps)
 
-        param[idx, j] -= step
         exp_avg[idx, j] = avg
         exp_avg_sq[idx, j] = avg_sq
 

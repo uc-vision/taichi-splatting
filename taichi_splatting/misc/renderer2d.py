@@ -12,6 +12,7 @@ from taichi_splatting.data_types import Gaussians2D
 from taichi_splatting.misc.encode_depth import encode_depth32
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
+from taichi_splatting.torch_ops.projection import inverse_sigmoid
 
 
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
@@ -107,7 +108,7 @@ def sample_gaussians(points: Gaussians2D) -> torch.Tensor:
 
 
 
-def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:
+def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.0, depth_noise:float=1e-2) -> Gaussians2D:
   """ Split along most significant axis """
   axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
   values = torch.linspace(-1, 1, n, device=points.position.device)
@@ -116,12 +117,15 @@ def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[flo
   samples += torch.randn_like(samples) * noise
 
   if scaling is None:
-    scaling = 1 / math.sqrt(n)
+    scaling = math.sqrt(n) / n
 
-  factor = math.log(1 / (scaling * n))
+
+  factor = math.log(scaling)
   points = replace(points, 
       log_scaling = points.log_scaling + factor * axis,
       batch_size = points.batch_size)
+      
+      
 
   return split_by_samples(points, samples, depth_noise)
 
