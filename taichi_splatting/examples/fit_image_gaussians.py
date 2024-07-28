@@ -12,10 +12,10 @@ from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.encode_depth import encode_depth32
 from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, split_gaussians2d, uniform_split_gaussians2d
 
-from taichi_splatting.misc.sparse_adam import SparseAdam
+from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
 
-from taichi_splatting.misc.parameter_class import ParameterClass
+from taichi_splatting.optim.parameter_class import ParameterClass
 from taichi_splatting.tests.random_data import random_2d_gaussians
 
 from taichi_splatting.torch_ops.util import check_finite
@@ -34,7 +34,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--split_rate', type=float, default=0.2, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--prune_rate', type=float, default=0.2, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
   parser.add_argument('--scale_reg', type=float, default=0.00001)
 
@@ -115,7 +115,7 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
 
       visible = torch.nonzero(raster.point_split_heuristics[:, 0]).squeeze(1)
       # opt.step()
-      opt.step(vis_indexes = visible)
+      opt.step(visible_indexes = visible)
 
       with torch.no_grad():
         gaussians.log_scaling.clamp_max(5)
@@ -271,7 +271,7 @@ def main():
 
         split_mask, prune_mask = split_prune(n = n, 
                     target = math.ceil(cmd_args.n * (1 - t_points) + t_points * cmd_args.target),
-                    n_prune=int(cmd_args.split_rate * n * (1 - t)**2),
+                    n_prune=int(cmd_args.prune_rate * n * (1 - t)**2),
                     densify_score=densify_score, prune_cost=prune_cost)
 
 

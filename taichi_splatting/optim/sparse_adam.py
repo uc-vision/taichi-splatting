@@ -62,14 +62,13 @@ class SparseAdam(torch.optim.Optimizer):
       param = group["params"][0]
       if param.grad is None:
         continue
-
-      if param.dim() == 1:
-        param, grad = param.unsqueeze(1), param.grad.unsqueeze(1)
-      else:
-        grad = param.grad
-
+      
       # Lazy state initialization
       state = self.state[param]
+
+      grad = param.grad.view(param.shape[0], -1)
+      param = param.view(param.shape[0], -1) 
+
       if len(state) == 0:
         state['step'] = torch.tensor(0.0, dtype=torch.float32)
         state['exp_avg'] = torch.zeros_like(param)
@@ -81,3 +80,4 @@ class SparseAdam(torch.optim.Optimizer):
       kernel = adam_kernel(betas=group["betas"], eps=group["eps"], 
                            weight_decay=group["weight_decay"])
       kernel(param, grad, exp_avg, exp_avg_sq, visible_indexes, group["lr"])
+
