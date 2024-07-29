@@ -12,6 +12,7 @@ from taichi_splatting.data_types import Gaussians2D
 from taichi_splatting.misc.encode_depth import encode_depth32
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
+from taichi_splatting.torch_ops.projection import inverse_sigmoid
 
 
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
@@ -53,6 +54,9 @@ def point_rotation(points:Gaussians2D):
 def point_covariance(gaussians):
   basis = point_basis(gaussians)
   return torch.bmm(basis.transpose(1, 2), basis)
+
+
+
 
 
 def split_by_samples(points: Gaussians2D, samples: torch.Tensor, depth_noise:float=1e-2) -> Gaussians2D:
@@ -97,7 +101,14 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None
   return split_by_samples(points, samples, depth_noise)
 
 
-def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.1, depth_noise:float=1e-2) -> Gaussians2D:
+def sample_gaussians(points: Gaussians2D) -> torch.Tensor:
+  samples = torch.randn_like(points.position)
+  return (samples.unsqueeze(1) @ point_basis(points)).squeeze(1)
+
+
+
+
+def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.0, depth_noise:float=1e-2) -> Gaussians2D:
   """ Split along most significant axis """
   axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
   values = torch.linspace(-1, 1, n, device=points.position.device)
@@ -106,12 +117,15 @@ def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[flo
   samples += torch.randn_like(samples) * noise
 
   if scaling is None:
-    scaling = 1 / math.sqrt(n)
+    scaling = math.sqrt(n) / n
 
-  factor = math.log(1 / (scaling * n))
+
+  factor = math.log(scaling)
   points = replace(points, 
       log_scaling = points.log_scaling + factor * axis,
       batch_size = points.batch_size)
+      
+      
 
   return split_by_samples(points, samples, depth_noise)
 

@@ -195,13 +195,13 @@ def make_library(dtype=ti.f32):
       projection: mat3,
       position: vec3,
   ):
-      f = vec2(projection[0, 0], projection[1, 1])
-      c = vec2(projection[0, 2], projection[1, 2])
+      fx, fy = projection[0, 0], projection[1, 1]
       x, y, z = position
+      
 
       return mat2x3f([
-         [f.x/z, 0, c.x/z - (c.x*z + f.x*x)/z**2],
-         [0, f.y/z, c.y/z - (c.y*z + f.y*y)/z**2],
+         [fx/z, 0, - fx*x / z**2],
+         [0, fy/z, - fy*y / z**2],
       ])
 
          

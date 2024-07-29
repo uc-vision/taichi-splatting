@@ -5,7 +5,7 @@ from beartype import beartype
 import taichi as ti
 import torch
 from taichi_splatting.data_types import Gaussians3D
-from taichi_splatting.misc.autograd import restore_grad
+from taichi_splatting.optim.autograd import restore_grad
 
 from .params import CameraParams
 from taichi_splatting.taichi_lib import get_library
