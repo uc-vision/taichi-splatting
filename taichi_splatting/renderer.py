@@ -6,7 +6,6 @@ from beartype.typing import Optional, Tuple
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
-from taichi_splatting.misc.depth_variance import compute_depth_variance
 from taichi_splatting.misc.encode_depth import encode_depth
 from taichi_splatting.misc.radius import compute_radius
 from taichi_splatting.rasterizer import rasterize, RasterConfig
@@ -91,25 +90,35 @@ def render_gaussians(
     features = gaussians.feature[indexes]
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
-  gaussians2d, depthvars = project_to_image(gaussians, indexes, camera_params)
-  return render_projected(indexes, gaussians2d, features, depthvars, camera_params, config, 
+  gaussians2d, depths = project_to_image(gaussians, indexes, camera_params)
+  return render_projected(indexes, gaussians2d, features, depths, camera_params, config, 
                    render_depth=render_depth, use_depth16=use_depth16,
                    compute_split_heuristics=compute_split_heuristics, compute_radii=compute_radii)
 
 
+@torch.compile
+def compute_depth_variance(depth_depthsq, weight, eps=1e-6):
+    weight_eps = weight + eps
+
+    depth = depth_depthsq[..., 0] / weight_eps
+    depth_var = depth_depthsq[..., 1] / weight_eps
+
+    return depth, depth_var - depth**2
+
+
 def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor, 
-      features:torch.Tensor, depthvars:torch.Tensor, 
+      features:torch.Tensor, depths:torch.Tensor, 
       camera_params: CameraParams, config:RasterConfig,      
 
       render_depth:bool = False,  use_depth16:bool = False,
       compute_split_heuristics:bool = False, compute_radii:bool = False):
 
-  depth_order = encode_depth(depthvars, 
+  depth_order = encode_depth(depths, 
     depth_range=(camera_params.near_plane, camera_params.far_plane),
     use_depth16 = use_depth16)
   
   if render_depth:
-    features = torch.cat([depthvars, features], dim=1)
+    features = torch.cat([depths, depths**2, features], dim=1)
 
   raster = rasterize(gaussians2d, depth_order, features.contiguous(),
     image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)
@@ -118,8 +127,8 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
   feature_image = raster.image
 
   if render_depth:
-    depth, depth_var = compute_depth_variance(raster.image, raster.image_weight)
-    feature_image = feature_image[..., 3:]
+    depth, depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
+    feature_image = feature_image[..., 2:]
 
   heuristics = raster.point_split_heuristics if compute_split_heuristics else None
   radii = compute_radius(gaussians2d, config.gaussian_scale) if compute_radii else None

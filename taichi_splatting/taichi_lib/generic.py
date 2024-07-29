@@ -175,51 +175,82 @@ def make_library(dtype=ti.f32):
       """
       
       W = T_camera_world[:3, :3]
-      R = quat_to_mat(cov_rotation)
+      RS = scaled_quat_to_mat(cov_rotation, cov_scale)
 
-      S = mat3([
-          [cov_scale.x, 0, 0],
-          [0, cov_scale.y, 0],
-          [0, 0, cov_scale.z]
-      ])
-      # covariance matrix, 3x3, equation (6) in the paper
+        # covariance matrix, 3x3, equation (6) in the paper
       # Sigma = R @ S @ S.transpose() @ R.transpose()
       # cov_uv = J @ W @ Sigma @ W.transpose() @ J.transpose()  # equation (5) in the paper
       
-      m = W @ R @ S
+      m = W @ RS
       return m @ m.transpose() 
 
 
   @ti.func
-  def get_projective_transform_jacobian(
+  def image_projective_jacobian(
+      projection: mat3,
+      image_point: vec2, z: dtype
+  ):
+    fx, fy = projection[0, 0], projection[1, 1]
+    cx, cy = projection[0, 2], projection[1, 2]
+    x, y = image_point
+    
+
+    return mat2x3f([
+        [fx/z, 0, -(x - cx) / z],
+        [0, fy/z, -(y - cy) / z],
+    ])
+
+  @ti.func
+  def camera_projective_jacobian(
       projection: mat3,
       position: vec3,
   ):
-      fx, fy = projection[0, 0], projection[1, 1]
-      x, y, z = position
-      
+    fx, fy = projection[0, 0], projection[1, 1]
+    x, y, z = position
 
-      return mat2x3f([
-         [fx/z, 0, - fx*x / z**2],
-         [0, fy/z, - fy*y / z**2],
-      ])
-
-         
+    return mat2x3f([
+        [fx/z, 0, - fx*x / z**2],
+        [0, fy/z, - fy*y / z**2],
+    ])         
 
   @ti.func
   def project_perspective_gaussian(
       projective_transform: mat3,
-      point_in_camera: vec3,
+      image_point: vec2, depth: dtype,
       cov_in_camera: mat3) -> mat2:
       """ Approximate the 2D gaussian covariance in image space """
 
       J = get_projective_transform_jacobian(
-          projective_transform, point_in_camera)
+          projective_transform, image_point, depth)
       
       cov_uv = J @ cov_in_camera @ J.transpose()
       return cov_uv
 
 
+
+
+  @ti.func
+  def gaussian_covariance_in_image(
+      T_camera_world: mat4,
+      cov_rotation: vec4,
+      cov_scale: vec3,
+      J: mat2x3f,
+  ) -> mat2:
+      """ Construct and rotate the covariance matrix in camera space
+      """
+      
+      W = T_camera_world[:3, :3]
+      # RS = scaled_quat_to_mat(cov_rotation, cov_scale)
+      R = quat_to_mat(cov_rotation)
+      S = scaling_matrix(cov_scale)
+
+
+      # covariance matrix, 3x3, equation (6) in the paper
+      # Sigma = R @ S @ S.transpose() @ R.transpose()
+      # cov_uv = J @ W @ Sigma @ W.transpose() @ J.transpose()  # equation (5) in the paper
+      
+      m = J @ W @ R @ S
+      return m @ m.transpose() 
 
 
   # 
@@ -346,6 +377,17 @@ def make_library(dtype=ti.f32):
       1 - 2*y2 - 2*z2, 2*x*y - 2*w*z, 2*x*z + 2*w*y,
       2*x*y + 2*w*z, 1 - 2*x2 - 2*z2, 2*y*z - 2*w*x,
       2*x*z - 2*w*y, 2*y*z + 2*w*x, 1 - 2*x2 - 2*y2
+    )
+
+  @ti.func
+  def scaled_quat_to_mat(q:vec4, s:vec3) -> mat3:
+    x, y, z, w = q
+    x2, y2, z2 = x*x, y*y, z*z
+
+    return mat3(
+      s.x * (1 - 2*y2 - 2*z2), s.y * (2*x*y - 2*w*z), s.z * (2*x*z + 2*w*y),
+      s.x * (2*x*y + 2*w*z), s.y * (1 - 2*x2 - 2*z2), s.z * (2*y*z - 2*w*x),
+      s.x * (2*x*z - 2*w*y), s.y * (2*y*z + 2*w*x), s.z * (1 - 2*x2 - 2*y2)
     )
 
   @ti.func

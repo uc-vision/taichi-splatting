@@ -120,9 +120,7 @@ def apply(position, log_scaling, rotation, alpha_logit, indexes,
   uv_cov += torch.eye(2, device=uv_cov.device, dtype=uv_cov.dtype) * blur_cov
 
   points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha_logit.sigmoid()], axis=-1)
-  depths = torch.stack([point_in_camera[:, 2], cov_in_camera[:, 2, 2], point_in_camera[:, 2] ** 2], axis=-1)
-
-  return points, depths.contiguous()
+  return points, point_in_camera[:, 2:3]
 
 
 def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams
