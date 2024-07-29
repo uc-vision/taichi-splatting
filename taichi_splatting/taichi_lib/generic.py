@@ -213,20 +213,6 @@ def make_library(dtype=ti.f32):
         [0, fy/z, - fy*y / z**2],
     ])         
 
-  @ti.func
-  def project_perspective_gaussian(
-      projective_transform: mat3,
-      image_point: vec2, depth: dtype,
-      cov_in_camera: mat3) -> mat2:
-      """ Approximate the 2D gaussian covariance in image space """
-
-      J = get_projective_transform_jacobian(
-          projective_transform, image_point, depth)
-      
-      cov_uv = J @ cov_in_camera @ J.transpose()
-      return cov_uv
-
-
 
 
   @ti.func
@@ -240,16 +226,13 @@ def make_library(dtype=ti.f32):
       """
       
       W = T_camera_world[:3, :3]
-      # RS = scaled_quat_to_mat(cov_rotation, cov_scale)
-      R = quat_to_mat(cov_rotation)
-      S = scaling_matrix(cov_scale)
-
+      RS = scaled_quat_to_mat(cov_rotation, cov_scale)
 
       # covariance matrix, 3x3, equation (6) in the paper
       # Sigma = R @ S @ S.transpose() @ R.transpose()
       # cov_uv = J @ W @ Sigma @ W.transpose() @ J.transpose()  # equation (5) in the paper
       
-      m = J @ W @ R @ S
+      m = J @ W @ RS
       return m @ m.transpose() 
 
 
