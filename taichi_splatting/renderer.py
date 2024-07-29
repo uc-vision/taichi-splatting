@@ -81,7 +81,7 @@ def render_gaussians(
   """
 
 
-  indexes = gaussians_in_view(gaussians.position, camera_params, config.tile_size, config.margin_tiles)
+  indexes = gaussians_in_view(gaussians, camera_params, config.gaussian_scale)
   # view_gaussians = gaussians[indexes] 
 
   if use_sh:
@@ -154,13 +154,13 @@ def viewspace_gradient(gaussians2d: torch.Tensor):
 
 
 def gaussians_in_view(
-  positions: torch.Tensor, 
+  gaussians: Gaussians3D,
+
   camera_params: CameraParams,
-  tile_size: int = 16,
-  margin_tiles: int = 3
+  gaussian_scale: float = 3.,
 ):
-  point_mask = frustum_culling(positions,
-    camera_params=camera_params, margin_pixels=margin_tiles * tile_size
+  point_mask = frustum_culling(gaussians.position, gaussians.rotation, gaussians.log_scaling,
+    camera_params=camera_params, gaussian_scale=gaussian_scale
   )
 
   return torch.nonzero(point_mask, as_tuple=True)[0]

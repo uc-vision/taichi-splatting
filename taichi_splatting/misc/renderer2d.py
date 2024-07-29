@@ -12,7 +12,6 @@ from taichi_splatting.data_types import Gaussians2D
 from taichi_splatting.misc.encode_depth import encode_depth32
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
-from taichi_splatting.torch_ops.projection import inverse_sigmoid
 
 
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
@@ -54,8 +53,6 @@ def point_rotation(points:Gaussians2D):
 def point_covariance(gaussians):
   basis = point_basis(gaussians)
   return torch.bmm(basis.transpose(1, 2), basis)
-
-
 
 
 
@@ -104,8 +101,6 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None
 def sample_gaussians(points: Gaussians2D) -> torch.Tensor:
   samples = torch.randn_like(points.position)
   return (samples.unsqueeze(1) @ point_basis(points)).squeeze(1)
-
-
 
 
 def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, noise=0.0, depth_noise:float=1e-2) -> Gaussians2D:

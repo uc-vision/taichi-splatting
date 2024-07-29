@@ -12,7 +12,9 @@ from taichi_splatting.torch_ops import projection as torch_proj
 
 
 
-def random_camera(pos_scale:float=1., image_size:Optional[Tuple[int, int]]=None, image_size_range:int = (256, 1024)) -> CameraParams:
+def random_camera(pos_scale:float=1., image_size:Optional[Tuple[int, int]]=None, image_size_range:int = (256, 1024),  near_plane = 0.1) -> CameraParams:
+  assert near_plane > 0
+
   q = F.normalize(torch.randn((1, 4)))
   t = torch.randn((3)) * pos_scale
 
@@ -31,18 +33,11 @@ def random_camera(pos_scale:float=1., image_size:Optional[Tuple[int, int]]=None,
   fx = w / (2 * torch.tan(fov / 2))
   fy = h / (2 * torch.tan(fov / 2))
 
-  T_image_camera = torch.tensor([
-    [fx, 0,  cx],
-    [0,  fy, cy],
-    [0,  0,  1]
-  ])
-
-  near_plane = 0.1
-  assert near_plane > 0
+  projection = torch.tensor([fx, fy, cx, cy], dtype=torch.float32)
 
   return CameraParams(
     T_camera_world=T_camera_world,
-    T_image_camera=T_image_camera,
+    projection=projection,
     image_size=(w, h),
     near_plane=near_plane,
     far_plane=near_plane * 1000.

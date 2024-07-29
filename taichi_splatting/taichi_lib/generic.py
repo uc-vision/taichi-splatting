@@ -165,53 +165,33 @@ def make_library(dtype=ti.f32):
     return t
 
 
-  @ti.func
-  def gaussian_covariance_in_camera(
-      T_camera_world: mat4,
-      cov_rotation: vec4,
-      cov_scale: vec3,
-  ) -> mat3:
-      """ Construct and rotate the covariance matrix in camera space
-      """
-      
-      W = T_camera_world[:3, :3]
-      RS = scaled_quat_to_mat(cov_rotation, cov_scale)
-
-        # covariance matrix, 3x3, equation (6) in the paper
-      # Sigma = R @ S @ S.transpose() @ R.transpose()
-      # cov_uv = J @ W @ Sigma @ W.transpose() @ J.transpose()  # equation (5) in the paper
-      
-      m = W @ RS
-      return m @ m.transpose() 
-
 
   @ti.func
-  def image_projective_jacobian(
-      projection: mat3,
-      image_point: vec2, z: dtype
+  def project_with_jacobian(
+      position: vec3,
+
+      camera_T_world: mat4,
+      projection: vec4,
+
+      image_size: vec2, 
   ):
-    fx, fy = projection[0, 0], projection[1, 1]
-    cx, cy = projection[0, 2], projection[1, 2]
-    x, y = image_point
     
+    f = projection[0:2]
+    c = projection[2:4]
 
-    return mat2x3f([
-        [fx/z, 0, -(x - cx) / z],
-        [0, fy/z, -(y - cy) / z],
+    in_camera = (camera_T_world @ vec4(*position, 1)).xyz
+
+    z = in_camera.z
+    uv = (f * in_camera.xy) / z + c
+
+    t = ti.math.clamp(uv, 0, image_size - 1)
+
+    J = mat2x3f([
+        [f.x/z, 0, -(t.x - c.x) / z],
+        [0, f.y/z, -(t.y - c.y) / z],
     ])
 
-  @ti.func
-  def camera_projective_jacobian(
-      projection: mat3,
-      position: vec3,
-  ):
-    fx, fy = projection[0, 0], projection[1, 1]
-    x, y, z = position
-
-    return mat2x3f([
-        [fx/z, 0, - fx*x / z**2],
-        [0, fy/z, - fy*y / z**2],
-    ])         
+    return uv, z, J
 
 
 
@@ -235,6 +215,18 @@ def make_library(dtype=ti.f32):
       m = J @ W @ RS
       return m @ m.transpose() 
 
+  @ti.func
+  def project_gaussian(
+    camera_T_world: mat4, projection: vec4, image_size: vec2,
+    position: vec3, rotation: vec4, scale: vec3):
+  
+      uv, depth, J = project_with_jacobian(
+          position, camera_T_world, projection, image_size)
+
+      uv_cov = upper(gaussian_covariance_in_image(
+          camera_T_world, rotation, scale, J))
+
+      return uv, depth, uv_cov
 
   # 
   # Miscellaneous math functions
@@ -260,6 +252,13 @@ def make_library(dtype=ti.f32):
   def mat4_from_ndarray(ndarray:ti.template()):
     return mat4([ndarray[i, j] 
                             for i in ti.static(range(4)) for j in ti.static(range(4))])
+  
+  @ti.func
+  def vec4_from_ndarray(ndarray:ti.template()):
+    return vec4([ndarray[i] for i in ti.static(range(4))])
+  
+
+
   @ti.func
   def isfin(x):
     return ~(ti.math.isinf(x) or ti.math.isnan(x))

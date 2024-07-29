@@ -61,8 +61,6 @@ def log_iterp(t, a, b):
 
 
 
-
-
 def display_image(name, image):
     image = (image.detach().clamp(0, 1) * 255).to(torch.uint8)
     image = image.cpu().numpy()
