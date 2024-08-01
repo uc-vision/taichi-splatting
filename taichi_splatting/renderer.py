@@ -6,14 +6,13 @@ from beartype.typing import Optional, Tuple
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
-from taichi_splatting.misc.encode_depth import encode_depth
 from taichi_splatting.misc.radius import compute_radius
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
 from taichi_splatting.perspective import (CameraParams)
 
-from taichi_splatting.perspective.projection2 import project_to_image
+from taichi_splatting.perspective.projection import project_to_image
 
 
 @dataclass 
@@ -111,15 +110,15 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
       render_depth:bool = False,  use_depth16:bool = False,
       compute_split_heuristics:bool = False, compute_radii:bool = False):
 
-  depth_order = encode_depth(depths, 
-    depth_range=(camera_params.near_plane, camera_params.far_plane),
-    use_depth16 = use_depth16)
-  
+
   if render_depth:
     features = torch.cat([depths, depths**2, features], dim=1)
 
-  raster = rasterize(gaussians2d, depth_order, features.contiguous(),
-    image_size=camera_params.image_size, config=config, compute_split_heuristics=compute_split_heuristics)
+  raster = rasterize(gaussians2d, depths, features.contiguous(),
+    image_size=camera_params.image_size, config=config, 
+    
+    use_depth16=use_depth16,
+    compute_split_heuristics=compute_split_heuristics)
 
   depth, depth_var = None, None
   feature_image = raster.image

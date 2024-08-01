@@ -22,43 +22,45 @@ def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
 
 
 @cache
-def tile_mapper(config:RasterConfig, depth_type=torch.int32):
+def tile_mapper(config:RasterConfig, use_depth16=False):
 
-  if depth_type == torch.int32:
+  if use_depth16 is False:
     max_tile = 65535
-    key_type = torch.int64
+    key_type = torch.uint64
     end_sort_bit = 48
 
     @ti.func
-    def make_sort_key(depth, tile_id):
+    def make_sort_key(depth:ti.f32, tile_id:ti.i32):
         assert depth >= 0, f"depth {depth} cannot be negative for int 32 key!"
 
-        return ti.cast(depth, ti.i64) | (ti.cast(tile_id, ti.i64) << 32)
+        # non negative float reinterpreted as int retains the same order
+        # high bits store the tile ID (most significant)
+        depth_key = ti.bit_cast(depth, ti.u32)
+        return  ti.cast(depth_key, ti.u64) | (ti.cast(tile_id, ti.u64) << 32)
   
     @ti.func
-    def get_tile_id(key):
+    def get_tile_id(key:ti.u64) -> ti.i32:
       return ti.cast(key >> 32, ti.i32)
 
 
-  elif depth_type == torch.int16:
+  else:
     max_tile = 65535
-    key_type = torch.int32
+    key_type = torch.uint32
     end_sort_bit = 32
 
     @ti.func
-    def make_sort_key(depth:ti.i16, tile_id:ti.i32):
-        depthu = ti.cast(depth, ti.i32) + 32767
+    def make_sort_key(depth:ti.f32, tile_id:ti.i32):
+        
+        # float quantized to 16 bits, then cast to 16 bit int
+        # high bits store the tile ID (most significant)
 
-        key_u32 = ti.cast(depthu, ti.u32) | (ti.cast(tile_id, ti.u32) << 16)
-        return ti.bit_cast(key_u32, ti.i32)
+        return (ti.cast(ti.math.clamp(depth, 0, 1) * 65535, ti.u32)
+            |  (ti.cast(tile_id, ti.u32) << 16))
+
   
     @ti.func
-    def get_tile_id(key:ti.i32):
-      key_u32 = ti.bit_cast(key, ti.u32)
-      return ti.cast(key_u32 >> 16, ti.i32)
-
-  else:
-    raise ValueError(f"depth_type {depth_type} not supported")
+    def get_tile_id(key:ti.u32) -> ti.i32:
+       return ti.cast(key >> 16, ti.i32)
 
 
   tile_size = config.tile_size
@@ -112,7 +114,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
 
   @ti.kernel
   def generate_sort_keys_kernel(
-      depths: ti.types.ndarray(torch_taichi[depth_type], ndim=1),  # (M)
+      depths: ti.types.ndarray(ti.f32, ndim=1),  # (M)
       gaussians : ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M)
       cumulative_overlap_counts: ti.types.ndarray(ti.i32, ndim=1),  # (M)
       # (K), K = sum(num_overlap_tiles)
@@ -153,7 +155,7 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
     generate_sort_keys_kernel(depths.contiguous(), tile_overlap_ranges, cum_overlap_counts, image_size,
                               overlap_key, overlap_to_point)
 
-    overlap_key, overlap_to_point  = cuda_lib.radix_sort_pairs(overlap_key, overlap_to_point, end_bit=end_sort_bit, unsigned=True)
+    overlap_key, overlap_to_point  = cuda_lib.radix_sort_pairs(overlap_key, overlap_to_point, end_bit=end_sort_bit)
     return overlap_key, overlap_to_point
   
 
@@ -197,14 +199,15 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
 
 
 @beartype
-def map_to_tiles(gaussians : torch.Tensor, encoded_depth:torch.Tensor, 
+def map_to_tiles(gaussians : torch.Tensor, depth:torch.Tensor, 
                  image_size:Tuple[Integral, Integral],
-                 config:RasterConfig
+                 config:RasterConfig,
+                 use_depth16=False
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
      gaussians: (N, 6) torch.Tensor of packed gaussians, N is the number of gaussians
-     encoded_depths: (N)  torch.Tensor of encoded depths (int32)
+     depth: (N)  torch.Tensor of depths (float32)
      image_size: (2, ) tuple of ints, (width, height)
      tile_config: configuration for tile mapper (tile_size etc.)
 
@@ -213,6 +216,6 @@ def map_to_tiles(gaussians : torch.Tensor, encoded_depth:torch.Tensor,
      tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
 
-  
-  mapper = tile_mapper(config, depth_type=encoded_depth.dtype)
-  return mapper(gaussians, encoded_depth, image_size)
+
+  mapper = tile_mapper(config, use_depth16=use_depth16)
+  return mapper(gaussians, depth.squeeze(1), image_size)
