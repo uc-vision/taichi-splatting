@@ -129,7 +129,7 @@ def sh_function(degree:int=3, dimension:int=3,
           params_i = params[idx]
 
           for d in ti.static(range(dimension)):
-              out[i][d] = ti.math.clamp(
+              out[idx][d] = ti.math.clamp(
                 coeffs.dot(params_i[d, :]) + 0.5, 0, 1)
 
 
@@ -138,7 +138,7 @@ def sh_function(degree:int=3, dimension:int=3,
     @staticmethod
     def forward(ctx, params:torch.Tensor, points:torch.Tensor, indexes:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
-        out = torch.empty(indexes.shape[0], params.shape[1], dtype=dtype, device=params.device)
+        out = torch.empty(points.shape[0], params.shape[1], dtype=dtype, device=params.device)
         evaluate_sh_at_kernel(params, points, indexes, camera_pos, out)
 
         ctx.save_for_backward(params, points, camera_pos, out)

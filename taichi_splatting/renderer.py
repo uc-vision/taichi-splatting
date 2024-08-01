@@ -11,9 +11,9 @@ from taichi_splatting.misc.radius import compute_radius
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
-from taichi_splatting.perspective import (
-  frustum_culling, project_to_image, CameraParams)
+from taichi_splatting.perspective import (CameraParams)
 
+from taichi_splatting.perspective.projection2 import project_to_image
 
 
 @dataclass 
@@ -81,16 +81,14 @@ def render_gaussians(
   """
 
 
-  indexes = gaussians_in_view(gaussians, camera_params, config.gaussian_scale)
-  # view_gaussians = gaussians[indexes] 
+  gaussians2d, depths, indexes = project_to_image(gaussians, camera_params, config.gaussian_scale)
 
   if use_sh:
     features = evaluate_sh_at(gaussians.feature, gaussians.position.detach(), indexes, camera_params.camera_position)
   else:
-    features = gaussians.feature[indexes]
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
-  gaussians2d, depths = project_to_image(gaussians, indexes, camera_params)
+
   return render_projected(indexes, gaussians2d, features, depths, camera_params, config, 
                    render_depth=render_depth, use_depth16=use_depth16,
                    compute_split_heuristics=compute_split_heuristics, compute_radii=compute_radii)
@@ -153,14 +151,3 @@ def viewspace_gradient(gaussians2d: torch.Tensor):
 
 
 
-def gaussians_in_view(
-  gaussians: Gaussians3D,
-
-  camera_params: CameraParams,
-  gaussian_scale: float = 3.,
-):
-  point_mask = frustum_culling(gaussians.position, gaussians.rotation, gaussians.log_scaling,
-    camera_params=camera_params, gaussian_scale=gaussian_scale
-  )
-
-  return torch.nonzero(point_mask, as_tuple=True)[0]

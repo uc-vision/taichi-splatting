@@ -19,6 +19,10 @@ class CameraParams:
   blur_cov:float = 0.3
 
 
+  @property
+  def depth_range(self):
+    return (self.near_plane, self.far_plane)
+
 
   @property
   def device(self):
