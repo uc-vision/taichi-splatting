@@ -8,7 +8,13 @@ from tqdm import tqdm
 
 
 def eval_with_grad(f, *args):
-  args = [x.detach().clone().requires_grad_(x.requires_grad) for x in args]
+
+  def setup_grad(x):
+    if isinstance(x, torch.Tensor):
+      return x.detach().clone().requires_grad_(x.requires_grad)
+    return x
+  
+  args = [setup_grad(x) for x in args]
 
   # multiply by one to make the argument not a leaf tensor 
   # avoids an issue with taichi/pytorch autograd integration
@@ -17,13 +23,14 @@ def eval_with_grad(f, *args):
 
   if isinstance(out, tuple):
     for o in out:
-      loss += o.mean()
+      if o.dtype in (torch.float32, torch.float64):  
+        loss += o.mean()
   else:
     loss = out.mean()
 
   loss.backward()
 
-  return out, tuple(arg.grad for arg in args)
+  return out, tuple(arg.grad for arg in args if isinstance(arg, torch.Tensor) and arg.grad is not None)
 
 def allclose(test_name, name, a, b, atol=1e-2, rtol=1e-3):
   assert type(a) == type(b), f"{name}: type does not match {type(a)} != {type(b)}"

@@ -16,7 +16,13 @@ class RasterConfig:
   margin_tiles: int = 3
 
   # cutoff N standard deviations from mean
-  gaussian_scale: float = 3.0   
+  gaussian_scale: float = 3.0 
+
+  # clamp position to within this margin of the image for affine jaocbian
+  clamp_margin: float = 0.15  
+
+  # blur covariance matrix by this factor
+  blur_cov: float = 0.3
   
   # cull to an oriented box, otherwise an axis aligned bounding box
   tight_culling: bool = True  

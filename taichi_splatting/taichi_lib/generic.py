@@ -174,6 +174,7 @@ def make_library(dtype=ti.f32):
       projection: vec4,
 
       image_size: vec2, 
+      clamp_margin: ti.template()
   ):
     
     f = projection[0:2]
@@ -184,7 +185,7 @@ def make_library(dtype=ti.f32):
     z = in_camera.z
     uv = (f * in_camera.xy) / z + c
 
-    t = ti.math.clamp(uv, 0, image_size - 1)
+    t = ti.math.clamp(uv, -image_size * clamp_margin, (image_size  - 1) * (1 + clamp_margin))
 
     J = mat2x3f([
         [f.x/z, 0, -(t.x - c.x) / z],
@@ -218,10 +219,12 @@ def make_library(dtype=ti.f32):
   @ti.func
   def project_gaussian(
     camera_T_world: mat4, projection: vec4, image_size: vec2,
-    position: vec3, rotation: vec4, scale: vec3):
+    position: vec3, rotation: vec4, scale: vec3,
+    clamp_margin: ti.template()):
+      
   
       uv, depth, J = project_with_jacobian(
-          position, camera_T_world, projection, image_size)
+          position, camera_T_world, projection, image_size, clamp_margin)
 
       uv_cov = upper(gaussian_covariance_in_image(
           camera_T_world, rotation, scale, J))

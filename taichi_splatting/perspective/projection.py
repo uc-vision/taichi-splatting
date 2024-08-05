@@ -5,7 +5,7 @@ from beartype.typing import Tuple
 from beartype import beartype
 import taichi as ti
 import torch
-from taichi_splatting.data_types import Gaussians3D
+from taichi_splatting.data_types import Gaussians3D, RasterConfig
 from taichi_splatting.optim.autograd import restore_grad
 
 from .params import CameraParams
@@ -27,7 +27,7 @@ def project_to_image_function(torch_dtype=torch.float32):
   lib = get_library(dtype)
 
   @ti.func
-  def ndc_depth(depth: ti.f32, near:ti.f32, far:ti.f32) -> ti.f32:
+  def ndc_depth(depth: dtype, near:dtype, far:dtype) -> dtype:
     ndc = (far + near - (2.0 * near * far) / depth) / (far - near)
     # modified to return value between 0 and 1 (rather than -1 to 1)
     return (ndc + 1) / 2
@@ -50,15 +50,17 @@ def project_to_image_function(torch_dtype=torch.float32):
     depth: ti.types.ndarray(lib.vec1, ndim=1),  # (N, 1)
 
     # other parameters
-    gaussian_scale: ti.f32,
-    blur_cov:ti.f32
+    gaussian_scale: dtype,
+    blur_cov:dtype,
+    clamp_margin: dtype
+
   ):
 
     for idx in range(position.shape[0]):
 
       uv, z, uv_cov = lib.project_gaussian(
         lib.mat4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
-        position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]))
+        position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin=clamp_margin)
 
       radius = lib.radii_from_cov(uv_cov) * gaussian_scale
 
@@ -103,7 +105,8 @@ def project_to_image_function(torch_dtype=torch.float32):
     points: ti.types.ndarray(lib.Gaussian2D.vec, ndim=1),  # (N, 6)
     depth: ti.types.ndarray(lib.vec1, ndim=1),  # (N, 1)
 
-    blur_cov:ti.f32
+    blur_cov:dtype,
+    clamp_margin: dtype
   ):
 
     for i in range(indexes.shape[0]):
@@ -111,7 +114,7 @@ def project_to_image_function(torch_dtype=torch.float32):
 
       uv, z, uv_cov = lib.project_gaussian(
         lib.mat4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
-        position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]))
+        position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin)
 
       # add small fudge factor blur to avoid numerical issues
       uv_conic = lib.inverse_cov(uv_cov + lib.vec3([blur_cov, 0, blur_cov]))
@@ -130,7 +133,7 @@ def project_to_image_function(torch_dtype=torch.float32):
     def forward(ctx, position, log_scaling, rotation, alpha_logit,
                 T_camera_world,
                 projection, image_size, depth_range,
-                gaussian_scale, blur_cov):
+                gaussian_scale, blur_cov, clamp_margin):
       dtype, device = projection.dtype, projection.device
 
       n = position.shape[0]
@@ -140,20 +143,26 @@ def project_to_image_function(torch_dtype=torch.float32):
 
       gaussian_tensors = (position, log_scaling, rotation, alpha_logit)
 
+
       project_kernel(*gaussian_tensors, 
             T_camera_world, projection, 
             lib.vec2(image_size), lib.vec2(depth_range),
             points, depth,  # outputs
-            gaussian_scale, blur_cov)
+            gaussian_scale, blur_cov, clamp_margin)
       
       
       ctx.indexes = torch.nonzero(depth[:, 0]).squeeze(1)
+
       points = points[ctx.indexes]
       depth = depth[ctx.indexes]
 
-      ctx.blur_cov = blur_cov
+
       ctx.image_size = image_size
       ctx.depth_range = depth_range
+
+      ctx.blur_cov = blur_cov
+      ctx.gaussian_scale = gaussian_scale
+      ctx.clamp_margin = clamp_margin
       
       ctx.mark_non_differentiable(ctx.indexes)
 
@@ -180,11 +189,12 @@ def project_to_image_function(torch_dtype=torch.float32):
           T_camera_world, 
           projection, lib.vec2(ctx.image_size), lib.vec2(ctx.depth_range),
           points, depth,
-          ctx.blur_cov)
+          ctx.blur_cov, ctx.clamp_margin)
+
 
         return (*[tensor.grad for tensor in gaussian_tensors], 
-                None, T_camera_world.grad, projection.grad,
-                None, None)
+                T_camera_world.grad, projection.grad,
+                None, None, None, None, None)
 
   return _module_function
 
@@ -198,7 +208,10 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
           depth_range:Tuple[float, float],
 
           gaussian_scale:float=3.0,
-          blur_cov:float=0.3):
+          blur_cov:float=0.3,
+          clamp_margin:float=0.15
+
+          ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
   
   _module_function = project_to_image_function(position.dtype)
   return _module_function.apply(
@@ -214,10 +227,11 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
     depth_range,
     gaussian_scale,
     
-    blur_cov)
+    blur_cov, 
+    clamp_margin)
 
 @beartype
-def project_to_image(gaussians:Gaussians3D,  camera_params: CameraParams, gaussian_scale:float=3.0,
+def project_to_image(gaussians:Gaussians3D,  camera_params: CameraParams, config:RasterConfig,
                      ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
   """ 
   Project 3D gaussians to 2D gaussians in image space using perspective projection.
@@ -235,6 +249,7 @@ def project_to_image(gaussians:Gaussians3D,  camera_params: CameraParams, gaussi
     indexes:   torch.Tensor (N)     - indexes of points that are in view
   """
 
+
   return apply(
       *gaussians.shape_tensors(),
       camera_params.T_camera_world,
@@ -243,8 +258,9 @@ def project_to_image(gaussians:Gaussians3D,  camera_params: CameraParams, gaussi
       camera_params.image_size,
       camera_params.depth_range,
 
-      gaussian_scale = gaussian_scale,
-      blur_cov = camera_params.blur_cov,
+      config.gaussian_scale,
+      config.blur_cov,
+      config.clamp_margin
   )
 
 

@@ -16,7 +16,6 @@ class CameraParams:
   far_plane: float
   image_size: Tuple[Integral, Integral]
 
-  blur_cov:float = 0.3
 
 
   @property
@@ -48,14 +47,14 @@ class CameraParams:
     return T_image_camera @ self.T_camera_world
   
   def requires_grad_(self, requires_grad: bool):
-    self.T_image_camera.requires_grad_(requires_grad)
+    self.projection.requires_grad_(requires_grad)
     self.T_camera_world.requires_grad_(requires_grad)
     return self
 
 
   def __repr__(self):
     w, h = self.image_size
-    fx, fy, cx, cy = self.projection.cpu().numpy()
+    fx, fy, cx, cy = self.projection.detach().cpu().numpy()
 
     pos_str = ", ".join([f"{x:.3f}" for x in self.camera_position])
     return f"CameraParams({w}x{h}, fx={fx:.4f}, fy={fy:.4f}, cx={cx:.4f}, cy={cy:.4f}, clipping={self.near_plane:.4f}-{self.far_plane:.4f}, position=({pos_str})"
@@ -68,9 +67,8 @@ class CameraParams:
   
   def scale_image(self, scale: float):
     image_size = (int(self.image_size[0] * scale), int(self.image_size[1] * scale))
-    scaling = torch.tensor([[scale, 0, 0], [0, scale, 0], [0, 0, 1]], device=self.T_image_camera.device, dtype=self.T_image_camera.dtype)
 
-    return replace(self, image_size=image_size, T_image_camera=scaling @ self.T_image_camera)
+    return replace(self, image_size=image_size, projection=self.projection * scale)
 
 
   def to(self, device=None, dtype=None):
@@ -79,12 +77,11 @@ class CameraParams:
       T_camera_world=self.T_camera_world.to(device=device, dtype=dtype),
       near_plane=self.near_plane,
       far_plane=self.far_plane,
-      image_size=self.image_size,
-      blur_cov=self.blur_cov
+      image_size=self.image_size
     )
 
   def __post_init__(self):
-    assert self.projection.shape == (4, ), f"Expected shape (4), got {self.projection.shape}"
+    assert self.projection.shape == (4, ), f"Expected shape (4,), got {self.projection.shape}"
     assert self.T_camera_world.shape == (4, 4), f"Expected shape (4, 4), got {self.T_camera_world.shape}"
 
 
