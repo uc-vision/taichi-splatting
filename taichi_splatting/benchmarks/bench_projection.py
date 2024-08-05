@@ -3,6 +3,7 @@ from functools import partial
 
 import torch
 from taichi_splatting.benchmarks.util import benchmarked
+from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.perspective import projection
 # from taichi_splatting import projection
 
@@ -17,9 +18,10 @@ def parse_args(args=None):
 
   parser.add_argument('--image_size', type=str, default='1024,768')
   parser.add_argument('--device', type=str, default='cuda:0')
-  parser.add_argument('--n', type=int, default=1000000)
+  parser.add_argument('--n', type=int, default=2000000)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--iters', type=int, default=500)
+  parser.add_argument('--margin', type=float, default=0.3, help="controls random points (non visible) margin")
   
 
   args = parser.parse_args(args)
@@ -29,7 +31,7 @@ def parse_args(args=None):
 
 def bench_projection(args):
 
-  ti.init(arch=ti.cuda, offline_cache=True, log_level=ti.DEBUG, 
+  ti.init(arch=ti.cuda, offline_cache=True, log_level=ti.INFO, 
         device_memory_GB=0.1)
   
      
@@ -37,19 +39,26 @@ def bench_projection(args):
 
   with torch.no_grad():
     camera_params = random_camera()
-    gaussians = random_3d_gaussians(args.n, camera_params)
-    indexes = torch.arange(args.n, device=args.device)
+    gaussians = random_3d_gaussians(args.n, camera_params, margin=args.margin)
+    config = RasterConfig()
 
     gaussians, camera_params = gaussians.to(args.device), camera_params.to(args.device)
 
-    project_forward = partial(projection.project_to_image, gaussians, indexes, camera_params.T_image_camera, camera_params.T_camera_world)
+
+    _, _, vis_idx = projection.project_to_image(gaussians, camera_params, config)
+    print(args)
+    print(f"benchmarking {args.n} points ({vis_idx.shape[0]} visible) points")
+
+
+
+    project_forward = partial(projection.project_to_image, gaussians, camera_params, config)
     benchmarked('forward', project_forward, profile=args.profile, iters=args.iters)  
 
 
   gaussians.requires_grad_(True)
 
   def project_backward():
-    points, depth = projection.project_to_image(gaussians, indexes, camera_params.T_image_camera, camera_params.T_camera_world)
+    points, depth, indexes = projection.project_to_image(gaussians, camera_params, config)
     loss = points.sum() + depth.sum()
     loss.backward()
 
@@ -62,12 +71,12 @@ def bench_projection(args):
   benchmarked('backward (extrinsics)', project_backward, profile=args.profile, iters=args.iters)  
 
   camera_params.T_camera_world.requires_grad_(False)
-  camera_params.T_image_camera.requires_grad_(True)
+  camera_params.projection.requires_grad_(True)
   benchmarked('backward (intrinsics)', project_backward, profile=args.profile, iters=args.iters)  
 
   gaussians.requires_grad_(True)
   camera_params.T_camera_world.requires_grad_(True)
-  camera_params.T_image_camera.requires_grad_(True)
+  camera_params.projection.requires_grad_(True)
   benchmarked('backward (everything)', project_backward, profile=args.profile, iters=args.iters)  
 
 

@@ -19,6 +19,7 @@ def make_library(dtype=ti.f32):
   mat3 = ti.types.matrix(3, 3, dtype)
   mat4 = ti.types.matrix(4, 4, dtype)
 
+  mat3x4 = ti.types.matrix(3, 4, dtype)
   mat4x2 = ti.types.matrix(4, 2, dtype=dtype)
 
   #
@@ -170,7 +171,7 @@ def make_library(dtype=ti.f32):
   def project_with_jacobian(
       position: vec3,
 
-      camera_T_world: mat4,
+      camera_T_world: mat3x4,
       projection: vec4,
 
       image_size: vec2, 
@@ -180,7 +181,7 @@ def make_library(dtype=ti.f32):
     f = projection[0:2]
     c = projection[2:4]
 
-    in_camera = (camera_T_world @ vec4(*position, 1)).xyz
+    in_camera = (camera_T_world @ vec4(*position, 1))
 
     z = in_camera.z
     uv = (f * in_camera.xy) / z + c
@@ -198,7 +199,7 @@ def make_library(dtype=ti.f32):
 
   @ti.func
   def gaussian_covariance_in_image(
-      T_camera_world: mat4,
+      T_camera_world: mat3x4,
       cov_rotation: vec4,
       cov_scale: vec3,
       J: mat2x3f,
@@ -218,7 +219,7 @@ def make_library(dtype=ti.f32):
 
   @ti.func
   def project_gaussian(
-    camera_T_world: mat4, projection: vec4, image_size: vec2,
+    camera_T_world: mat3x4, projection: vec4, image_size: vec2,
     position: vec3, rotation: vec4, scale: vec3,
     clamp_margin: ti.template()):
       
@@ -256,6 +257,13 @@ def make_library(dtype=ti.f32):
     return mat4([ndarray[i, j] 
                             for i in ti.static(range(4)) for j in ti.static(range(4))])
   
+
+  @ti.func
+  def mat3x4_from_ndarray(ndarray:ti.template()):
+    return mat3x4([ndarray[i, j] 
+                            for i in ti.static(range(3)) for j in ti.static(range(4))])
+
+
   @ti.func
   def vec4_from_ndarray(ndarray:ti.template()):
     return vec4([ndarray[i] for i in ti.static(range(4))])

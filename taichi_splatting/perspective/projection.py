@@ -59,11 +59,10 @@ def project_to_image_function(torch_dtype=torch.float32):
     for idx in range(position.shape[0]):
 
       uv, z, uv_cov = lib.project_gaussian(
-        lib.mat4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
+        lib.mat3x4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
         position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin=clamp_margin)
 
       radius = lib.radii_from_cov(uv_cov) * gaussian_scale
-
 
       in_view = ((z > depth_range[0]) and (z < depth_range[1]) and 
         (uv.x >= -radius) and (uv.x < image_size.x + radius) and 
@@ -113,7 +112,7 @@ def project_to_image_function(torch_dtype=torch.float32):
       idx = indexes[i]
 
       uv, z, uv_cov = lib.project_gaussian(
-        lib.mat4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
+        lib.mat3x4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
         position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin)
 
       # add small fudge factor blur to avoid numerical issues

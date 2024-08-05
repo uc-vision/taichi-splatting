@@ -9,8 +9,7 @@ import taichi as ti
 
 import torch
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
-from taichi_splatting.misc.encode_depth import encode_depth32
-from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, split_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import project_gaussians2d, sample_gaussians, uniform_split_gaussians2d
 
 from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
@@ -22,7 +21,7 @@ from taichi_splatting.torch_ops.util import check_finite
 from torch.profiler import profile, record_function, ProfilerActivity
 
 import time
-from torch import optim
+
 
 def parse_args():
   parser = argparse.ArgumentParser()
@@ -88,13 +87,11 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
       opt.zero_grad()
 
       gaussians2d = project_gaussians2d(gaussians)  
-      depths = encode_depth32(gaussians.z_depth)
-
       opacity = torch.sigmoid(gaussians.alpha_logit).unsqueeze(-1)
 
 
       raster = rasterize(gaussians2d=gaussians2d, 
-        encoded_depths=depths,
+        encoded_depths=gaussians.z_depth.clamp(0, 1),
         features=gaussians.feature, 
         image_size=(w, h), 
         config=config,

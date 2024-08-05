@@ -36,7 +36,7 @@ def evaluate_sh_at(params:torch.Tensor,  # M, K, D where D = (degree + 1)^2
                 camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
 
-  dirs = camera_pos.unsqueeze(0) - points[indexes]
+  dirs = points[indexes] - camera_pos.unsqueeze(0)
   dirs = torch.nn.functional.normalize(dirs, dim=1)
 
  
