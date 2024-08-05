@@ -18,7 +18,7 @@ def parse_args(args=None):
 
   parser.add_argument('--image_size', type=str, default='1024,768')
   parser.add_argument('--device', type=str, default='cuda:0')
-  parser.add_argument('--n', type=int, default=2000000)
+  parser.add_argument('--n', type=int, default=1000000)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--iters', type=int, default=500)
   parser.add_argument('--margin', type=float, default=0.0, help="controls random points (non visible) margin")
