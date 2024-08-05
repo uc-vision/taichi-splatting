@@ -21,7 +21,7 @@ def parse_args(args=None):
   parser.add_argument('--n', type=int, default=2000000)
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--iters', type=int, default=500)
-  parser.add_argument('--margin', type=float, default=0.3, help="controls random points (non visible) margin")
+  parser.add_argument('--margin', type=float, default=0.0, help="controls random points (non visible) margin")
   
 
   args = parser.parse_args(args)
