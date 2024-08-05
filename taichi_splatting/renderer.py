@@ -80,7 +80,7 @@ def render_gaussians(
   """
 
 
-  gaussians2d, depths, indexes = project_to_image(gaussians, camera_params, config.gaussian_scale)
+  gaussians2d, depths, indexes = project_to_image(gaussians, camera_params, config)
 
   if use_sh:
     features = evaluate_sh_at(gaussians.feature, gaussians.position.detach(), indexes, camera_params.camera_position)
