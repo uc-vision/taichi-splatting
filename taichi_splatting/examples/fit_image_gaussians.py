@@ -33,7 +33,7 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--prune_rate', type=float, default=0.2, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--prune_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
   parser.add_argument('--scale_reg', type=float, default=0.00001)
 
@@ -71,7 +71,9 @@ def display_image(name, image):
 def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
-def train_epoch(opt, config:RasterConfig, gaussians, ref_image, epoch_size=100, 
+def train_epoch(opt, gaussians, ref_image, 
+        config:RasterConfig,        
+        epoch_size=100, 
         grad_alpha=0.9, 
         opacity_reg=0.0,
         scale_reg=0.0,
