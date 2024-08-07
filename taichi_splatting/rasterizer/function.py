@@ -23,7 +23,6 @@ RasterOut = NamedTuple('RasterOut',
 def render_function(config:RasterConfig,
                     points_requires_grad:bool,
                     features_requires_grad:bool, 
-                    compute_split_heuristics:bool,
                     feature_size:int,
                     dtype=torch.float32):
   
@@ -31,7 +30,7 @@ def render_function(config:RasterConfig,
   forward = forward_kernel(config, feature_size=feature_size, dtype=torch_taichi[dtype])
   backward = backward_kernel(config, points_requires_grad,
                              features_requires_grad, 
-                             compute_split_heuristics, feature_size, dtype=torch_taichi[dtype])
+                             feature_size, dtype=torch_taichi[dtype])
 
   class _module_function(torch.autograd.Function):
     @staticmethod
@@ -47,7 +46,7 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=dtype, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_split_heuristics = torch.zeros( (gaussians.shape[0], 2) if compute_split_heuristics else (0, 2), 
+      point_split_heuristics = torch.zeros( (gaussians.shape[0], 2) if config.compute_split_heuristics else (0, 2), 
                                  dtype=dtype, device=features.device)
       
 
@@ -94,8 +93,7 @@ def render_function(config:RasterConfig,
 @beartype
 def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
               overlap_to_point: torch.Tensor, tile_overlap_ranges: torch.Tensor,
-              image_size: Tuple[Integral, Integral], config: RasterConfig,
-              compute_split_heuristics:bool=False
+              image_size: Tuple[Integral, Integral], config: RasterConfig
               ) -> RasterOut:
   """
   Rasterize an image given 2d gaussians, features and tile overlap information.
@@ -112,7 +110,6 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
 
       image_size: (2, ) tuple of ints, (width, height)
       config: Config - configuration parameters for rasterization
-      compute_split_heuristics: bool - whether to compute the visibility for each point in the image
 
     Returns:
       RasterOut - namedtuple with fields:
@@ -122,7 +119,6 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
   """
   _module_function = render_function(config, gaussians2d.requires_grad,
                                       features.requires_grad,
-                                      compute_split_heuristics, 
                                       features.shape[1],
                                       dtype=gaussians2d.dtype)
 
@@ -133,12 +129,10 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
   return RasterOut(image, image_weight, point_split_heuristics)
 
 
-def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor, 
+def rasterize(gaussians2d:torch.Tensor, depth:torch.Tensor, 
                           features:torch.Tensor, image_size:Tuple[Integral, Integral],
-                          config:RasterConfig, 
-                          
-                          compute_split_heuristics:bool=False,
-                          use_depth16:bool=False) -> RasterOut:
+                          config:RasterConfig,
+                          use_depth16:bool = False) -> RasterOut:
     
     
   """
@@ -146,8 +140,8 @@ def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor,
 
   Parameters:
       gaussians2d: (N, 6)  packed gaussians, N is the number of gaussians
-      encoded_depths: (N )  encoded depths, N is the number of gaussians
-      features: (N, F)   features, F is the number of features
+      depth:       (N, 1)   depths, N is the number of gaussians
+      features:    (N, F)   features, F is the number of features
 
       image_size: (2, ) tuple of ints, (width, height)
       config: Config - configuration parameters for rasterization
@@ -160,13 +154,13 @@ def rasterize(gaussians2d:torch.Tensor, encoded_depths:torch.Tensor,
         point_split_heuristics: (N, ) torch tensor, where N is the number of gaussians  
   """
 
-  assert gaussians2d.shape[0] == encoded_depths.shape[0] == features.shape[0], \
-    f"Size mismatch: got {gaussians2d.shape}, {encoded_depths.shape}, {features.shape}"
+  assert gaussians2d.shape[0] == depth.shape[0] == features.shape[0], \
+    f"Size mismatch: got {gaussians2d.shape}, {depth.shape}, {features.shape}"
 
   # render with padding to tile_size, later crop back to original size
-  overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, encoded_depths, 
-    image_size=image_size, config=config, use_depth16=False)
+  overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, depth, 
+    image_size=image_size, config=config, use_depth16=use_depth16)
   
   return rasterize_with_tiles(gaussians2d, features, 
     tile_overlap_ranges=tile_overlap_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-    image_size=image_size, config=config, compute_split_heuristics=compute_split_heuristics)
+    image_size=image_size, config=config)

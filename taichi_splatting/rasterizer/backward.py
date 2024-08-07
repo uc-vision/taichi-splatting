@@ -14,7 +14,6 @@ from taichi.math import ivec2
 def backward_kernel(config: RasterConfig,
                     points_requires_grad: bool,
                     features_requires_grad: bool, 
-                    compute_split_heuristics: bool,
                     feature_size: int,
                     dtype=ti.f32):
   
@@ -92,7 +91,7 @@ def backward_kernel(config: RasterConfig,
         if ti.static(features_requires_grad) else None)
 
       tile_split_heuristics = (ti.simt.block.SharedArray((block_area,), dtype=ti.math.vec2) 
-        if ti.static(compute_split_heuristics) else None)
+        if ti.static(config.compute_split_heuristics) else None)
 
       
       last_point_pixel = thread_index(0)
@@ -152,7 +151,7 @@ def backward_kernel(config: RasterConfig,
           if ti.static(features_requires_grad):
             tile_grad_feature[tile_idx] = feature_vec(0.0)
           
-          if ti.static(compute_split_heuristics):
+          if ti.static(config.compute_split_heuristics):
             tile_split_heuristics[tile_idx] = vec2(0.0)
 
         point_group_size = ti.min(
@@ -203,7 +202,7 @@ def backward_kernel(config: RasterConfig,
                   gaussian_alpha)
 
 
-              if ti.static(compute_split_heuristics):
+              if ti.static(config.compute_split_heuristics):
                 contribution += vec2(
                   (feature_diff**2).sum() * weight,
                   ti.abs(alpha_grad * point_alpha * dp_dmean).sum()
@@ -219,7 +218,7 @@ def backward_kernel(config: RasterConfig,
             if ti.static(features_requires_grad):
               warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
 
-            if ti.static(compute_split_heuristics):
+            if ti.static(config.compute_split_heuristics):
               warp_add_vector(tile_split_heuristics[in_group_idx], contribution)
         # end of point group loop
 
@@ -234,7 +233,7 @@ def backward_kernel(config: RasterConfig,
           if ti.static(features_requires_grad):
             ti.atomic_add(grad_features[point_offset], tile_grad_feature[tile_idx])
 
-          if ti.static(compute_split_heuristics):
+          if ti.static(config.compute_split_heuristics):
             ti.atomic_add(point_split_heuristics[point_offset], tile_split_heuristics[tile_idx])
 
       # end of point group id loop

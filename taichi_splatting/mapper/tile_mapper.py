@@ -152,7 +152,7 @@ def tile_mapper(config:RasterConfig, use_depth16=False):
     overlap_key = torch.empty((total_overlap, ), dtype=key_type, device=cum_overlap_counts.device)
     overlap_to_point = torch.empty((total_overlap, ), dtype=torch.int32, device=cum_overlap_counts.device)
 
-    generate_sort_keys_kernel(depths.contiguous(), tile_overlap_ranges, cum_overlap_counts, image_size,
+    generate_sort_keys_kernel(depths.squeeze(1).contiguous(), tile_overlap_ranges, cum_overlap_counts, image_size,
                               overlap_key, overlap_to_point)
 
     overlap_key, overlap_to_point  = cuda_lib.radix_sort_pairs(overlap_key, overlap_to_point, end_bit=end_sort_bit)
@@ -167,7 +167,9 @@ def tile_mapper(config:RasterConfig, use_depth16=False):
     cum_overlap_counts, total_overlap = cuda_lib.full_cumsum(overlap_counts)
     return cum_overlap_counts[:-1], total_overlap
 
+  @beartype
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):
+
 
     image_size = pad_to_tile(image_size, tile_size)
     tile_shape = (image_size[1] // tile_size, image_size[0] // tile_size)
@@ -202,12 +204,12 @@ def tile_mapper(config:RasterConfig, use_depth16=False):
 def map_to_tiles(gaussians : torch.Tensor, depth:torch.Tensor, 
                  image_size:Tuple[Integral, Integral],
                  config:RasterConfig,
-                 use_depth16=False
+                 use_depth16:bool=False
                  ) -> Tuple[torch.Tensor, torch.Tensor]:
   """ maps guassians to tiles, sorted by depth (front to back):
     Parameters:
      gaussians: (N, 6) torch.Tensor of packed gaussians, N is the number of gaussians
-     depth: (N)  torch.Tensor of depths (float32)
+     depth: (N, 1)  torch.Tensor of depths (float32)
      image_size: (2, ) tuple of ints, (width, height)
      tile_config: configuration for tile mapper (tile_size etc.)
 
@@ -216,6 +218,8 @@ def map_to_tiles(gaussians : torch.Tensor, depth:torch.Tensor,
      tile_ranges: (M, 2) torch tensor, where M is the number of tiles, maps tile index to range of overlap indices
     """
 
+  assert gaussians.ndim == 2 and gaussians.shape[1] == 6, f"gaussians must be Nx6, got {gaussians.shape}"
+  assert depth.ndim == 2 and depth.shape[1] == 1, f"depths must be Nx1, got {depth.shape}"
 
   mapper = tile_mapper(config, use_depth16=use_depth16)
-  return mapper(gaussians, depth.squeeze(1), image_size)
+  return mapper(gaussians, depth, image_size)

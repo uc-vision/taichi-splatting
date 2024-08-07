@@ -28,9 +28,9 @@ def project_to_image_function(torch_dtype=torch.float32):
 
   @ti.func
   def ndc_depth(depth: dtype, near:dtype, far:dtype) -> dtype:
-    ndc = (far + near - (2.0 * near * far) / depth) / (far - near)
-    # modified to return value between 0 and 1 (rather than -1 to 1)
-    return (ndc + 1) / 2
+    # modified ndc to return value between 0 and 1 (rather than -1 to 1)
+    return near * (far - depth) / (depth * (far - near))
+
 
   @ti.kernel
   def project_kernel(  

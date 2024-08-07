@@ -31,6 +31,8 @@ class RasterConfig:
   alpha_threshold: float = 1. / 255.
   saturate_threshold: float = 0.9999
 
+  compute_split_heuristics: bool = False
+
 
 
 def check_packed3d(packed_gaussians: torch.Tensor):
@@ -81,6 +83,16 @@ class Gaussians3D():
   
   def replace(self, **kwargs):
     return replace(self, **kwargs, batch_size=self.batch_size)
+  
+  def concat(self, other):
+    return replace(self,
+      position=torch.cat([self.position, other.position], dim=0),
+      log_scaling=torch.cat([self.log_scaling, other.log_scaling], dim=0),
+      rotation=torch.cat([self.rotation, other.rotation], dim=0),
+      alpha_logit=torch.cat([self.alpha_logit, other.alpha_logit], dim=0),
+      feature=torch.cat([self.feature, other.feature], dim=0),
+      batch_size = (self.batch_size[0] + other.batch_size[0], )
+    )
 
 @tensorclass
 class Gaussians2D():

@@ -71,8 +71,8 @@ def display_image(name, image):
 def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
-def train_epoch(opt, gaussians, ref_image, epoch_size=100, 
-        config:RasterConfig = RasterConfig(), grad_alpha=0.9, 
+def train_epoch(opt, config:RasterConfig, gaussians, ref_image, epoch_size=100, 
+        grad_alpha=0.9, 
         opacity_reg=0.0,
         scale_reg=0.0,
         noise_threshold=0.05,
@@ -91,11 +91,10 @@ def train_epoch(opt, gaussians, ref_image, epoch_size=100,
 
 
       raster = rasterize(gaussians2d=gaussians2d, 
-        encoded_depths=gaussians.z_depth.clamp(0, 1),
+        depth=gaussians.z_depth.clamp(0, 1),
         features=gaussians.feature, 
         image_size=(w, h), 
-        config=config,
-        compute_split_heuristics=True)
+        config=config)
 
 
       scale = torch.exp(gaussians.log_scaling)
@@ -181,7 +180,10 @@ def main():
 
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
   
-  config = RasterConfig(tile_size=cmd_args.tile_size, gaussian_scale=3.0, pixel_stride=cmd_args.pixel_tile or (2, 2))
+  config = RasterConfig(compute_split_heuristics=True,
+                        tile_size=cmd_args.tile_size, 
+                        gaussian_scale=3.0, 
+                        pixel_stride=cmd_args.pixel_tile or (2, 2))
 
   @beartype
   def take_n(t:torch.Tensor, n:int, descending=False):

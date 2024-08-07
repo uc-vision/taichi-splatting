@@ -1,4 +1,5 @@
 import argparse
+from dataclasses import replace
 from functools import partial
 
 import torch
@@ -45,7 +46,7 @@ def bench_rasterizer(args):
   gaussians2d = project_gaussians2d(gaussians)
 
   overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, 
-      encoded_depth=gaussians.z_depth.view(dtype=torch.int32).squeeze(1), 
+      depth=gaussians.z_depth.squeeze(1), 
       image_size=args.image_size, 
       config=config)
   
@@ -83,7 +84,7 @@ def bench_rasterizer(args):
   def compute_split_heuristics():
     raster = rasterize_with_tiles(gaussians2d=gaussians2d, features=gaussians.feature, 
       tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-      image_size=args.image_size, config=config, compute_split_heuristics=True)
+      image_size=args.image_size, config=replace(config, compute_split_heuristics=True))
     
     raster.image.sum().backward()
 

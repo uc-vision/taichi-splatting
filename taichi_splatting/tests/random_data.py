@@ -42,11 +42,7 @@ def random_camera(pos_scale:float=1., image_size:Optional[Tuple[int, int]]=None,
     near_plane=near_plane,
     far_plane=near_plane * 1000.
   )
-def inverse_ndc_depth(ndc, near, far):
-  # modified to convert value from 0 to 1 back to -1 to 1
-  ndc = (ndc * 2) - 1
-  depth = (2.0 * near * far) / (far + near - ndc * (far - near))
-  return depth
+
 
 
 
@@ -57,7 +53,7 @@ def random_3d_gaussians(n, camera_params:CameraParams,
   w, h = camera_params.image_size
   uv_pos = (torch.rand(n, 2) * (1 + margin) - margin * 0.5) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
 
-  depth = inverse_ndc_depth(torch.rand(n), camera_params.near_plane, camera_params.far_plane)
+  depth = torch_proj.inverse_ndc_depth(torch.rand(n), camera_params.near_plane, camera_params.far_plane)
 
   position = torch_proj.unproject_points(uv_pos, depth.unsqueeze(1), camera_params.T_image_world)
   fx = camera_params.T_image_camera[0, 0]
@@ -81,7 +77,8 @@ def random_3d_gaussians(n, camera_params:CameraParams,
   )
 
 
-def random_2d_gaussians(n, image_size:Tuple[int, int], num_channels=3, scale_factor=1.0, alpha_range=(0.1, 0.9), depth_range=(0.0, 1.0)):
+def random_2d_gaussians(n, image_size:Tuple[int, int], 
+                        num_channels=3, scale_factor=1.0, alpha_range=(0.1, 0.9), depth_range=(0.0, 1.0)) -> Gaussians2D:
   w, h = image_size
 
   position = torch.rand(n, 2) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
