@@ -50,7 +50,7 @@ def bench_rasterizer(args):
     def map_to_tiles():
 
       return module.map_to_tiles(gaussians2d, 
-        depth=gaussians.z_depth.squeeze(1), 
+        depth=gaussians.z_depth, 
         image_size=args.image_size, 
         config=config,
         use_depth16=args.depth16)

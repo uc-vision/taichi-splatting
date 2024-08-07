@@ -17,13 +17,13 @@ from taichi_splatting.perspective.projection import project_to_image
 
 @torch.compile
 def inverse_ndc_depth(ndc_depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
-  # ndc from 0 to 1 (instead of -1 to 1)
-  return (near * far - ndc_depth * near) / (far - ndc_depth * (far - near))
+  # ndc = (1/depth - 1/far) / (1/near - 1/far)
+  # depth = 1 / ((1 - ndc) * (1/near - 1/far) + 1/far)
+  return 1.0 / ((1.0 - ndc_depth) * (1/near - 1/far) + 1/far)
 
 @dataclass(frozen=True, kw_only=True)
 class Rendering:
   """ Collection of outputs from the renderer, 
-  including image map(s) and point statistics for each rendered point.
 
   depth and depth var are optional, as they are only computed if render_depth=True
   split_heuristics is computed in the backward pass if compute_split_heuristics=True

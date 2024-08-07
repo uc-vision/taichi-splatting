@@ -91,12 +91,14 @@ def cov_to_conic(cov: torch.Tensor) -> torch.Tensor:
 
 
 def ndc_depth(depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
-  # ndc from 0 to 1 (instead of -1 to 1)
-  return near * (far - depth) / (depth * (far - near))
+  # ndc from 0 (near) to 1 (far)
+  return 1 - (1./depth - 1./far) / (1./near - 1./far)
+
 
 def inverse_ndc_depth(ndc_depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
-  # ndc from 0 to 1 (instead of -1 to 1)
-  return (near * far - ndc_depth * near) / (far - ndc_depth * (far - near))
+  # inverse ndc from 0 (near) to 1 (far) -> depth
+  return 1.0 / ((1.0 - ndc_depth) * (1/near - 1/far) + 1/far)
+
 
 
 def generalized_ndc(depth: torch.Tensor, near: float, far: float, k:float) -> torch.Tensor:

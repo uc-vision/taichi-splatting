@@ -46,7 +46,7 @@ def bench_rasterizer(args):
   gaussians2d = project_gaussians2d(gaussians)
 
   overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, 
-      depth=gaussians.z_depth.squeeze(1), 
+      depth=gaussians.z_depth, 
       image_size=args.image_size, 
       config=config)
   
