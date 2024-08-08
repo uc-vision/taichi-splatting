@@ -4,8 +4,8 @@ from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.perspective.params import CameraParams
 
 from taichi_splatting.tests.util import eval_with_grad
-import taichi_splatting.torch_ops.projection as torch_proj
-from taichi_splatting.torch_ops.util import check_finite
+import taichi_splatting.torch_lib.projection as torch_proj
+from taichi_splatting.torch_lib.util import check_finite
 import taichi_splatting.perspective.projection as ti_proj
 from taichi_splatting.tests.random_data import random_camera, random_3d_gaussians
 

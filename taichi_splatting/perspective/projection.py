@@ -26,11 +26,6 @@ def project_to_image_function(torch_dtype=torch.float32):
   dtype = torch_taichi[torch_dtype]
   lib = get_library(dtype)
 
-  @ti.func
-  def ndc_depth(depth: dtype, near:dtype, far:dtype) -> dtype:
-      # ndc = 1 - (1/depth - 1/far) / (1/near - 1/far)
-      return 1 - (1./depth - 1./far) / (1./near - 1./far)
-
 
 
   @ti.kernel
@@ -41,8 +36,8 @@ def project_to_image_function(torch_dtype=torch.float32):
     alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
 
     # projection parameters
-    T_camera_world: ti.types.ndarray(ndim=2),  # (4, 4)
-    projection: ti.types.ndarray(ndim=1),  # (4) camera projection (fx, fy, cx, cy)
+    T_camera_world: ti.types.ndarray(lib.mat3x4, ndim=1),  # (M, 3, 4)
+    projection: ti.types.ndarray(lib.vec4, ndim=1),  # (M, 4) camera projection (fx, fy, cx, cy)
     image_size: lib.vec2,  # (2) image size
     depth_range: lib.vec2,  # (2) near and far plane
 
@@ -60,7 +55,7 @@ def project_to_image_function(torch_dtype=torch.float32):
     for idx in range(position.shape[0]):
 
       uv, z, uv_cov = lib.project_gaussian(
-        lib.mat3x4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
+        T_camera_world[idx], projection[idx], image_size,
         position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin=clamp_margin)
 
       radius = lib.radii_from_cov(uv_cov) * gaussian_scale
@@ -78,7 +73,7 @@ def project_to_image_function(torch_dtype=torch.float32):
           # add small fudge factor blur to avoid numerical issues
         uv_conic = lib.inverse_cov(uv_cov + lib.vec3([blur_cov, 0, blur_cov]))
 
-        depth[idx] = ndc_depth(z, depth_range[0], depth_range[1])
+        depth[idx] = z
         points[idx] = lib.Gaussian2D.to_vec(
             uv=uv,
             uv_conic=uv_conic,
@@ -95,12 +90,10 @@ def project_to_image_function(torch_dtype=torch.float32):
     alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
 
     indexes: ti.types.ndarray(ti.i64, ndim=1),  # (N) indexes of points to render from 0 to M
-    T_camera_world: ti.types.ndarray(ndim=2),  # (4, 4)
+    T_camera_world: ti.types.ndarray(lib.mat3x4, ndim=1),  # (M, 3, 4)
 
-    projection: ti.types.ndarray(ndim=1),  # (4) camera projection (fx, fy, cx, cy)
+    projection: ti.types.ndarray(lib.vec4, ndim=1),  # (M, 4) camera projection (fx, fy, cx, cy)
     image_size: lib.vec2,  # (2) image size
-    depth_range: lib.vec2, 
-
     
     points: ti.types.ndarray(lib.Gaussian2D.vec, ndim=1),  # (N, 6)
     depth: ti.types.ndarray(lib.vec1, ndim=1),  # (N, 1)
@@ -113,13 +106,13 @@ def project_to_image_function(torch_dtype=torch.float32):
       idx = indexes[i]
 
       uv, z, uv_cov = lib.project_gaussian(
-        lib.mat3x4_from_ndarray(T_camera_world), lib.vec4_from_ndarray(projection), image_size,
+        T_camera_world[idx], projection[idx], image_size,
         position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin)
 
       # add small fudge factor blur to avoid numerical issues
       uv_conic = lib.inverse_cov(uv_cov + lib.vec3([blur_cov, 0, blur_cov]))
 
-      depth[i] = ndc_depth(z, depth_range[0], depth_range[1])
+      depth[i] = z
       points[i] = lib.Gaussian2D.to_vec(
           uv=uv,
           uv_conic=uv_conic,
@@ -187,7 +180,7 @@ def project_to_image_function(torch_dtype=torch.float32):
           *gaussian_tensors,  
           ctx.indexes,
           T_camera_world, 
-          projection, lib.vec2(ctx.image_size), lib.vec2(ctx.depth_range),
+          projection, lib.vec2(ctx.image_size),
           points, depth,
           ctx.blur_cov, ctx.clamp_margin)
 
@@ -214,14 +207,16 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
           ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
   
   _module_function = project_to_image_function(position.dtype)
+  n = position.shape[0]
+
   return _module_function.apply(
     position.contiguous(),
     log_scaling.contiguous(),
     rotation.contiguous(),
     alpha_logit.contiguous(),
 
-    T_camera_world.contiguous(),
-    projection.contiguous(),
+    T_camera_world[:3].unsqueeze(0).expand(n, 3, 4).contiguous(),
+    projection.unsqueeze(0).expand(n, 4).contiguous(),
     image_size,
 
     depth_range,

@@ -5,7 +5,7 @@ import taichi as ti
 import torch
 
 from taichi_splatting.data_types import Gaussians2D
-from taichi_splatting.torch_ops.projection import inverse_sigmoid
+from taichi_splatting.torch_lib.projection import inverse_sigmoid
 
 
 @ti.kernel

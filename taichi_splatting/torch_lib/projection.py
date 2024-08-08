@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from taichi_splatting.perspective import CameraParams
 from taichi_splatting.data_types import Gaussians3D, RasterConfig
-from taichi_splatting.torch_ops.transforms import make_homog, quat_to_mat, transform33, transform44
+from taichi_splatting.torch_lib.transforms import make_homog, quat_to_mat, transform44
 
 def radii_from_cov(uv_cov:torch.Tensor):
   x, y, _, z = uv_cov.view(-1, 4).unbind(1)
@@ -89,18 +89,18 @@ def cov_to_conic(cov: torch.Tensor) -> torch.Tensor:
   return torch.stack([inv_det * z, -inv_det * y, inv_det * x], -1)
 
 
-
+@torch.compile
 def ndc_depth(depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
   # ndc from 0 (near) to 1 (far)
   return 1 - (1./depth - 1./far) / (1./near - 1./far)
 
-
+@torch.compile
 def inverse_ndc_depth(ndc_depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
   # inverse ndc from 0 (near) to 1 (far) -> depth
   return 1.0 / ((1.0 - ndc_depth) * (1/near - 1/far) + 1/far)
 
 
-
+@torch.compile
 def generalized_ndc(depth: torch.Tensor, near: float, far: float, k:float) -> torch.Tensor:
   # k = 1 -> linear
   # k = -1 -> ndc (inverse)
@@ -152,10 +152,9 @@ def apply(position, log_scaling, rotation, alpha_logit,
   uv_cov += torch.eye(2, device=uv_cov.device, dtype=uv_cov.dtype) * blur_cov
   points = torch.concatenate([uv[:, :2], cov_to_conic(uv_cov), alpha_logit.sigmoid()], axis=-1)
 
-  z = ndc_depth(z[in_view], depth_range[0], depth_range[1])
   vis_idx = in_view.nonzero(as_tuple=True)[0]
 
-  return points[in_view], z.unsqueeze(1), vis_idx
+  return points[in_view], z[in_view], vis_idx
 
 
 def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams, config: RasterConfig

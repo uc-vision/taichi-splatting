@@ -1,7 +1,6 @@
 
 
 from dataclasses import dataclass
-from functools import cached_property
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 import torch
@@ -14,12 +13,8 @@ from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 from taichi_splatting.perspective import (CameraParams)
 
 from taichi_splatting.perspective.projection import project_to_image
+from taichi_splatting.torch_lib.projection import ndc_depth
 
-@torch.compile
-def inverse_ndc_depth(ndc_depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
-  # ndc = (1/depth - 1/far) / (1/near - 1/far)
-  # depth = 1 / ((1 - ndc) * (1/near - 1/far) + 1/far)
-  return 1.0 / ((1.0 - ndc_depth) * (1/near - 1/far) + 1/far)
 
 @dataclass(frozen=True, kw_only=True)
 class Rendering:
@@ -35,28 +30,15 @@ class Rendering:
 
   # Information relevant to points rendered
   points_in_view: torch.Tensor  # (N, 1) - indexes of points in view 
-  point_ndc_depth: torch.Tensor  # (N, 1) - depth of each point
+  point_depth: torch.Tensor  # (N, 1) - depth of each point
 
   split_heuristics: Optional[torch.Tensor] = None  # (N, 2) - split and prune heuristic
   radii : Optional[torch.Tensor] = None  # (N, 1) - radius of each point
 
   camera : CameraParams
 
-  ndc_depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
-  ndc_depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
-
-  @cached_property
-  def point_depth(self) -> Optional[torch.Tensor]:
-    near, far = self.camera.depth_range
-    return inverse_ndc_depth(self.point_ndc_depth, near, far)
-
-  @cached_property
-  def depth(self) -> Optional[torch.Tensor]:
-    if self.ndc_depth is None:
-      return None
-    else:
-      near, far = self.camera.depth_range
-      return inverse_ndc_depth(self.ndc_depth, near, far)
+  depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
+  depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
 
 
   @property
@@ -76,6 +58,7 @@ def render_gaussians(
   render_depth:bool = False, 
   compute_radii:bool = False,
   use_depth16:bool = False,
+  use_ndc_depth:bool = False
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 
@@ -122,22 +105,24 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
       features:torch.Tensor, depths:torch.Tensor, 
       camera_params: CameraParams, config:RasterConfig,      
 
-      render_depth:bool = False,  use_depth16:bool = False, compute_radii:bool = False):
+      render_depth:bool = False,  use_depth16:bool = False, use_ndc_depth:bool = False, compute_radii:bool = False):
 
+  ndc_depths = ndc_depth(depths, camera_params.near_plane, camera_params.far_plane)
 
   if render_depth:
+    depths = ndc_depth if use_ndc_depth else depths
     features = torch.cat([depths, depths**2, features], dim=1)
 
-  raster = rasterize(gaussians2d, depths, features.contiguous(),
+  raster = rasterize(gaussians2d, ndc_depths, features.contiguous(),
     image_size=camera_params.image_size, 
     config=config, 
     use_depth16=use_depth16)
 
-  depth, depth_var = None, None
+  img_depth, img_depth_var = None, None
   feature_image = raster.image
 
   if render_depth:
-    depth, depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
+    img_depth, img_depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
     feature_image = feature_image[..., 2:]
 
   heuristics = raster.point_split_heuristics if config.compute_split_heuristics else None
@@ -145,15 +130,15 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
 
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 
-                  ndc_depth=depth, 
-                  ndc_depth_var=depth_var, 
+                  depth=img_depth, 
+                  depth_var=img_depth_var, 
 
                   camera=camera_params,
                     
                   split_heuristics=heuristics,
                   points_in_view=indexes,
 
-                  point_ndc_depth=depths,
+                  point_depth=depths,
                   radii=radii)
 
 

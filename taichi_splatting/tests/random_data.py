@@ -7,8 +7,8 @@ import torch.nn.functional as F
 from taichi_splatting.data_types import Gaussians2D, Gaussians3D
 from taichi_splatting.perspective import CameraParams
 
-from taichi_splatting.torch_ops.transforms import join_rt
-from taichi_splatting.torch_ops import projection as torch_proj
+from taichi_splatting.torch_lib.transforms import join_rt
+from taichi_splatting.torch_lib import projection as torch_proj
 
 
 
