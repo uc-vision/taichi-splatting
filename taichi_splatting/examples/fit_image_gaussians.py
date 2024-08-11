@@ -55,9 +55,11 @@ def parse_args():
   return args
 
 
-def log_iterp(t, a, b):
+def log_lerp(t, a, b):
   return math.exp(math.log(b) * t + math.log(a) * (1 - t))
 
+def lerp(t, a, b):
+  return b * t + a * (1 - t)
 
 
 def display_image(name, image):
@@ -227,7 +229,7 @@ def main():
     t = (epoch + 1) / (cmd_args.max_epoch - 1)
 
 
-    params.set_learning_rate(position = log_iterp(t, *lr_range))
+    params.set_learning_rate(position = log_lerp(t, *lr_range))
 
 
     image, densify_score, prune_cost, epoch_time = train(params.optimizer, params, ref_image, 
