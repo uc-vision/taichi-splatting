@@ -154,7 +154,7 @@ def apply(position, log_scaling, rotation, alpha_logit,
 
   vis_idx = in_view.nonzero(as_tuple=True)[0]
 
-  return points[in_view], z[in_view], vis_idx
+  return points[in_view], z[in_view].unsqueeze(1), vis_idx
 
 
 def project_to_image(gaussians:Gaussians3D, camera_params: CameraParams, config: RasterConfig
