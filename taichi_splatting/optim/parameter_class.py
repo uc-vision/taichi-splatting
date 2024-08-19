@@ -100,6 +100,16 @@ class ParameterClass():
     
   def items(self):
     return self.tensors.items()
+  
+
+  def update_group(self, name, **kwargs):
+    for group in self.optimizer.param_groups:
+      if group['name'] == name:
+        group.update(kwargs)
+        return
+    
+    raise ValueError(f"Group {name} not found in optimizer")
+
 
 
   def __getattr__(self, name):

@@ -17,7 +17,6 @@ class CameraParams:
   image_size: Tuple[Integral, Integral]
 
 
-
   @property
   def depth_range(self):
     return (self.near_plane, self.far_plane)
@@ -38,6 +37,14 @@ class CameraParams:
         [0, fy, cy], 
         [0, 0, 1]]
     return torch.tensor(m, device=self.device, dtype=self.dtype)
+
+  @property
+  def focal_length(self):
+    return self.projection[0:2]
+  
+  @property
+  def principal_point(self):
+    return self.projection[2:4]
 
   @property
   def T_image_world(self):

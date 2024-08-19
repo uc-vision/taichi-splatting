@@ -37,7 +37,7 @@ def parse_args():
   parser.add_argument('--opacity_reg', type=float, default=0.001)
   parser.add_argument('--scale_reg', type=float, default=0.00001)
 
-  parser.add_argument('--noise_scale', type=float, default=100.0)
+  parser.add_argument('--noise_scale', type=float, default=0.0)
 
   parser.add_argument('--write_frames', type=Path, default=None)
 

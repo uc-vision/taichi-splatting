@@ -1,6 +1,7 @@
 
 
 from dataclasses import dataclass
+from functools import cached_property
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 import torch
@@ -40,6 +41,21 @@ class Rendering:
   depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
   depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
 
+  @cached_property
+  def ndc_depth(self) -> torch.Tensor:
+    return ndc_depth(self.depth, self.camera.near_plane, self.camera.far_plane)
+
+
+  @cached_property
+  def visible_mask(self) -> torch.Tensor:
+    """ If a point in the view is visible """
+    return self.split_heuristics[self.points_in_view, 1] > 0
+
+  @cached_property
+  def visible_indices(self) -> torch.Tensor:
+    """ Indexes of visible points """
+    return self.points_in_view[self.visible_mask]
+
 
   @property
   def image_size(self) -> Tuple[int, int]:
@@ -58,7 +74,6 @@ def render_gaussians(
   render_depth:bool = False, 
   compute_radii:bool = False,
   use_depth16:bool = False,
-  use_ndc_depth:bool = False
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 
@@ -88,7 +103,7 @@ def render_gaussians(
 
 
   return render_projected(indexes, gaussians2d, features, depths, camera_params, config, 
-                   render_depth=render_depth, use_depth16=use_depth16, compute_radii=compute_radii)
+                   render_depth=render_depth, use_depth16=use_depth16,  compute_radii=compute_radii)
 
 
 @torch.compile
