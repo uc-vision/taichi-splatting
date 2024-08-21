@@ -288,7 +288,7 @@ def make_library(dtype=ti.f32):
       return ti.sqrt(max_eig_sq)
 
   @ti.func
-  def cov_axes(cov:vec3):
+  def eig(cov:vec3):
       tr = cov.x + cov.z
       det = cov.x * cov.z - cov.y * cov.y
 
@@ -299,9 +299,16 @@ def make_library(dtype=ti.f32):
       lambda2 = (tr - sqrt_gap) * 0.5
 
       v1 = vec2(cov.x - lambda2, cov.y).normalized() 
-      v2 = vec2(v1.y, -v1.x)
+      v2 = vec2(-v1.y, v1.x)
 
-      return v1 * ti.sqrt(lambda1), v2 * ti.sqrt(lambda2)  
+      return lambda1, lambda2, v1, v2
+
+
+
+  @ti.func
+  def cov_axes(cov:vec3):
+    lambda1, lambda2, v1, v2 = eig(cov)
+    return v1 * ti.sqrt(lambda1), v2 * ti.sqrt(lambda2)  
 
 
   @ti.func

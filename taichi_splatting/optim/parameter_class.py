@@ -1,6 +1,8 @@
 import copy
 from beartype import beartype
 from beartype.typing import Callable,  Dict, Optional
+from dataclasses import replace
+
 from tensordict import TensorDict
 import torch.optim as optim
 import torch
@@ -17,9 +19,6 @@ class ParameterClass():
   """
   Maintains a group of mixed parameters/non parameters in a TensorClass,
   as well as optimizer state synchronized with the parameters.
-
-  Note - call ParameterClass.create to create a ParameterClass instead 
-  of the constructor directly.
 
   Supports filtering with python indexing and appending parameters.
 
@@ -118,14 +117,27 @@ class ParameterClass():
     
     return self.tensors[name]
 
-
-  def to(self, device):
+  def modify(self, f):
     return ParameterClass(
-      as_parameters(self.tensors.to(device), self.optimized_keys()), 
+      f(self.tensors), 
       self.parameter_groups, 
-      self._updated_state(lambda x: x.to(device),
-      optimizer=self.create_optimizer)
+      self._updated_state(lambda x: x),
+      optimizer=self.create_optimizer
     )
+
+  def apply(self, f):
+    return self.modify(lambda x: x.apply(f))
+  
+  def to(self, device):
+    return self.modify(lambda x: x.to(device))
+
+  def replace(self, **kwargs):
+    return self.modify(lambda x: replace(**kwargs))
+  
+
+  def detach(self) -> TensorDict:
+    return self.tensors.detach()
+
 
   def to_dict(self):
     return self.tensors.to_dict()

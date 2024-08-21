@@ -103,11 +103,15 @@ class SparseAdam(torch.optim.Optimizer):
       
       if group["point_lr"] is not None:
         point_lr=group["point_lr"]
+        assert point_lr.shape == (param.shape[0],), f"point_lr shape {point_lr.shape} != {param.shape[0]}"
       else:
         point_lr = torch.empty((0,), device=param.device, dtype=torch.float32)
 
       if group["mask_lr"] is not None:
-        mask_lr = group["mask_lr"]
+
+        assert group["mask_lr"].shape == param.shape[1:], f"mask_lr shape {group['mask_lr'].shape} != {param.shape[1:]}"
+        mask_lr = group["mask_lr"].view(-1)
+
       else:
         mask_lr = torch.empty((0,), device=param.device, dtype=torch.float32)
           

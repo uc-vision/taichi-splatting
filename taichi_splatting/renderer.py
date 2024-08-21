@@ -46,10 +46,18 @@ class Rendering:
     return ndc_depth(self.depth, self.camera.near_plane, self.camera.far_plane)
 
 
+  @property
+  def split_score(self) -> torch.Tensor:
+    return self.split_heuristics[:, 0]  
+  
+  @property
+  def prune_cost(self) -> torch.Tensor:
+    return self.split_heuristics[:, 1]
+
   @cached_property
   def visible_mask(self) -> torch.Tensor:
     """ If a point in the view is visible """
-    return self.split_heuristics[self.points_in_view, 1] > 0
+    return self.prune_cost > 0
 
   @cached_property
   def visible_indices(self) -> torch.Tensor:

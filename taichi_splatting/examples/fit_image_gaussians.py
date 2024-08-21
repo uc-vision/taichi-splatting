@@ -160,6 +160,7 @@ def main():
   lr_range = (0.5, 0.1)
 
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), scale_factor=0.1).to(torch.device('cuda:0'))
+  
   parameter_groups = dict(
     position=dict(lr=lr_range[0]),
     log_scaling=dict(lr=0.025),
@@ -174,8 +175,8 @@ def main():
 
 
 
-  params = ParameterClass.create(gaussians.to_tensordict(), 
-        parameter_groups, base_lr=1.0, optimizer=create_optimizer)
+  params = ParameterClass(gaussians.to_tensordict(), 
+        parameter_groups, optimizer=create_optimizer)
   
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
