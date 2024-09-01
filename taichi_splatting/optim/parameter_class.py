@@ -6,14 +6,8 @@ from dataclasses import replace
 from tensordict import TensorDict
 import torch.optim as optim
 import torch
-from functools import partial
 
-default_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
 
-def replace_dict(d, **kwargs):
-  d = copy.copy(d)
-  d.update(kwargs)
-  return d
 
 class ParameterClass():
   """
@@ -32,35 +26,24 @@ class ParameterClass():
 
   def __init__(self, tensors:TensorDict, 
                parameter_groups:Dict[str, Dict], 
-               param_state:Optional[Dict[str, torch.Tensor]]=None,
-               optimizer = default_optimizer):
+               optim_state:Optional[Dict[str, torch.Tensor]]=None,
+               optimizer = optim.Adam,
+
+               **optim_kwargs):
 
     self.tensors:TensorDict = as_parameters(tensors, parameter_groups.keys())
-
 
     param_groups = [
       dict(params=[self.tensors[name]], name=name, **group)
         for name, group in parameter_groups.items()
     ]
 
-    self.create_optimizer = optimizer
-    self.optimizer = self.create_optimizer(param_groups)
+    self.optimizer = optimizer(param_groups, **optim_kwargs)
     
-
-    if param_state is not None:
-      for k, v in param_state.items():
+    if optim_state is not None:
+      for k, v in optim_state.items():
         self.optimizer.state[self.tensors[k]] = v
 
-
-  @beartype
-  @staticmethod
-  def create(tensors:TensorDict, parameter_groups:Dict[str, Dict], base_lr=1.0,
-               optimizer = default_optimizer):
-    
-    parameter_groups = {k: replace_dict(group, lr=group.get("lr", 1.0) * base_lr)
-          for k, group in parameter_groups.items()}
-    
-    return ParameterClass(tensors, parameter_groups, optimizer=optimizer)
   
   @property
   def parameter_groups(self):
@@ -74,6 +57,11 @@ class ParameterClass():
     return {group['name']: group['lr'] for group in self.optimizer.param_groups}
 
 
+  @property
+  def optim_state(self):
+    return self._updated_state(lambda x: x)
+
+
   @beartype
   def set_learning_rate(self, **kwargs:float):
     learning_rates = replace_dict(self.learning_rates, **kwargs)
@@ -82,6 +70,24 @@ class ParameterClass():
       group['lr'] = learning_rates[group['name']]
 
     return self
+  
+
+  def state_dict(self) -> Dict:
+    return {
+      'tensors': self.tensors.state_dict(),
+      'optimizer': self.optim_state,
+      'parameter_groups': self.parameter_groups
+    }
+  
+  @staticmethod
+  def from_state_dict(state:dict, optimizer=optim.Adam) -> 'ParameterClass':
+    return ParameterClass(
+      TensorDict.from_dict(state['tensors']), 
+      state['parameter_groups'],
+      state['optimizer'],
+      
+      optimizer=optimizer
+    )
 
   def zero_grad(self):
     self.optimizer.zero_grad()
@@ -121,8 +127,9 @@ class ParameterClass():
     return ParameterClass(
       f(self.tensors), 
       self.parameter_groups, 
-      self._updated_state(lambda x: x),
-      optimizer=self.create_optimizer
+      self.optim_state,
+
+      optimizer=type(self.optimizer)
     )
 
   def apply(self, f):
@@ -156,14 +163,11 @@ class ParameterClass():
               for name, param in self.tensors.items()
                 if param in self.optimizer.state}
     
-
-  def get_state(self):
-    return self._updated_state(lambda x: x)
-
+  
 
   def __getitem__(self, idx):
-    state = self._updated_state(lambda x: x[idx])
-    return ParameterClass(self.tensors[idx], self.parameter_groups, state, optimizer=self.create_optimizer)
+    state = self.optim_state
+    return ParameterClass(self.tensors[idx], self.parameter_groups, state, optimizer=type(self.optimizer))
   
   def append_tensors(self, tensors:TensorDict):
     assert set(tensors.keys()) == set(self.tensors.keys()), f"{tensors.keys()} != {self.tensors.keys()}"
@@ -172,7 +176,10 @@ class ParameterClass():
     state = self._updated_state(lambda x: torch.cat(
       [x, x.new_zeros(n, *x.shape[1:])] )
     )
-    return ParameterClass(torch.cat([self.tensors, tensors]), self.parameter_groups, state, optimizer=self.create_optimizer)
+    return ParameterClass(torch.cat([self.tensors, tensors]), 
+                          self.parameter_groups, 
+                          state, 
+                          optimizer=type(self.optimizer))
 
   def append(self, params:'ParameterClass'):
     return self.append_tensors(params.tensors)
@@ -189,6 +196,10 @@ def as_parameters(tensors, keys):
     return cls.from_dict(param_dict) 
 
 
+def replace_dict(d, **kwargs):
+  d = copy.copy(d)
+  d.update(kwargs)
+  return d
 
 
 

@@ -29,111 +29,36 @@ def make_library(dtype=ti.f32):
 
   @ti.dataclass
   class Gaussian2D:
-      uv        : vec2
-      uv_conic  : vec3
-      alpha   : dtype
-
-
-
-  @ti.dataclass
-  class Gaussian3D:
-      position   : vec3
-      log_scaling : vec3
-      rotation    : vec4
-      alpha_logit : dtype
-
-      @ti.func
-      def alpha(self):
-        return sigmoid(self.alpha_logit)
-
-      @ti.func
-      def scale(self):
-          return ti.math.exp(self.log_scaling)
-
+      mean      : vec2
+      axis      : vec2
+      sigma     : vec2
+      alpha     : dtype
 
   vec_g2d = ti.types.vector(struct_size(Gaussian2D), dtype=dtype)
-  vec_g3d = ti.types.vector(struct_size(Gaussian3D), dtype=dtype)
-
 
   @ti.func
-  def to_vec_g2d(uv:vec2, uv_conic:vec3, alpha:dtype) -> vec_g2d:
-    return vec_g2d(*uv, *uv_conic, alpha)
-
-  @ti.func
-  def to_vec_g3d(position:vec3, log_scaling:vec3, rotation:vec4, alpha_logit:dtype) -> vec_g3d:
-    return vec_g3d(*position, *log_scaling, *rotation, alpha_logit)
-
-
-  @ti.func
-  def unpack_vec_g3d(vec:vec_g3d) -> Gaussian3D:
-    return vec[0:3], vec[3:6], vec[6:10], vec[10]
-
-  @ti.func
-  def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
-    return vec[0:2], vec[2:5], vec[5]
-
-  @ti.func
-  def get_position_g3d(vec:vec_g3d) -> vec3:
-    return vec[0:3]
-
-  @ti.func
-  def get_position_g2d(vec:vec_g2d) -> vec2:
-    return vec[0:2]
-
-  @ti.func
-  def get_conic_g2d(vec:vec_g2d) -> vec3:
-    return vec[2:5]
-
-
-  @ti.func
-  def get_cov_g2d(vec:vec_g2d) -> vec3:
-    conic = get_conic_g2d(vec)
-    return inverse_cov(conic)
-
-  @ti.func
-  def from_vec_g3d(vec:vec_g3d) -> Gaussian3D:
-    return Gaussian3D(vec[0:3], vec[3:6], vec[6:10], vec[10])
+  def to_vec_g2d(mean:vec2, axis:vec2, sigma:vec2, alpha:dtype) -> vec_g2d:
+    return vec_g2d(*mean, *axis, *sigma, alpha)
+  
 
   @ti.func
   def from_vec_g2d(vec:vec_g2d) -> Gaussian2D:
-    return Gaussian2D(vec[0:2], vec[2:5], vec[5])
-
-
-  @ti.func
-  def unpack_activate_g3d(vec:vec_g3d):
-    position, log_scaling, rotation, alpha_logit = unpack_vec_g3d(vec)
-    return position, ti.exp(log_scaling), ti.math.normalize(rotation), sigmoid(alpha_logit)
-  
-
-
+    return Gaussian2D(vec[0:2], vec[2:4], vec[4:6], vec[6])
 
   @ti.func
-  def bounding_sphere(vec:vec_g3d, gaussian_scale: ti.template()):
-    position, log_scaling = vec[0:3], vec[3:6]
-    return position, ti.exp(log_scaling).max() * gaussian_scale
+  def unpack_vec_g2d(vec:vec_g2d) -> Gaussian2D:
+    return vec[0:2], vec[2:4], vec[4:6], vec[6]
+
 
   # Taichi structs don't have static methods, but they can be added afterward
+
   Gaussian2D.vec = vec_g2d
   Gaussian2D.to_vec = to_vec_g2d
   Gaussian2D.from_vec = from_vec_g2d
   Gaussian2D.unpack = unpack_vec_g2d
 
-  Gaussian2D.get_position = get_position_g2d
-  Gaussian2D.get_conic = get_conic_g2d
-  Gaussian2D.get_cov = get_cov_g2d
 
 
-  Gaussian3D.vec = vec_g3d
-  Gaussian3D.to_vec = to_vec_g3d
-  Gaussian3D.from_vec = from_vec_g3d
-  Gaussian3D.unpack = unpack_vec_g3d
-  Gaussian3D.unpack_activate = unpack_activate_g3d
-  Gaussian3D.get_position = get_position_g3d
-  Gaussian3D.bounding_sphere = bounding_sphere
-
-
-
-  #
   # Projection related functions
   #
 
@@ -301,14 +226,28 @@ def make_library(dtype=ti.f32):
       v1 = vec2(cov.x - lambda2, cov.y).normalized() 
       v2 = vec2(-v1.y, v1.x)
 
-      return lambda1, lambda2, v1, v2
+      return ti.sqrt(vec2(lambda1, lambda2)), v1, v2
 
 
 
   @ti.func
+  def ellipse_bounds(uv, v1, v2):
+    extent  = ti.sqrt(v1**2 + v2**2)
+    return (uv - extent), (uv + extent)
+  
+
+
+  
+  @ti.func 
+  def clamp_bounds(lower:vec2, upper:vec2, image_size:ti.math.ivec2):
+    lower = ti.math.clamp(lower, 0, image_size - 1)
+    upper = ti.math.clamp(upper, 0, image_size - 1)
+    return lower, upper
+
+  @ti.func
   def cov_axes(cov:vec3):
-    lambda1, lambda2, v1, v2 = eig(cov)
-    return v1 * ti.sqrt(lambda1), v2 * ti.sqrt(lambda2)  
+    sigma, v1, v2 = eig(cov)
+    return v1 * sigma.x, v2 * sigma.y
 
 
   @ti.func
@@ -359,13 +298,104 @@ def make_library(dtype=ti.f32):
 
       return p, dp_duv, dp_dconic
 
+  @ti.func
+  def perp(v:vec2) -> vec2:
+    return vec2(-v.y, v.x)
 
+  @ti.func
+  def gaussian_pdf(xy: vec2, mean: vec2, axis: vec2, sigma: vec2) -> dtype:
+    d = xy - mean
+
+    tx = d.dot(axis) / sigma.x
+    ty = d.dot(perp(axis)) / sigma.y
+
+    return ti.exp(-0.5 * (tx**2 + ty**2))
 
 
   @ti.func
-  def cov_inv_basis(uv_cov: vec3, scale: dtype) -> mat2:
-      basis = ti.Matrix.cols(cov_axes(uv_cov))
-      return (basis * scale).inverse()
+  def gaussian_pdf_with_grad(xy: vec2, mean: vec2, axis: vec2, sigma: vec2):
+    d = xy - mean
+
+    tx = d.dot(axis) / sigma.x
+    ty = d.dot(perp(axis)) / sigma.y
+
+    tx2, ty2 = tx**2, ty**2
+    p = ti.exp(-0.5 * (tx2 + ty2))
+
+    dp_dsigma = vec2(tx2, ty2) * p / sigma
+    tx_s, ty_s = tx / sigma.x, ty / sigma.y
+
+    dp_daxis = p * (tx_s * -d + ty_s * perp(d))
+    dp_dmean = p * (tx_s * axis + ty_s * perp(axis))
+
+    return p, dp_dmean, dp_daxis, dp_dsigma
+  
+
+  @ti.func
+  def S_sig(x, sigma=1):
+      """ Approximate gaussian cdf """
+      z = x / sigma
+      return 1 / (1 + ti.exp(-1.6 * z - 0.07 * z**3))
+
+  @ti.func
+  def gaussian_pdf_antialias(xy: vec2, mean: vec2, axis: vec2, sigma: vec2):
+    d = xy - mean
+    sx, sy = sigma
+
+    tx = d.dot(axis)
+    ty = d.dot(perp(axis))
+
+    Sx1, Sx2 = S_sig(tx + 0.5, sx), S_sig(tx - 0.5, sx)
+    Sy1, Sy2 = S_sig(ty + 0.5, sy), S_sig(ty - 0.5, sy)
+
+    return 2 * ti.math.pi * sx * (Sx1 - Sx2) * sy * (Sy1 - Sy2)
+  
+  @ti.func
+  def S_sig_grad(x, sigma=1):
+      """ Approximate gaussian cdf and derivatives dS/dx, dS/dsigma """
+      z = x / sigma
+      s = 1 / (1 + ti.exp(-1.6 * z - 0.07 * z**3))
+      
+      ds_dx = (1.6 + 0.21 * z**2) * s * (1 - s)
+      dSig_dx = ds_dx / sigma
+
+      return s, dSig_dx, dSig_dx * -z
+
+  @ti.func
+  def gaussian_pdf_antialias_with_grad(xy:vec2, mean:vec2, axis:vec2, sigma:vec2):
+    sx, sy = sigma
+    d = xy - mean # relative position of pixel centre to gaussian mean
+
+    # pixel centre in gaussian coordinate system (\tilde{u} in paper)
+    tx = d.dot(axis)
+    ty = d.dot(perp(axis))
+
+    Sx1, dSx1, dSx1_sig = S_sig_grad(tx + 0.5, sx)
+    Sx2, dSx2, dSx2_sig = S_sig_grad(tx - 0.5, sx)
+
+    Sy1, dSy1, dSy1_sig = S_sig_grad(ty + 0.5, sy)
+    Sy2, dSy2, dSy2_sig = S_sig_grad(ty - 0.5, sy)
+
+    # forward pass, computation of intensity
+    ix = sx * (Sx1 - Sx2)
+    iy = sy * (Sy1 - Sy2)
+
+    tau = 2 * ti.math.pi
+    i_2d = tau * ix * iy
+
+    # backward pass, computation of gradients of intensity w.r.t. parameters
+    dSx = iy  * sx * (dSx1 - dSx2)
+    dSy = ix  * sy * (dSy1 - dSy2)
+
+    di_dmean = tau * (dSx * -axis  + dSy * -perp(axis))
+
+    di_dsigma = vec2(tau * iy * (Sx1 - Sx2 +  (dSx1_sig -  dSx2_sig) * sx),
+                     tau * ix * (Sy1 - Sy2 +  (dSy1_sig -  dSy2_sig) * sy))
+
+    # gradient on first eigenvector (v1) + gradient on second eigenvector (v2 = perp(v1))
+    di_daxis = tau * (dSx * d + dSy * -perp(d)) 
+
+    return i_2d, di_dmean, di_daxis, di_dsigma
 
 
   @ti.func

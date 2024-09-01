@@ -22,10 +22,9 @@ warnings.filterwarnings('ignore', '(.*)that is not a leaf Tensor is being access
 
 
 @cache
-def project_to_image_function(torch_dtype=torch.float32):
+def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur_cov=0.0):
   dtype = torch_taichi[torch_dtype]
   lib = get_library(dtype)
-
 
 
   @ti.kernel
@@ -46,38 +45,35 @@ def project_to_image_function(torch_dtype=torch.float32):
     depth: ti.types.ndarray(lib.vec1, ndim=1),  # (N, 1)
 
     # other parameters
-    gaussian_scale: dtype,
-    blur_cov:dtype,
-    clamp_margin: dtype
+    gaussian_scale: dtype
 
   ):
-
     for idx in range(position.shape[0]):
-
-      uv, z, uv_cov = lib.project_gaussian(
+      mean, z, cov = lib.project_gaussian(
         T_camera_world[idx], projection[idx], image_size,
         position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin=clamp_margin)
 
-      radius = lib.radii_from_cov(uv_cov) * gaussian_scale
+      if ti.static(blur_cov > 0):
+        cov += lib.vec3([blur_cov, 0, blur_cov])
+
+      sigma, v1, v2 = lib.eig(cov)
+      sx, sy = sigma * gaussian_scale
+      lower, upper = lib.ellipse_bounds(mean, v1 * sx, v2 * sy)
 
       in_view = ((z > depth_range[0]) and (z < depth_range[1]) and 
-        (uv.x >= -radius) and (uv.x < image_size.x + radius) and 
-        (uv.y >= -radius) and (uv.y < image_size.y + radius)
-      )
-
+                 (upper > 0).all() and (lower < image_size).all())
+                  
       if not in_view:
         depth[idx] = 0.
 
       else:
 
-          # add small fudge factor blur to avoid numerical issues
-        uv_conic = lib.inverse_cov(uv_cov + lib.vec3([blur_cov, 0, blur_cov]))
-
         depth[idx] = z
         points[idx] = lib.Gaussian2D.to_vec(
-            uv=uv,
-            uv_conic=uv_conic,
-            alpha=lib.sigmoid(alpha_logit[idx][0]),
+            mean  = mean,
+            axis  = v1,
+            sigma = sigma,
+            alpha = lib.sigmoid(alpha_logit[idx][0]),
         )
 
 
@@ -97,25 +93,25 @@ def project_to_image_function(torch_dtype=torch.float32):
     
     points: ti.types.ndarray(lib.Gaussian2D.vec, ndim=1),  # (N, 6)
     depth: ti.types.ndarray(lib.vec1, ndim=1),  # (N, 1)
-
-    blur_cov:dtype,
-    clamp_margin: dtype
   ):
 
     for i in range(indexes.shape[0]):
       idx = indexes[i]
 
-      uv, z, uv_cov = lib.project_gaussian(
+      mean, z, cov = lib.project_gaussian(
         T_camera_world[idx], projection[idx], image_size,
         position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin)
+      
+      if ti.static(blur_cov > 0):
+        cov += lib.vec3([blur_cov, 0, blur_cov])
 
-      # add small fudge factor blur to avoid numerical issues
-      uv_conic = lib.inverse_cov(uv_cov + lib.vec3([blur_cov, 0, blur_cov]))
+      sigma, v1, _ = lib.eig(cov)
 
       depth[i] = z
       points[i] = lib.Gaussian2D.to_vec(
-          uv=uv,
-          uv_conic=uv_conic,
+          mean=mean,
+          axis = v1,
+          sigma = sigma,
           alpha=lib.sigmoid(alpha_logit[idx][0]),
       )
 
@@ -126,7 +122,7 @@ def project_to_image_function(torch_dtype=torch.float32):
     def forward(ctx, position, log_scaling, rotation, alpha_logit,
                 T_camera_world,
                 projection, image_size, depth_range,
-                gaussian_scale, blur_cov, clamp_margin):
+                gaussian_scale):
       dtype, device = projection.dtype, projection.device
 
       n = position.shape[0]
@@ -141,7 +137,7 @@ def project_to_image_function(torch_dtype=torch.float32):
             T_camera_world, projection, 
             lib.vec2(image_size), lib.vec2(depth_range),
             points, depth,  # outputs
-            gaussian_scale, blur_cov, clamp_margin)
+            gaussian_scale)
       
       
       ctx.indexes = torch.nonzero(depth[:, 0]).squeeze(1)
@@ -153,10 +149,7 @@ def project_to_image_function(torch_dtype=torch.float32):
       ctx.image_size = image_size
       ctx.depth_range = depth_range
 
-      ctx.blur_cov = blur_cov
       ctx.gaussian_scale = gaussian_scale
-      ctx.clamp_margin = clamp_margin
-      
       ctx.mark_non_differentiable(ctx.indexes)
 
       ctx.save_for_backward(*gaussian_tensors,
@@ -175,19 +168,19 @@ def project_to_image_function(torch_dtype=torch.float32):
       with restore_grad(*gaussian_tensors,  projection, T_camera_world, points, depth):
         points.grad = dpoints.contiguous()
         depth.grad = ddepth.contiguous()
-        
+
+      
         indexed_project_kernel.grad(
           *gaussian_tensors,  
           ctx.indexes,
           T_camera_world, 
           projection, lib.vec2(ctx.image_size),
-          points, depth,
-          ctx.blur_cov, ctx.clamp_margin)
+          points, depth)
 
 
         return (*[tensor.grad for tensor in gaussian_tensors], 
                 T_camera_world.grad, projection.grad,
-                None, None, None, None, None)
+                None, None, None)
 
   return _module_function
 
@@ -201,12 +194,13 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
           depth_range:Tuple[float, float],
 
           gaussian_scale:float=3.0,
-          blur_cov:float=0.3,
+          blur_cov:float=0.0,
+          
           clamp_margin:float=0.15
 
           ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
   
-  _module_function = project_to_image_function(position.dtype)
+  _module_function = project_to_image_function(position.dtype, clamp_margin, blur_cov)
   n = position.shape[0]
 
   return _module_function.apply(
@@ -220,10 +214,7 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
     image_size,
 
     depth_range,
-    gaussian_scale,
-    
-    blur_cov, 
-    clamp_margin)
+    gaussian_scale)
 
 @beartype
 def project_to_image(gaussians:Gaussians3D,  camera_params: CameraParams, config:RasterConfig,
