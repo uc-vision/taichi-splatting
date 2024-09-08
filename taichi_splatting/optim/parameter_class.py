@@ -74,19 +74,20 @@ class ParameterClass():
 
   def state_dict(self) -> Dict:
     return {
-      'tensors': self.tensors.state_dict(),
+      'tensors': self.tensors.to_dict(),
       'optimizer': self.optim_state,
       'parameter_groups': self.parameter_groups
     }
   
   @staticmethod
-  def from_state_dict(state:dict, optimizer=optim.Adam) -> 'ParameterClass':
+  def from_state_dict(state:dict, optimizer=optim.Adam, **optim_kwargs) -> 'ParameterClass':
     return ParameterClass(
-      TensorDict.from_dict(state['tensors']), 
+      TensorDict.from_dict(state['tensors'], batch_dims=1), 
       state['parameter_groups'],
       state['optimizer'],
       
-      optimizer=optimizer
+      optimizer=optimizer,
+      **optim_kwargs
     )
 
   def zero_grad(self):
