@@ -132,9 +132,8 @@ def render_gaussians(
   if use_sh:
     features = evaluate_sh_at(gaussians.feature, gaussians.position.detach(), indexes, camera_params.camera_position)
   else:
-    features = gaussians.feature
+    features = gaussians.feature[indexes]
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
-
 
   return render_projected(indexes, gaussians2d, features, depths, camera_params, config, 
                    render_depth=render_depth, use_depth16=use_depth16)
