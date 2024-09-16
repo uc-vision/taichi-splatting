@@ -54,6 +54,7 @@ def render_function(config:RasterConfig,
         tile_overlap_ranges, overlap_to_point,
         image_feature, image_alpha, image_last_valid)
 
+
       # Non differentiable parameters
       ctx.overlap_to_point = overlap_to_point
       ctx.tile_overlap_ranges = tile_overlap_ranges

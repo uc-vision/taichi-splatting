@@ -68,8 +68,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       tile_point_count = end_offset - start_offset
 
       num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
-      pixel_saturated = False
-      last_point_idx = start_offset
+      last_point_idx = -1
 
 
       # Loop through the range in groups of tile_area
@@ -99,33 +98,28 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
         # in parallel across a block, render all points in the group
         for in_group_idx in range(max_point_group_offset):
-          if pixel_saturated:
-            break
+          if T_i < ti.static(1 - config.saturate_threshold):
+            break  # somehow faster than directly breaking
 
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
 
           alpha = point_alpha * gaussian_alpha
 
-            
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (configurable as alpha_threshold)
           if alpha < ti.static(config.alpha_threshold):
             continue
 
-          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-          # from paper: before a Gaussian is included in the forward rasterization
-          # pass, we compute the accumulated opacity if we were to include it
-          # and stop front-to-back blending before it can exceed config.saturate_threshold.
-
-          next_T_i = T_i * (1 - alpha)
-          if next_T_i < ti.static(1 - config.saturate_threshold):
-            pixel_saturated = True
-            continue  # somehow faster than directly breaking
-          last_point_idx = group_start_offset + in_group_idx + 1
-
           # weight = alpha * T_i
-          accum_feature += tile_feature[in_group_idx] * alpha * T_i
-          T_i = next_T_i
+          if ti.static(config.use_alpha_blending):
+            accum_feature += tile_feature[in_group_idx] * alpha * T_i
+            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+          else:
+            # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
+            accum_feature = tile_feature[in_group_idx]
+            
+          last_point_idx = group_start_offset + in_group_idx + 1
+          T_i = T_i * (1 - alpha)
 
 
         # end of point group loop
@@ -135,7 +129,11 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
         image_feature[pixel.y, pixel.x] = accum_feature
 
         # No need to accumulate a normalisation factor as it is exactly 1 - T_i
-        image_alpha[pixel.y, pixel.x] = 1. - T_i    
+        if ti.static(config.use_alpha_blending):
+          image_alpha[pixel.y, pixel.x] = 1. - T_i    
+        else:
+          image_alpha[pixel.y, pixel.x] = dtype(last_point_idx > 0)
+
         image_last_valid[pixel.y, pixel.x] = last_point_idx
 
     # end of pixel loop

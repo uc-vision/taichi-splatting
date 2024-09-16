@@ -1,6 +1,7 @@
 
 
 import argparse
+from dataclasses import replace
 
 from tqdm import tqdm
 from taichi_splatting.data_types import RasterConfig
@@ -26,14 +27,13 @@ def display_image(name, image):
     cv2.waitKey(1)
 
 
-def make_inputs(seed, device=torch.device('cuda:0')):
+def make_inputs(config, seed, device=torch.device('cuda:0')):
     torch.random.manual_seed(seed)
 
     n = torch.randint(1, 50, (1,)).item()
     channels = torch.randint(1, 4, (1,)).item()
 
     image_size = (8, 8)
-    config = RasterConfig(tile_size=8, pixel_stride=(1, 1))
 
     gaussians = random_2d_gaussians(n, image_size, num_channels=channels, scale_factor=1.0, alpha_range=(0.2, 0.8)).to(device=device)  
     gaussians2d = project_gaussians2d(gaussians)
@@ -45,27 +45,30 @@ def make_inputs(seed, device=torch.device('cuda:0')):
 
     def rasterize(mean, axis, sigma, alpha, colors):
       packed = torch.cat([mean, axis, sigma, alpha], dim=-1)
-      return rasterize_with_tiles(packed, colors, overlap_to_point=overlap_to_point, tile_overlap_ranges=tile_ranges.view(-1, 2), 
-                     image_size=image_size, config=config).image
+
+      render = rasterize_with_tiles(packed, colors, overlap_to_point=overlap_to_point, tile_overlap_ranges=tile_ranges.view(-1, 2), 
+                     image_size=image_size, config=config)
+      
+      return render.image
     
     return (gaussians2d[:, 0:2].requires_grad_(True), 
             gaussians2d[:, 2:4].requires_grad_(True), 
             gaussians2d[:, 4:6].requires_grad_(True), 
 
             gaussians2d[:, 6:7].requires_grad_(True), 
-            colors.requires_grad_(False)), rasterize
+            colors.requires_grad_(True)), rasterize
 
 
-def test_rasterizer_gradcheck(show = False, iters = 100, device=torch.device('cuda:0')):
+def test_rasterizer_gradcheck(name, config, show = False, iters = 100, device=torch.device('cuda:0')):
   torch.random.manual_seed(0)
   seeds = torch.randint(0, 1000, (iters, ), device=device)
 
   if show:
     cv2.namedWindow("image", cv2.WINDOW_NORMAL)
 
-  pbar = tqdm(total=len(seeds), desc="rasterizer_gradcheck")
+  pbar = tqdm(total=len(seeds), desc=name)
   for seed in seeds:
-      inputs, render = make_inputs(seed)
+      inputs, render = make_inputs(config, seed)
       torch.autograd.gradcheck(render, inputs, eps=1e-6, check_grad_dtypes=True, check_undefined_grad=True)
 
       if show:
@@ -79,11 +82,17 @@ def test_rasterizer_gradcheck(show = False, iters = 100, device=torch.device('cu
 
 def main(show=False, debug=False):
   torch.set_printoptions(precision=10, sci_mode=False)
-  
 
   ti.init(arch=ti.cuda, default_fp=ti.f64, debug=debug)
-  test_rasterizer_gradcheck(show)
 
+  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=True, use_alpha_blending=True)
+  test_rasterizer_gradcheck("antialias", config, show)
+
+  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=True)
+  test_rasterizer_gradcheck("no_antialias", config, show)
+
+  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=False)
+  test_rasterizer_gradcheck("no_blending", config, show)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
