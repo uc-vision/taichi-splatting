@@ -1,6 +1,6 @@
 [project]
 name = "taichi-splatting"  
-version = "0.21.1"  
+version = "0.21.3"  
 description = "A Taichi Gaussian Splatting library"  
 readme = "README.md" 
 requires-python = ">=3.10"
