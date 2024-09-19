@@ -110,6 +110,7 @@ def render_gaussians(
   use_sh:bool = False,      
   render_depth:bool = False, 
   use_depth16:bool = False,
+  render_median_depth:bool = False,
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 
@@ -139,7 +140,7 @@ def render_gaussians(
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
   return render_projected(indexes, gaussians2d, features, depths, camera_params, config, 
-                   render_depth=render_depth, use_depth16=use_depth16)
+                   render_depth=render_depth, use_depth16=use_depth16, render_median_depth=render_median_depth)
 
 
 @torch.compile
