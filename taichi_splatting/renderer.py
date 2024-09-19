@@ -1,13 +1,15 @@
 
 
-from dataclasses import fields, dataclass
+from dataclasses import fields, dataclass, replace
 from functools import cached_property
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
+from taichi_splatting.mapper.tile_mapper import map_to_tiles
 from taichi_splatting.rasterizer import rasterize, RasterConfig
+from taichi_splatting.rasterizer.function import rasterize_with_tiles
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
 from taichi_splatting.perspective import (CameraParams)
@@ -41,6 +43,7 @@ class Rendering:
   depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
   depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
 
+  median_depth: Optional[torch.Tensor] = None  # (H, W) - median depth map1
   gaussians2d: Optional[torch.Tensor] = None     # (N, 7) - 2D gaussians in view
 
   @cached_property
@@ -154,7 +157,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
       features:torch.Tensor, depths:torch.Tensor, 
       camera_params: CameraParams, config:RasterConfig,      
 
-      render_depth:bool = False,  use_depth16:bool = False, use_ndc_depth:bool = False):
+      render_depth:bool = False,  use_depth16:bool = False, render_median_depth:bool = False, use_ndc_depth:bool = False):
 
   ndc_depths = ndc_depth(depths, camera_params.near_plane, camera_params.far_plane)
 
@@ -162,10 +165,20 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
     depths = ndc_depth if use_ndc_depth else depths
     features = torch.cat([depths, depths**2, features], dim=1)
 
-  raster = rasterize(gaussians2d, ndc_depths, features.contiguous(),
-    image_size=camera_params.image_size, 
-    config=config, 
-    use_depth16=use_depth16)
+  overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, ndc_depths, 
+    image_size=camera_params.image_size, config=config, use_depth16=use_depth16)
+  
+  raster = rasterize_with_tiles(gaussians2d, features, 
+    tile_overlap_ranges=tile_overlap_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
+    image_size=camera_params.image_size, config=config)
+
+  median_depth = None
+  if render_median_depth:
+    raster_depth = rasterize_with_tiles(gaussians2d, depths, 
+      tile_overlap_ranges=tile_overlap_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
+      image_size=camera_params.image_size, config=replace(config, use_alpha_blending=False, saturate_threshold=0.5))
+    
+    median_depth = raster_depth.image.squeeze(-1)
 
   img_depth, img_depth_var = None, None
   feature_image = raster.image
@@ -180,6 +193,8 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
                   image_weight=raster.image_weight, 
                   depth=img_depth, 
                   depth_var=img_depth_var, 
+
+                  median_depth=median_depth,
 
                   camera=camera_params,
                   config=config,
