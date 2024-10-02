@@ -53,6 +53,9 @@ class CameraParams:
     T_image_camera[0:3, 0:3] = self.T_image_camera
     return T_image_camera @ self.T_camera_world
   
+  def transformed(self, t:torch.Tensor) -> 'CameraParams':
+    return replace(self, T_camera_world = t @ self.T_camera_world)
+  
   def requires_grad_(self, requires_grad: bool):
     self.projection.requires_grad_(requires_grad)
     self.T_camera_world.requires_grad_(requires_grad)
