@@ -1,7 +1,6 @@
 
 from functools import cache
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
-from taichi_splatting.taichi_lib.concurrent import WARP_SIZE
 
 
 from .forward import RasterConfig, forward_kernel
@@ -53,6 +52,7 @@ def render_function(config:RasterConfig,
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,
         image_feature, image_alpha, image_last_valid)
+
 
       # Non differentiable parameters
       ctx.overlap_to_point = overlap_to_point
@@ -157,7 +157,6 @@ def rasterize(gaussians2d:torch.Tensor, depth:torch.Tensor,
   assert gaussians2d.shape[0] == depth.shape[0] == features.shape[0], \
     f"Size mismatch: got {gaussians2d.shape}, {depth.shape}, {features.shape}"
 
-  # render with padding to tile_size, later crop back to original size
   overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, depth, 
     image_size=image_size, config=config, use_depth16=use_depth16)
   

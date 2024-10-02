@@ -175,15 +175,16 @@ def backward_kernel(config: RasterConfig,
 
           has_grad = False
           for i, offset in ti.static(pixel_tile):
-            pixel = ti.cast(pixel_base, dtype) + vec2(offset) + 0.5
+            pixelf = ti.cast(pixel_base, dtype) + vec2(offset) + 0.5
 
-            gaussian_alpha, dp_dmean, dp_daxis, dp_dsigma = gaussian_pdf(pixel, mean, axis, sigma)
+            gaussian_alpha, dp_dmean, dp_daxis, dp_dsigma = gaussian_pdf(pixelf, mean, axis, sigma)
             
             alpha = point_alpha * gaussian_alpha
             pixel_grad = (alpha >= ti.static(config.alpha_threshold)) and (point_index <= last_point_pixel[i])      
       
             if pixel_grad:
               has_grad = True
+              
               alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
               T_i[i] /= (1. - alpha)
 
@@ -244,7 +245,68 @@ def backward_kernel(config: RasterConfig,
       # end of point group id loop
     # end of pixel loop
 
-  return _backward_kernel
+  @ti.kernel
+  def _backward_kernel_no_alpha(
+      points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
+      point_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
+      
+      # (TH, TW, 2) the start/end (0..K] index of ranges in the overlap_to_point array
+      tile_overlap_ranges: ti.types.ndarray(ti.math.ivec2, ndim=1),
+      # (K) ranges of points mapping to indexes into points list
+      overlap_to_point: ti.types.ndarray(ti.i32, ndim=1),
+      
+      # saved from forward
+      image_alpha: ti.types.ndarray(dtype, ndim=2),       # H, W
+      image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
+
+      # input gradients
+      grad_image_feature: ti.types.ndarray(feature_vec, ndim=2),  # (H, W, F)
+
+      # output gradients
+      grad_points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, C)
+      grad_features: ti.types.ndarray(feature_vec, ndim=1),  # (M, F)
+
+      point_split_heuristics: ti.types.ndarray(vec2, ndim=1),  # (M)
+  ):
+
+    camera_height, camera_width = image_alpha.shape
+
+    # round up
+    tiles_wide = (camera_width + tile_size - 1) // tile_size 
+    tiles_high = (camera_height + tile_size - 1) // tile_size
+
+    # see forward.py for explanation of tile_id and tile_idx and blocking
+    ti.loop_config(block_dim=(block_area))
+
+    for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, tile_area):
+
+      pixel = tiling.tile_transform(tile_id, tile_idx, tile_size, (1, 1), tiles_wide)
+      # pixelf = ti.cast(pixel, dtype) + 0.5
+
+      if pixel.y < camera_height and pixel.x < camera_width and image_last_valid[pixel.y, pixel.x] >= 0:
+        gaussian_idx = image_last_valid[pixel.y, pixel.x] - 1
+        grad_feature = grad_image_feature[pixel.y, pixel.x]
+
+        # mean, axis, sigma, _ = Gaussian2D.unpack(points[gaussian_idx])
+        # feature = point_features[gaussian_idx]
+      
+        # alpha_grad_from_feature = feature * grad_feature
+        # alpha_grad: dtype = alpha_grad_from_feature.sum()
+
+        grad_point = Gaussian2D.vec(0.)
+
+        if ti.static(points_requires_grad):
+          ti.atomic_add(grad_points[gaussian_idx], grad_point)
+
+        if ti.static(features_requires_grad):
+          ti.atomic_add(grad_features[gaussian_idx], grad_feature)
+
+
+      # end of point group id loop
+    # end of pixel loop
+
+
+  return _backward_kernel if config.use_alpha_blending else _backward_kernel_no_alpha
 
 
 
