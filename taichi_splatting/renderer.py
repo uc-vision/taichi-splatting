@@ -61,17 +61,17 @@ class Rendering:
   
   
   @property
-  def scale(self):
+  def point_scale(self):
     return self.gaussians2d[:, 4:6] * self.config.gaussian_scale
   
   @property
-  @torch.compile
-  def area(self):
-    return self.scale[:, 0] * self.scale[:, 1]
+  def point_opacity(self):
+    return self.gaussians2d[:, 6]
+  
 
   @property
-  def radii(self):
-    return self.scale.max(dim=1).values
+  def point_radii(self):
+    return self.point_scale.max(dim=1).values
   
   
 

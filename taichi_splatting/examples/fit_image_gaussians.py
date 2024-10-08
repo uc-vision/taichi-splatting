@@ -4,7 +4,6 @@ from pathlib import Path
 from beartype import beartype
 import cv2
 import argparse
-import numpy as np
 import taichi as ti
 
 import torch
@@ -182,6 +181,8 @@ def main():
   params = ParameterClass(gaussians.to_tensordict(), 
         parameter_groups, optimizer=create_optimizer)
   
+
+
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
 

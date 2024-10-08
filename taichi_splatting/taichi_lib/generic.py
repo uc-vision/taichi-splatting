@@ -419,6 +419,11 @@ def make_library(dtype=ti.f32):
       s.x * (2*x*y + 2*w*z), s.y * (1 - 2*x2 - 2*z2), s.z * (2*y*z - 2*w*x),
       s.x * (2*x*z - 2*w*y), s.y * (2*y*z + 2*w*x), s.z * (1 - 2*x2 - 2*y2)
     )
+  
+  @ti.func
+  def inv_scaled_quat_to_mat(q:vec4, s:vec3) -> mat3:
+    q_conj = vec4(-q.x, -q.y, -q.z, q.w)
+    return scaled_quat_to_mat(q_conj, 1/s)
 
   @ti.func
   def join_rt(r:mat3, t:vec3) -> mat4:
