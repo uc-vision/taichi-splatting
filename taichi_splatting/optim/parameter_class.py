@@ -1,4 +1,5 @@
 import copy
+from typing import Iterable, Mapping
 from beartype import beartype
 from beartype.typing import Callable,  Dict, Optional
 from dataclasses import replace
@@ -32,6 +33,7 @@ class ParameterClass():
                **optim_kwargs):
 
     self.tensors:TensorDict = as_parameters(tensors, parameter_groups.keys())
+
 
     param_groups = [
       dict(params=[self.tensors[name]], name=name, **group)
@@ -79,6 +81,13 @@ class ParameterClass():
       'parameter_groups': self.parameter_groups
     }
   
+  def __getstate__(self):
+    return self.__dict__
+
+  def __setstate__(self, state):
+    self.__dict__.update(state)
+
+  
   @staticmethod
   def from_state_dict(state:dict, optimizer=optim.Adam, **optim_kwargs) -> 'ParameterClass':
     return ParameterClass(
@@ -115,7 +124,6 @@ class ParameterClass():
         return
     
     raise ValueError(f"Group {name} not found in optimizer")
-
 
 
   def __getattr__(self, name):
@@ -165,10 +173,14 @@ class ParameterClass():
                 if param in self.optimizer.state}
     
   
+  @beartype
+  def __getitem__(self, idx:torch.Tensor | str):
 
-  def __getitem__(self, idx):
-    state = self.optim_state
-    return ParameterClass(self.tensors[idx], self.parameter_groups, state, optimizer=type(self.optimizer))
+    if isinstance(idx, str):
+      return self.tensors[idx]
+    else:
+      state = self.optim_state
+      return ParameterClass(self.tensors[idx], self.parameter_groups, state, optimizer=type(self.optimizer))
   
   def append_tensors(self, tensors:TensorDict):
     assert set(tensors.keys()) == set(self.tensors.keys()), f"{tensors.keys()} != {self.tensors.keys()}"
@@ -186,7 +198,8 @@ class ParameterClass():
     return self.append_tensors(params.tensors)
 
 
-def as_parameters(tensors, keys):
+@beartype
+def as_parameters(tensors:TensorDict | Mapping[str, torch.Tensor], keys:Iterable[str]):
   
     param_dict = {
       k: torch.nn.Parameter(x.detach(), requires_grad=True) 
