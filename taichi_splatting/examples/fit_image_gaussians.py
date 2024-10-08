@@ -165,7 +165,7 @@ def main():
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(1.0, 1.0), scale_factor=0.1).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
-    position=dict(lr=lr_range[0]),
+    position=dict(lr=lr_range[0], type='position_2d'),
     log_scaling=dict(lr=0.025),
     rotation=dict(lr=0.005),
     # alpha_logit=dict(lr=0.05),
@@ -253,11 +253,8 @@ def main():
         # depths = encode_depth32(params.z_depth)
         # raster =  rasterize(gaussians2d, depths, densify_score.contiguous().unsqueeze(-1), 
         #                     image_size=(w, h), config=config, compute_split_heuristics=True)
-
-        err = torch.abs(ref_image - image)
-        
+      
         display_image('rendered', image)
-        # display_image('err',  0.25 * err / err.mean(dim=(0, 1), keepdim=True))
 
     
       if cmd_args.write_frames:
