@@ -13,7 +13,8 @@ def display_image(name, image):
     image = image.cpu().numpy()
 
     cv2.imshow(name, image)
-    cv2.waitKey(0)
+    while cv2.waitKey(1) == -1:
+        pass
 
 def main():
     ti.init(ti.gpu)
@@ -26,8 +27,14 @@ def main():
       display_image('image', rendering.image)
       splits = uniform_split_gaussians2d(gaussians, 2)
 
+      
+      # splits = split_gaussians2d(gaussians, 2)
+
       rendering = render_gaussians(splits, (640, 480))
       display_image('image', rendering.image)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

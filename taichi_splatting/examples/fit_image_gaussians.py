@@ -8,7 +8,7 @@ import taichi as ti
 
 import torch
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
-from taichi_splatting.misc.renderer2d import project_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
@@ -31,8 +31,8 @@ def parse_args():
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
-  parser.add_argument('--max_epoch', type=int, default=200)
-  parser.add_argument('--prune_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--max_epoch', type=int, default=100)
+  parser.add_argument('--prune_rate', type=float, default=0.05, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
   parser.add_argument('--scale_reg', type=float, default=0.00001)
 
@@ -46,7 +46,7 @@ def parse_args():
   parser.add_argument('--show', action='store_true')
 
   parser.add_argument('--profile', action='store_true')
-  parser.add_argument('--epoch_size', type=int, default=10, help='Number of iterations per measurement/profiling')
+  parser.add_argument('--epoch_size', type=int, default=20, help='Number of iterations per measurement/profiling')
   
   args = parser.parse_args()
 
@@ -74,7 +74,7 @@ def display_image(name, image):
 def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
-def train_epoch(opt, gaussians, ref_image, 
+def train_epoch(opt:SparseAdam, gaussians:ParameterClass, ref_image, 
         config:RasterConfig,        
         epoch_size=100, 
         grad_alpha=0.9, 
@@ -115,6 +115,10 @@ def train_epoch(opt, gaussians, ref_image,
 
       visible = torch.nonzero(raster.point_split_heuristics[:, 0]).squeeze(1)
       # opt.step()
+
+      basis = point_basis(gaussians)
+      gaussians.update_group('position', basis=basis)
+
       opt.step(visible_indexes = visible)
 
       with torch.no_grad():
@@ -160,19 +164,19 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (0.5, 0.1)
+  lr_range = (0.1, 0.1)
 
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(1.0, 1.0), scale_factor=0.1).to(torch.device('cuda:0'))
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.1).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
-    position=dict(lr=lr_range[0], type='position_2d'),
+    position=dict(lr=lr_range[0], type='local'),
     log_scaling=dict(lr=0.025),
-    rotation=dict(lr=0.005),
-    # alpha_logit=dict(lr=0.05),
+    rotation=dict(lr=0.05),
+    alpha_logit=dict(lr=0.05),
     feature=dict(lr=0.01)
   )
 
-  create_optimizer = partial(SparseAdam, betas=(0.7, 0.999))
+  create_optimizer = partial(SparseAdam, betas=(0.8, 0.999))
   # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
   # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
 
@@ -280,7 +284,7 @@ def main():
                     densify_score=densify_score, prune_cost=prune_cost)
 
 
-        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.0)
+        splits = uniform_split_gaussians2d(gaussians[split_mask])
 
 
         params = params[~(split_mask | prune_mask)]

@@ -50,79 +50,58 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0, use_point_lr=Fa
   return kernel
 
 @cache
-def position_3d_kernel(betas=(0.9, 0.999), eps=1e-08):
+def local_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999), eps=1e-08, dims=2):
   b1, b2 = betas
+  vec = ti.types.vector(n=dims, dtype=ti.f32)
+  
 
   @ti.kernel
-  def kernel(param: ti.types.ndarray(dtype=ti.math.vec3, ndim=1), # N x 3
-             grad: ti.types.ndarray(dtype=ti.math.vec3, ndim=1),  # N x 3
+  def kernel(param: ti.types.ndarray(dtype=vec, ndim=1), # N 
+             grad: ti.types.ndarray(dtype=vec, ndim=1),  # N 
 
-             exp_avg: ti.types.ndarray(dtype=ti.math.vec3, ndim=1),    # N x 3
-             exp_avg_sq: ti.types.ndarray(dtype=ti.math.vec3, ndim=1), # N x 3
+             exp_avg: ti.types.ndarray(dtype=vec, ndim=1),    # N 
+             exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=1), # N 
 
              indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
-
-             log_scale: ti.types.ndarray(dtype=ti.math.vec3, ndim=1),
-             rotation: ti.types.ndarray(dtype=ti.math.vec3, ndim=1),
+             basis: ti.types.ndarray(dtype=basis_type, ndim=1), # N 
 
              lr: ti.f32):
 
     for i in indexes:
       idx = indexes[i]
 
-      m = quat_to_mat(ti.math.normalize(rotation[idx]))
-      scale = ti.math.exp(log_scale[idx])
-
-      local_grad = (m.transpose() @ grad[idx]) / scale
+      local_grad = to_local(grad[idx], basis[idx])
 
       avg = lerp(b1, exp_avg[idx], local_grad)
-      avg_sq = lerp(b2, exp_avg_sq[idx], ti.math.length_sq(local_grad))
+
+      norm = ti.math.dot(local_grad, local_grad)
+      avg_sq = lerp(b2, exp_avg_sq[idx], norm)
 
       local_step = lr * avg / (ti.sqrt(avg_sq) + eps)
-      param[idx] -= m @ (local_step * scale)
+      param[idx] -= from_local(local_step, basis[idx])
 
       exp_avg[idx] = avg
       exp_avg_sq[idx] = avg_sq
 
   return kernel
-
 
 @cache
-def position_2d_kernel(betas=(0.9, 0.999), eps=1e-08):
-  b1, b2 = betas
+def basis_kernel(betas=(0.9, 0.999), eps=1e-08, dims=2):
 
-  @ti.kernel
-  def kernel(param: ti.types.ndarray(dtype=ti.math.vec2, ndim=1), # N x 2
-             grad: ti.types.ndarray(dtype=ti.math.vec2, ndim=1),  # N x 2
+  vec = ti.types.vector(n=dims, dtype=ti.f32)
+  basis = ti.types.matrix(n=dims, m=dims, dtype=ti.f32)
 
-             exp_avg: ti.types.ndarray(dtype=ti.math.vec2, ndim=1),    # N x 2
-             exp_avg_sq: ti.types.ndarray(dtype=ti.math.vec2, ndim=1), # N x 2
+  @ti.func
+  def to_local(g: vec, b: basis):
+    return ti.math.inverse(b) @ g
 
-             indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
+  @ti.func
+  def from_local(g: vec, b: basis):
+    return (b @ g)
+  
+  return local_adam_kernel(basis, to_local, from_local, betas, eps, dims)
 
-             log_scale: ti.types.ndarray(dtype=ti.math.vec2, ndim=1),
-             rotation: ti.types.ndarray(dtype=ti.math.vec2, ndim=1),
 
-             lr: ti.f32):
-
-    for i in indexes:
-      idx = indexes[i]
-
-      m = quat_to_mat(ti.math.normalize(rotation[idx]))
-      scale = ti.math.exp(log_scale[idx])
-
-      local_grad = (m.transpose() @ grad[idx]) / scale
-
-      avg = lerp(b1, exp_avg[idx], local_grad)
-      avg_sq = lerp(b2, exp_avg_sq[idx], ti.math.length_sq(local_grad))
-
-      local_step = lr * avg / (ti.sqrt(avg_sq) + eps)
-      param[idx] -= m @ (local_step * scale)
-
-      exp_avg[idx] = avg
-      exp_avg_sq[idx] = avg_sq
-
-  return kernel
 
 
 class SparseAdam(torch.optim.Optimizer):
@@ -138,7 +117,7 @@ class SparseAdam(torch.optim.Optimizer):
     if not 0.0 <= betas[1] < 1.0:
       raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
 
-    defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, point_lr=None, mask_lr=None, type="adam")  
+    defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, point_lr=None, mask_lr=None, basis=None, type="adam")  
     super().__init__(params, defaults)
 
   def update_group(self, param, **kwargs):
@@ -185,27 +164,32 @@ class SparseAdam(torch.optim.Optimizer):
 
 
 
-  def position_step(self, group:dict, param: torch.Tensor, state: dict, visible_indexes: torch.Tensor, 
-                    log_scale: torch.Tensor, rotation: torch.Tensor):
+  def local_adam_step(self, group:dict, param: torch.Tensor, state: dict, visible_indexes: torch.Tensor):
+    if group["basis"] is None:
+      raise ValueError(f"basis parameter must be provided for local adam group {group['name']}")
     
-    grad = param.grad.view(param.shape[0], 3)
-    param = param.view(param.shape[0], 3) 
+    basis = group["basis"]
+
+    grad = param.grad.view(param.shape[0], -1)
+    param = param.view(param.shape[0], -1) 
 
     if len(state) == 0:
       state['step'] = torch.tensor(0.0, dtype=torch.float32)
       state['exp_avg'] = torch.zeros(*param.shape, dtype=torch.float32)
-      state['exp_avg_sq'] = torch.zeros(param.shape[0], 1, dtype=torch.float32)
+      state['exp_avg_sq'] = torch.zeros(param.shape[0], dtype=torch.float32)
 
     exp_avg = state["exp_avg"]
     exp_avg_sq = state["exp_avg_sq"]
 
-    if param.shape[1] == 3:
-      kernel = position_3d_kernel(betas=group["betas"], eps=group["eps"])
-    else:
-      kernel = position_2d_kernel(betas=group["betas"], eps=group["eps"])
-            
+    dim = param.shape[1]
+
+    if basis.shape != (param.shape[0], dim, dim):
+      raise ValueError(f"basis shape {basis.shape} != {param.shape[0], dim, dim}")
+
+    kernel = basis_kernel(betas=group["betas"], eps=group["eps"], dims=dim)
+
     kernel(param, grad, exp_avg, exp_avg_sq, visible_indexes, 
-            log_scale=log_scale, rotation=rotation, lr=group["lr"])
+            basis=basis, lr=group["lr"])
 
 
 
@@ -227,11 +211,11 @@ class SparseAdam(torch.optim.Optimizer):
         continue
       
       state = self.state[param]
-      if group["type"] == "position":
-        self.position_step(group, param, state, visible_indexes,
-                           log_scale=get_params("log_scale"),
-                           rotation=get_params("rotation"))
-      else:
+      if group["type"] == "local":
+        self.local_adam_step(group, param, state, visible_indexes)
+      elif group["type"] == "adam":
         self.adam_step(group, param, state, visible_indexes)
+      else:
+        raise ValueError(f"unknown group type {group['type']}")
     
 
