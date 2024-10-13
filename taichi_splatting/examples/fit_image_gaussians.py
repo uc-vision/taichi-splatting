@@ -8,7 +8,7 @@ import taichi as ti
 
 import torch
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
-from taichi_splatting.misc.renderer2d import project_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
@@ -31,14 +31,12 @@ def parse_args():
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
-  parser.add_argument('--max_epoch', type=int, default=200)
+  parser.add_argument('--max_epoch', type=int, default=50)
   parser.add_argument('--prune_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
   parser.add_argument('--scale_reg', type=float, default=0.00001)
 
-  parser.add_argument('--no_antialias', action='store_true')
-
-  parser.add_argument('--noise_scale', type=float, default=0.0)
+  parser.add_argument('--antialias', action='store_true')
 
   parser.add_argument('--write_frames', type=Path, default=None)
 
@@ -46,7 +44,7 @@ def parse_args():
   parser.add_argument('--show', action='store_true')
 
   parser.add_argument('--profile', action='store_true')
-  parser.add_argument('--epoch_size', type=int, default=10, help='Number of iterations per measurement/profiling')
+  parser.add_argument('--epoch_size', type=int, default=40, help='Number of iterations per measurement/profiling')
   
   args = parser.parse_args()
 
@@ -74,15 +72,12 @@ def display_image(name, image):
 def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
-def train_epoch(opt, gaussians, ref_image, 
+def train_epoch(opt:SparseAdam, gaussians:ParameterClass, ref_image, 
         config:RasterConfig,        
         epoch_size=100, 
         grad_alpha=0.9, 
         opacity_reg=0.0,
-        scale_reg=0.0,
-        noise_threshold=0.05,
-        noise_lr=0.0, 
-        k = 100):
+        scale_reg=0.0):
     
     h, w = ref_image.shape[:2]
 
@@ -103,10 +98,13 @@ def train_epoch(opt, gaussians, ref_image,
 
 
       scale = torch.exp(gaussians.log_scaling)
+      # aspect = scale[:, 0] / scale[:, 1]
+      # aspect = torch.maximum(aspect, 1 / aspect)
       
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * opacity.mean()
               + scale_reg * scale.pow(2).mean())
+              # + 0.0001 * (aspect - 1).pow(2).mean())
 
       loss.backward()
 
@@ -115,6 +113,10 @@ def train_epoch(opt, gaussians, ref_image,
 
       visible = torch.nonzero(raster.point_split_heuristics[:, 0]).squeeze(1)
       # opt.step()
+
+      basis = point_basis(gaussians)
+      gaussians.update_group('position', basis=basis)
+
       opt.step(visible_indexes = visible)
 
       with torch.no_grad():
@@ -123,12 +125,7 @@ def train_epoch(opt, gaussians, ref_image,
         split_heuristics =  raster.point_split_heuristics if i == 0 \
             else (1 - grad_alpha) * split_heuristics + grad_alpha * raster.point_split_heuristics
         
-        opacity = torch.sigmoid(gaussians.alpha_logit)
-        op_factor = torch.sigmoid(k * (noise_threshold - opacity)).unsqueeze(1)
-
-        # noise = sample_gaussians(gaussians) * op_factor * noise_lr
-        noise = torch.randn_like(gaussians.position) * op_factor * noise_lr
-        gaussians.position += noise
+  
 
       prune_cost, densify_score = split_heuristics.unbind(dim=1)
     return raster.image, prune_cost, densify_score 
@@ -162,17 +159,18 @@ def main():
   torch.manual_seed(cmd_args.seed)
   lr_range = (0.5, 0.1)
 
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(1.0, 1.0), scale_factor=0.1).to(torch.device('cuda:0'))
+  torch.cuda.random.manual_seed(cmd_args.seed)
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
-    position=dict(lr=lr_range[0]),
+    position=dict(lr=lr_range[0], type='local'),
     log_scaling=dict(lr=0.025),
-    rotation=dict(lr=0.005),
-    # alpha_logit=dict(lr=0.05),
+    rotation=dict(lr=0.05),
+    alpha_logit=dict(lr=0.05),
     feature=dict(lr=0.01)
   )
 
-  create_optimizer = partial(SparseAdam, betas=(0.7, 0.999))
+  create_optimizer = partial(SparseAdam, betas=(0.8, 0.999))
   # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
   # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
 
@@ -193,7 +191,7 @@ def main():
   config = RasterConfig(compute_split_heuristics=True,
                         tile_size=cmd_args.tile_size, 
                         gaussian_scale=3.0, 
-                        antialias=not cmd_args.no_antialias,
+                        antialias=cmd_args.antialias,
                         pixel_stride=cmd_args.pixel_tile or (2, 2))
 
   @beartype
@@ -242,8 +240,7 @@ def main():
     image, densify_score, prune_cost, epoch_time = train(params.optimizer, params, ref_image, 
                                         epoch_size=epoch_size, config=config, 
                                         opacity_reg=cmd_args.opacity_reg,
-                                        scale_reg=cmd_args.scale_reg,
-                                        noise_lr=cmd_args.noise_scale * (1 - t)**2)
+                                        scale_reg=cmd_args.scale_reg)
     
 
     with torch.no_grad():
@@ -253,11 +250,8 @@ def main():
         # depths = encode_depth32(params.z_depth)
         # raster =  rasterize(gaussians2d, depths, densify_score.contiguous().unsqueeze(-1), 
         #                     image_size=(w, h), config=config, compute_split_heuristics=True)
-
-        err = torch.abs(ref_image - image)
-        
+      
         display_image('rendered', image)
-        # display_image('err',  0.25 * err / err.mean(dim=(0, 1), keepdim=True))
 
     
       if cmd_args.write_frames:
@@ -283,7 +277,7 @@ def main():
                     densify_score=densify_score, prune_cost=prune_cost)
 
 
-        splits = uniform_split_gaussians2d(gaussians[split_mask], noise=0.0)
+        splits = uniform_split_gaussians2d(gaussians[split_mask])
 
 
         params = params[~(split_mask | prune_mask)]
