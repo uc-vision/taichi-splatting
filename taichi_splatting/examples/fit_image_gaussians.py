@@ -31,14 +31,12 @@ def parse_args():
 
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
-  parser.add_argument('--max_epoch', type=int, default=100)
-  parser.add_argument('--prune_rate', type=float, default=0.05, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--max_epoch', type=int, default=50)
+  parser.add_argument('--prune_rate', type=float, default=0.1, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.001)
   parser.add_argument('--scale_reg', type=float, default=0.00001)
 
-  parser.add_argument('--no_antialias', action='store_true')
-
-  parser.add_argument('--noise_scale', type=float, default=0.0)
+  parser.add_argument('--antialias', action='store_true')
 
   parser.add_argument('--write_frames', type=Path, default=None)
 
@@ -46,7 +44,7 @@ def parse_args():
   parser.add_argument('--show', action='store_true')
 
   parser.add_argument('--profile', action='store_true')
-  parser.add_argument('--epoch_size', type=int, default=20, help='Number of iterations per measurement/profiling')
+  parser.add_argument('--epoch_size', type=int, default=40, help='Number of iterations per measurement/profiling')
   
   args = parser.parse_args()
 
@@ -79,10 +77,7 @@ def train_epoch(opt:SparseAdam, gaussians:ParameterClass, ref_image,
         epoch_size=100, 
         grad_alpha=0.9, 
         opacity_reg=0.0,
-        scale_reg=0.0,
-        noise_threshold=0.05,
-        noise_lr=0.0, 
-        k = 100):
+        scale_reg=0.0):
     
     h, w = ref_image.shape[:2]
 
@@ -103,10 +98,13 @@ def train_epoch(opt:SparseAdam, gaussians:ParameterClass, ref_image,
 
 
       scale = torch.exp(gaussians.log_scaling)
+      # aspect = scale[:, 0] / scale[:, 1]
+      # aspect = torch.maximum(aspect, 1 / aspect)
       
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * opacity.mean()
               + scale_reg * scale.pow(2).mean())
+              # + 0.0001 * (aspect - 1).pow(2).mean())
 
       loss.backward()
 
@@ -127,12 +125,7 @@ def train_epoch(opt:SparseAdam, gaussians:ParameterClass, ref_image,
         split_heuristics =  raster.point_split_heuristics if i == 0 \
             else (1 - grad_alpha) * split_heuristics + grad_alpha * raster.point_split_heuristics
         
-        opacity = torch.sigmoid(gaussians.alpha_logit)
-        op_factor = torch.sigmoid(k * (noise_threshold - opacity)).unsqueeze(1)
-
-        # noise = sample_gaussians(gaussians) * op_factor * noise_lr
-        noise = torch.randn_like(gaussians.position) * op_factor * noise_lr
-        gaussians.position += noise
+  
 
       prune_cost, densify_score = split_heuristics.unbind(dim=1)
     return raster.image, prune_cost, densify_score 
@@ -164,9 +157,10 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (0.1, 0.1)
+  lr_range = (0.5, 0.1)
 
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.1).to(torch.device('cuda:0'))
+  torch.cuda.random.manual_seed(cmd_args.seed)
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local'),
@@ -197,7 +191,7 @@ def main():
   config = RasterConfig(compute_split_heuristics=True,
                         tile_size=cmd_args.tile_size, 
                         gaussian_scale=3.0, 
-                        antialias=not cmd_args.no_antialias,
+                        antialias=cmd_args.antialias,
                         pixel_stride=cmd_args.pixel_tile or (2, 2))
 
   @beartype
@@ -246,8 +240,7 @@ def main():
     image, densify_score, prune_cost, epoch_time = train(params.optimizer, params, ref_image, 
                                         epoch_size=epoch_size, config=config, 
                                         opacity_reg=cmd_args.opacity_reg,
-                                        scale_reg=cmd_args.scale_reg,
-                                        noise_lr=cmd_args.noise_scale * (1 - t)**2)
+                                        scale_reg=cmd_args.scale_reg)
     
 
     with torch.no_grad():
