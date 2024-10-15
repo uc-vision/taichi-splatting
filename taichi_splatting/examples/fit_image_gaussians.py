@@ -163,7 +163,7 @@ def main():
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
-    position=dict(lr=lr_range[0], type='local'),
+    position=dict(lr=lr_range[0], type='vector'),
     log_scaling=dict(lr=0.025),
     rotation=dict(lr=0.05),
     alpha_logit=dict(lr=0.05),
@@ -282,6 +282,7 @@ def main():
 
         params = params[~(split_mask | prune_mask)]
         params = params.append_tensors(splits.to_tensordict())
+        params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
 
         print(f" split {split_mask.sum()}, pruned {prune_mask.sum()} {params.batch_size} points")
 

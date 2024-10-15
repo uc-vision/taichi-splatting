@@ -148,7 +148,7 @@ class ParameterClass():
     return self.modify(lambda x: x.to(device))
 
   def replace(self, **kwargs):
-    return self.modify(lambda x: replace(**kwargs))
+    return self.modify(lambda x: x.replace(**kwargs))
   
 
   def detach(self) -> TensorDict:
