@@ -83,7 +83,7 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None
       Gaussians2D: the split gaussians 
   """
 
-  samples = torch.randn((points.batch_size[0], n, 2), device=points.position.device) 
+  samples = 0.5 * torch.randn((points.batch_size[0], n, 2), device=points.position.device) 
   offsets = repeat_sample_gaussians(samples, points, n)
 
   if scaling is None:
@@ -107,10 +107,20 @@ def repeat_sample_gaussians(samples: torch.Tensor, points: Gaussians2D, n:int=2)
   return (basis @ samples.view(-1, 2, 1)).reshape(-1, n, 2)
 
 
-def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None,  depth_noise:float=1e-2) -> Gaussians2D:
-  """ Split along most significant axis """
-  axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
-  values = torch.linspace(-0.7, 0.7, n, device=points.position.device)
+def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None,  depth_noise:float=1e-2, sep:float=0.7, random_axis:bool=False) -> Gaussians2D:
+
+  if random_axis:
+    # """ Randomly chose axis proportional to the scaling """
+    normalized_scaling = F.normalize(points.scaling, dim=1)
+    # Randomly choose axis proportional to the scaling
+    axis_probs = normalized_scaling / normalized_scaling.sum(dim=1, keepdim=True)
+    axis = torch.multinomial(axis_probs, num_samples=1).squeeze(1)
+    axis = F.one_hot(axis, num_classes=2)
+  else:
+    axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
+
+
+  values = torch.linspace(-sep, sep, n, device=points.position.device)
 
   samples = values.view(1, -1, 1) * axis.view(-1, 1, 2)
   offsets = repeat_sample_gaussians(samples, points, n)
@@ -119,6 +129,7 @@ def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[flo
     scaling = math.sqrt(n) / n
 
   factor = math.log(scaling)
+
   points = replace(points, 
       log_scaling = points.log_scaling + factor * axis,
       batch_size = points.batch_size)
