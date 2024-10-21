@@ -39,7 +39,7 @@ def parse_args():
 
   parser.add_argument('--prune_rate', type=float, default=0.015, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
-  parser.add_argument('--scale_reg', type=float, default=10.0)
+  parser.add_argument('--scale_reg', type=float, default=20.0)
 
   parser.add_argument('--antialias', action='store_true')
 
@@ -230,14 +230,14 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (3.0, 0.2)
+  lr_range = (3.0, 0.1)
 
   torch.cuda.random.manual_seed(cmd_args.seed)
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='vector'),
-    log_scaling=dict(lr=0.05),
+    log_scaling=dict(lr=0.1),
     rotation=dict(lr=0.5),
     alpha_logit=dict(lr=0.02),
     feature=dict(lr=0.03, type='vector')
@@ -251,7 +251,7 @@ def main():
   #   feature=dict(lr=0.02)
   # )
 
-  create_optimizer = partial(SparseAdam, betas=(0.7, 0.8))
+  create_optimizer = partial(SparseAdam, betas=(0.8, 0.9))
   # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
   # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
 
