@@ -35,11 +35,11 @@ def parse_args():
   parser.add_argument('--iters', type=int, default=2000)
 
   parser.add_argument('--epoch', type=int, default=8, help='base epoch size (increases with t)')
-  parser.add_argument('--max_epoch', type=int, default=32)
+  parser.add_argument('--max_epoch', type=int, default=24)
 
   parser.add_argument('--prune_rate', type=float, default=0.015, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
-  parser.add_argument('--scale_reg', type=float, default=20.0)
+  parser.add_argument('--scale_reg', type=float, default=5.0)
 
   parser.add_argument('--antialias', action='store_true')
 
@@ -185,7 +185,14 @@ def split_prune(params:ParameterClass, t, target, prune_rate, densify_score, pru
                   densify_score=densify_score, prune_cost=prune_cost)
 
   to_split = params[split_mask]
-  # tensor_state = to_split.tensor_state.apply(partial(torch.repeat_interleave, repeats=2, dim=0), batch_size=[to_split.batch_size[0] * 2])
+  # tensor_state = to_split.tensor_state.apply(
+  #   partial(torch.repeat_interleave, repeats=2, dim=0), 
+  #   batch_size=[to_split.batch_size[0] * 2]) 
+  
+  # for k, v in tensor_state.items():  
+  #   v['exp_avg'] *= 0.25
+  #   v['exp_avg_sq'] *= 0.25**2
+  
   tensor_state=None
   
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
@@ -230,7 +237,7 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (3.0, 0.1)
+  lr_range = (2.0, 0.1)
 
   torch.cuda.random.manual_seed(cmd_args.seed)
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
@@ -251,10 +258,7 @@ def main():
   #   feature=dict(lr=0.02)
   # )
 
-  create_optimizer = partial(SparseAdam, betas=(0.8, 0.9))
-  # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
-  # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
-
+  create_optimizer = partial(SparseAdam, betas=(0.85, 0.8))
 
 
   params = ParameterClass(gaussians.to_tensordict(), 
