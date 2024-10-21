@@ -9,7 +9,7 @@ import taichi as ti
 import torch
 from tqdm import tqdm
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
-from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, split_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
@@ -35,11 +35,11 @@ def parse_args():
   parser.add_argument('--iters', type=int, default=2000)
 
   parser.add_argument('--epoch', type=int, default=8, help='base epoch size (increases with t)')
-  parser.add_argument('--max_epoch', type=int, default=128)
+  parser.add_argument('--max_epoch', type=int, default=32)
 
   parser.add_argument('--prune_rate', type=float, default=0.015, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
-  parser.add_argument('--scale_reg', type=float, default=20.0)
+  parser.add_argument('--scale_reg', type=float, default=10.0)
 
   parser.add_argument('--antialias', action='store_true')
 
@@ -101,7 +101,7 @@ def train_epoch(opt:SparseAdam, gaussians:ParameterClass, ref_image,
         config=config)
 
 
-      scale = torch.exp(gaussians.log_scaling) / w
+      scale = torch.exp(gaussians.log_scaling) / min(w, h)
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * opacity.mean()
               + scale_reg * scale.pow(2).mean())
@@ -175,24 +175,23 @@ def find_split_prune(n, target, n_prune, densify_score, prune_cost):
     both = (split_mask & prune_mask)
     return split_mask ^ both, prune_mask ^ both
 
-def split_prune(params, t, target, prune_rate, densify_score, prune_cost):
-  gaussians = Gaussians2D(**params.tensors, batch_size=params.batch_size)
-
-  n = gaussians.batch_size[0]
+def split_prune(params:ParameterClass, t, target, prune_rate, densify_score, prune_cost):
+  n = params.batch_size[0]
 
   split_mask, prune_mask = find_split_prune(n = n, 
                   target = target,
                   # n_prune=int(prune_rate * n * (1 - t)),
                   n_prune=int(prune_rate * n),
-
                   densify_score=densify_score, prune_cost=prune_cost)
 
-
-  splits = uniform_split_gaussians2d(gaussians[split_mask], random_axis=True)
-  # splits = split_gaussians2d(gaussians[split_mask])
+  to_split = params[split_mask]
+  # tensor_state = to_split.tensor_state.apply(partial(torch.repeat_interleave, repeats=2, dim=0), batch_size=[to_split.batch_size[0] * 2])
+  tensor_state=None
+  
+  splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
 
   params = params[~(split_mask | prune_mask)]
-  params = params.append_tensors(splits.to_tensordict())
+  params = params.append_tensors(splits.to_tensordict(), tensor_state=tensor_state)
   params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
 
   return params, dict(      
@@ -231,17 +230,17 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (1.0, 0.05)
+  lr_range = (3.0, 0.2)
 
   torch.cuda.random.manual_seed(cmd_args.seed)
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='vector'),
-    log_scaling=dict(lr=0.025),
-    rotation=dict(lr=0.25),
-    alpha_logit=dict(lr=0.025),
-    feature=dict(lr=0.01 )
+    log_scaling=dict(lr=0.05),
+    rotation=dict(lr=0.5),
+    alpha_logit=dict(lr=0.02),
+    feature=dict(lr=0.03, type='vector')
   )
 
   # parameter_groups = dict(
@@ -252,7 +251,7 @@ def main():
   #   feature=dict(lr=0.02)
   # )
 
-  create_optimizer = partial(SparseAdam, betas=(0.8, 0.8))
+  create_optimizer = partial(SparseAdam, betas=(0.7, 0.8))
   # create_optimizer = partial(optim.Adam, foreach=True, betas=(0.7, 0.999), amsgrad=True, weight_decay=0.0)
   # create_optimizer = partial(AdamWScheduleFree, betas=(0.7, 0.999), weight_decay=0.0, warmup_steps=1000)
 
@@ -350,8 +349,5 @@ def with_benchmark(f):
       print(prof_table)
       return result
   return g
-
-  
-
-if __name__ == '__main__':
+      
   main()
