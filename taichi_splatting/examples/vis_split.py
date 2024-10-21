@@ -25,10 +25,10 @@ def main():
 
       rendering = render_gaussians(gaussians, (640, 480))
       display_image('image', rendering.image)
-      splits = uniform_split_gaussians2d(gaussians, 2)
+      # splits = uniform_split_gaussians2d(gaussians, 2)
 
       
-      # splits = split_gaussians2d(gaussians, 2)
+      splits = split_gaussians2d(gaussians, 15)
 
       rendering = render_gaussians(splits, (640, 480))
       display_image('image', rendering.image)
