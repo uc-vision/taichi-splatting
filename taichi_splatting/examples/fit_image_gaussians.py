@@ -198,6 +198,7 @@ def split_prune(params:ParameterClass, t, target, prune_rate, point_heuristics):
 
 
 def main():
+  torch.set_printoptions(precision=4, sci_mode=False)
 
   cmd_args = parse_args()
   device = torch.device('cuda:0')
@@ -216,12 +217,7 @@ def main():
   print(f'Image size: {w}x{h}')
 
   if cmd_args.show:
-    # cv2.namedWindow('gradient', cv2.WINDOW_NORMAL)
-    # cv2.namedWindow('err', cv2.WINDOW_NORMAL)
     cv2.namedWindow('rendered', cv2.WINDOW_NORMAL)
-
-    # cv2.resizeWindow('gradient', w, h)
-    # cv2.resizeWindow('err', w, h)
     cv2.resizeWindow('rendered', w, h)
 
 
@@ -239,14 +235,6 @@ def main():
     alpha_logit=dict(lr=0.2),
     feature=dict(lr=0.03, type='vector')
   )
-
-  # parameter_groups = dict(
-  #   position=dict(lr=lr_range[0], type='vector'),
-  #   log_scaling=dict(lr=0.1),
-  #   rotation=dict(lr=1.0),
-  #   alpha_logit=dict(lr=0.1),
-  #   feature=dict(lr=0.02)
-  # )
 
   create_optimizer = partial(SparseAdam, betas=(0.9, 0.95))
 
@@ -266,6 +254,7 @@ def main():
   config = RasterConfig(compute_point_heuristics=True,
                         tile_size=cmd_args.tile_size, 
                         gaussian_scale=3.0, 
+                        blur_cov=0.3 if not cmd_args.antialias else 0.0,
                         antialias=cmd_args.antialias,
                         pixel_stride=cmd_args.pixel_tile or (2, 2))
 
