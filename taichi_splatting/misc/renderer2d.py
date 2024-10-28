@@ -125,6 +125,7 @@ def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[flo
 
   if scaling is None:
     scaling = math.sqrt(n) / n
+  
   points = points.set_scaling(points.scaling * (axis * scaling + (1 - axis)))
 
   return split_with_offsets(points, offsets, depth_noise)

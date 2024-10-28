@@ -93,7 +93,6 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
     with torch.enable_grad():
       gaussians = Gaussians2D.from_tensordict(params.tensors)
       gaussians2d = project_gaussians2d(gaussians)  
-      opacity = torch.sigmoid(gaussians.alpha_logit).unsqueeze(-1)
 
       raster = rasterize(gaussians2d=gaussians2d, 
         depth=gaussians.z_depth.clamp(0, 1),
@@ -104,7 +103,7 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
 
       scale = torch.exp(gaussians.log_scaling) / min(w, h)
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
-              + opacity_reg * opacity.mean()
+              + opacity_reg * gaussians.opacity.mean()
               + scale_reg * scale.pow(2).mean())
 
       loss.backward()
@@ -113,7 +112,7 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
     check_finite(gaussians, 'gaussians', warn=True)
     visible = torch.nonzero(raster.point_heuristics[:, 2]).squeeze(1)
 
-    opt.step(visible_indexes = visible)
+    opt.step(visible_indexes = visible, basis=point_basis(gaussians[visible]))
 
     point_heuristics =  raster.point_heuristics if i == 0 \
         else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
@@ -183,21 +182,12 @@ def split_prune(params:ParameterClass, t, target, prune_rate, point_heuristics):
                   point_heuristics=point_heuristics)
 
   to_split = params[split_mask]
-  # tensor_state = to_split.tensor_state.apply(
-  #   partial(torch.repeat_interleave, repeats=2, dim=0), 
-  #   batch_size=[to_split.batch_size[0] * 2]) 
-  
-  # for k, v in tensor_state.items():  
-  #   v['exp_avg'] *= 0.25
-  #   v['exp_avg_sq'] *= 0.25**2
-  #   v['step'][:] *= 0.25
-  
-  tensor_state=None
+
   
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
 
   params = params[~(split_mask | prune_mask)]
-  params = params.append_tensors(splits.to_tensordict(), tensor_state=tensor_state)
+  params = params.append_tensors(splits.to_tensordict())
   params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
 
   return params, dict(      
@@ -242,7 +232,7 @@ def main():
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
-    position=dict(lr=lr_range[0], type='vector'),
+    position=dict(lr=lr_range[0], type='local_vector'),
     log_scaling=dict(lr=0.025),
 
     rotation=dict(lr=0.25),

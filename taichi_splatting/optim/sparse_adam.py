@@ -122,7 +122,6 @@ def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999
       step[idx] += 1
       bias_factor = ti.sqrt(1 - b2 ** step[idx])  / (1 - b1 ** step[idx])
 
-
       local_grad = to_local(grad[idx], basis[i])
       avg = lerp(b1, exp_avg[idx], local_grad)
 
