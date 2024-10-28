@@ -112,12 +112,8 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
 
     check_finite(gaussians, 'gaussians', warn=True)
     visible = torch.nonzero(raster.point_heuristics[:, 2]).squeeze(1)
-    # opt.step()
-
-    # params.update_group('position', basis=point_basis(gaussians))
 
     opt.step(visible_indexes = visible)
-    # gaussians.log_scaling.clamp_max(5)
 
     point_heuristics =  raster.point_heuristics if i == 0 \
         else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
@@ -167,8 +163,6 @@ def randomize_n(t:torch.Tensor, n:int):
   
 def find_split_prune(n, target, n_prune, point_heuristics):
     prune_cost, densify_score, weight = point_heuristics.unbind(dim=1)
-
-    # prune_cost = prune_cost * weight.sqrt()
     
     prune_mask = take_n(prune_cost, n_prune, descending=False)
 
@@ -205,11 +199,6 @@ def split_prune(params:ParameterClass, t, target, prune_rate, point_heuristics):
   params = params[~(split_mask | prune_mask)]
   params = params.append_tensors(splits.to_tensordict(), tensor_state=tensor_state)
   params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
-
-  # for k, v in params.tensor_state.items():  
-    # v['exp_avg'][:] = 0
-    # v['exp_avg_sq'][:] = 0
-    # v['step'][:] = 0
 
   return params, dict(      
     split = split_mask.sum().item(),
@@ -316,8 +305,8 @@ def main():
 
     image, point_heuristics, epoch_time = train(params.optimizer, params, ref_image, 
                                       epoch_size=epoch_size, config=config, 
-                                      opacity_reg=cmd_args.opacity_reg  * (1 - t),
-                                      scale_reg=cmd_args.scale_reg * (1 - t))
+                                      opacity_reg=cmd_args.opacity_reg,
+                                      scale_reg=cmd_args.scale_reg)
 
 
     if cmd_args.show:

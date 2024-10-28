@@ -32,9 +32,6 @@ def main():
       display_image('image', rendering.image)
       splits = uniform_split_gaussians2d(gaussians, 2, random_axis=True)
 
-      
-      # splits = split_gaussians2d(gaussians, 15)
-
       rendering = render_gaussians(splits, (640, 480))
       display_image('image', rendering.image)
 
