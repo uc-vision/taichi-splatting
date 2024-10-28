@@ -1,7 +1,7 @@
 import copy
 from typing import Iterable, Mapping, Tuple
 from beartype import beartype
-from beartype.typing import Callable,  Dict, Optional
+from beartype.typing import Dict, Optional
 
 from tensordict import TensorDict
 import torch.optim as optim
@@ -24,10 +24,11 @@ class ParameterClass():
     param_state: dict of key -> optimizer state to insert into the optimizer
   """
 
+  @beartype
   def __init__(self, tensors:TensorDict, 
                parameter_groups:Dict[str, Dict], 
                optimizer_state:Optional[Tuple[TensorDict, Dict]]=None,
-               optimizer = optim.Adam,
+               optimizer = optim.Optimizer,
 
                **optim_kwargs):
 
@@ -58,8 +59,6 @@ class ParameterClass():
   def learning_rates(self):
     return {group['name']: group['lr'] for group in self.optimizer.param_groups}
 
- 
-
 
   @beartype
   def set_learning_rate(self, **kwargs:float):
@@ -70,6 +69,21 @@ class ParameterClass():
 
     return self
   
+  @beartype
+  def update_group(self, name:str, **kwargs):
+    for group in self.optimizer.param_groups:
+      if group['name'] == name:
+        group.update(kwargs)
+        return
+    
+    raise ValueError(f"Group {name} not found in optimizer")
+
+
+  @beartype
+  def update_groups(self, **kwargs):
+    for name, params in kwargs.items():
+      self.update_group(name, **params)
+
 
   def state_dict(self) -> Dict:
     return {
@@ -114,13 +128,6 @@ class ParameterClass():
     return self.tensors.items()
   
 
-  def update_group(self, name, **kwargs):
-    for group in self.optimizer.param_groups:
-      if group['name'] == name:
-        group.update(kwargs)
-        return
-    
-    raise ValueError(f"Group {name} not found in optimizer")
 
 
   def __getattr__(self, name):
