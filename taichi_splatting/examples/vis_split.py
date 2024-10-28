@@ -23,12 +23,17 @@ def main():
     while True: 
       gaussians = random_2d_gaussians(5, (640, 480), scale_factor=0.2, alpha_range=(1.0, 1.0)).cuda()
 
+      print(gaussians.scaling)
+      gaussians = gaussians.set_scaling(gaussians.scaling)
+
+      print(gaussians.scaling)
+
       rendering = render_gaussians(gaussians, (640, 480))
       display_image('image', rendering.image)
-      # splits = uniform_split_gaussians2d(gaussians, 2)
+      splits = uniform_split_gaussians2d(gaussians, 2, random_axis=True)
 
       
-      splits = split_gaussians2d(gaussians, 15)
+      # splits = split_gaussians2d(gaussians, 15)
 
       rendering = render_gaussians(splits, (640, 480))
       display_image('image', rendering.image)

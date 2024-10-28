@@ -16,7 +16,7 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 RasterOut = NamedTuple('RasterOut', 
     [('image', torch.Tensor), 
      ('image_weight', torch.Tensor),
-     ('point_split_heuristics', torch.Tensor) ])
+     ('point_heuristics', torch.Tensor) ])
 
 @cache
 def render_function(config:RasterConfig,
@@ -45,7 +45,7 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=dtype, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_split_heuristics = torch.zeros( (gaussians.shape[0], 2) if config.compute_split_heuristics else (0, 2), 
+      point_heuristics = torch.zeros( (gaussians.shape[0], 3) if config.compute_point_heuristics else (0, 3), 
                                  dtype=dtype, device=features.device)
       
 
@@ -60,16 +60,16 @@ def render_function(config:RasterConfig,
       ctx.image_last_valid = image_last_valid
       ctx.image_alpha = image_alpha
       ctx.image_size = image_size
-      ctx.point_split_heuristics = point_split_heuristics
+      ctx.point_heuristics = point_heuristics
 
-      ctx.mark_non_differentiable(image_alpha, image_last_valid, point_split_heuristics, overlap_to_point, tile_overlap_ranges)
+      ctx.mark_non_differentiable(image_alpha, image_last_valid, point_heuristics, overlap_to_point, tile_overlap_ranges)
       ctx.save_for_backward(gaussians, features)
             
-      return image_feature, image_alpha, point_split_heuristics
+      return image_feature, image_alpha, point_heuristics
 
     @staticmethod
     def backward(ctx, grad_image_feature:torch.Tensor, 
-                 grad_alpha:torch.Tensor, grad_point_split_heuristics:torch.Tensor):
+                 grad_alpha:torch.Tensor, grad_point_heuristics:torch.Tensor):
         gaussians, features = ctx.saved_tensors
 
         grad_gaussians = torch.zeros_like(gaussians)
@@ -81,7 +81,7 @@ def render_function(config:RasterConfig,
           ctx.tile_overlap_ranges, ctx.overlap_to_point,
           ctx.image_alpha, ctx.image_last_valid,
           grad_image_feature.contiguous(),
-          grad_gaussians, grad_features, ctx.point_split_heuristics)
+          grad_gaussians, grad_features, ctx.point_heuristics)
 
         return grad_gaussians, grad_features, None, None, None, None
   return _module_function
@@ -115,18 +115,18 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
       RasterOut - namedtuple with fields:
         image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
         image_weight: (H, W) torch tensor, where H, W are the image height and width
-        point_split_heuristics: (N, ) torch tensor, where N is the number of gaussians  
+        point_heuristics: (N, ) torch tensor, where N is the number of gaussians  
   """
   _module_function = render_function(config, gaussians2d.requires_grad,
                                       features.requires_grad,
                                       features.shape[1],
                                       dtype=gaussians2d.dtype)
 
-  image, image_weight, point_split_heuristics = _module_function.apply(gaussians2d, features, 
+  image, image_weight, point_heuristics = _module_function.apply(gaussians2d, features, 
           overlap_to_point, tile_overlap_ranges, 
           image_size)
   
-  return RasterOut(image, image_weight, point_split_heuristics)
+  return RasterOut(image, image_weight, point_heuristics)
 
 
 def rasterize(gaussians2d:torch.Tensor, depth:torch.Tensor, 
@@ -145,13 +145,12 @@ def rasterize(gaussians2d:torch.Tensor, depth:torch.Tensor,
 
       image_size: (2, ) tuple of ints, (width, height)
       config: Config - configuration parameters for rasterization
-      compute_split_heuristics: bool - whether to compute the visibility for each point in the image
 
     Returns:
       RasterOut - namedtuple with fields:
         image: (H, W, F) torch tensor, where H, W are the image height and width, F is the number of features
         image_weight: (H, W) torch tensor, where H, W are the image height and width
-        point_split_heuristics: (N, ) torch tensor, where N is the number of gaussians  
+        point_heuristics: (N, 3) torch tensor, where N is the number of gaussians  
   """
 
   assert gaussians2d.shape[0] == depth.shape[0] == features.shape[0], \

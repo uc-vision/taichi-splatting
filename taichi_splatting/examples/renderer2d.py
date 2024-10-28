@@ -8,7 +8,6 @@ import torch
 import torch.nn.functional as F
 
 from taichi_splatting.data_types import Gaussians2D
-from taichi_splatting.misc.encode_depth import encode_depth32
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 from taichi_splatting.rasterizer.function import RasterOut
@@ -34,7 +33,7 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
 
 
 def point_basis(points:Gaussians2D):
-  scale = torch.exp(points.log_scaling)
+  scale = points.scaling
 
   v1 = points.rotation / torch.norm(points.rotation, dim=1, keepdim=True)
   v2 = torch.stack([-v1[..., 1], v1[..., 0]], dim=-1)
@@ -104,10 +103,8 @@ def uniform_split_gaussians2d(points: Gaussians2D, n:int=3, scaling:float=0.8, n
   samples = values.view(1, -1, 1) * axis.view(-1, 1, 2)
   samples += torch.randn_like(samples) * noise
 
-  factor = math.log(1 / (scaling * n))
-  points = replace(points, 
-      log_scaling = points.log_scaling + factor * axis,
-      batch_size = points.batch_size)
+  factor = 1 / (scaling * n)
+  points = points.set_scaling(points.scaling * (axis * factor + (1 - axis)))
 
   return split_by_samples(points, samples, depth_noise)
 

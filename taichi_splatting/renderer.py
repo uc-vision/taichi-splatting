@@ -26,7 +26,7 @@ class Rendering:
   """ Collection of outputs from the renderer, 
 
   depth and depth var are optional, as they are only computed if render_depth=True
-  split_heuristics is computed in the backward pass if compute_split_heuristics=True
+  point_heuristics is computed in the backward pass if compute_point_heuristics=True
 
   """
   image: torch.Tensor        # (H, W, C) - rendered image, C channels of features
@@ -187,7 +187,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
     img_depth, img_depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
     feature_image = feature_image[..., 2:]
 
-  heuristics = raster.point_split_heuristics if config.compute_split_heuristics else None
+  heuristics = raster.point_heuristics if config.compute_point_heuristics else None
 
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 

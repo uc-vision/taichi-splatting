@@ -93,6 +93,7 @@ def random_2d_gaussians(n, image_size:Tuple[int, int],
   low, high = alpha_range
   alpha = torch.rand(n) * (high - low) + low
 
+
   return Gaussians2D(
     position=position,
     z_depth=depth,
