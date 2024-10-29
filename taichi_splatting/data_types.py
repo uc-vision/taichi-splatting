@@ -4,6 +4,9 @@ from beartype import beartype
 from tensordict import tensorclass
 import torch
 
+from torch.nn import functional as F
+
+
   
 @beartype
 @dataclass(frozen=True, eq=True)
@@ -36,7 +39,7 @@ class RasterConfig:
   # use alpha blending - if set to false, with saturate_threshold can be used to compute quantile (e.g. median)
   use_alpha_blending: bool = True
 
-  compute_split_heuristics: bool = False
+  compute_point_heuristics: bool = False
 
 
 
@@ -98,12 +101,16 @@ class Gaussians3D():
       feature=torch.cat([self.feature, other.feature], dim=0),
       batch_size = (self.batch_size[0] + other.batch_size[0], )
     )
+  
+def inverse_sigmoid(x:torch.Tensor):
+  return torch.log(x / (1 - x))
 
 @tensorclass
 class Gaussians2D():
   position     : torch.Tensor # 2  - xy
   z_depth        : torch.Tensor # 1  - for sorting
-  log_scaling   : torch.Tensor # 2  - scale = exp(log_scalining) 
+  log_scaling   : torch.Tensor # 2
+
   rotation      : torch.Tensor # 2  - unit length imaginary number
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
   
@@ -118,7 +125,8 @@ class Gaussians2D():
     return torch.exp(self.log_scaling)
 
 
-
+  def set_scaling(self, scaling) -> 'Gaussians2D':
+    return replace(self, log_scaling=torch.log(scaling))
 
 
 

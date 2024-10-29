@@ -4,6 +4,7 @@ from functools import partial
 import math
 from numbers import Integral
 from typing import Optional
+from beartype import beartype
 from beartype.typing import Tuple
 import torch
 import torch.nn.functional as F
@@ -12,7 +13,7 @@ from taichi_splatting.data_types import Gaussians2D
 
 from taichi_splatting.rasterizer import rasterize, RasterConfig
 
-
+@beartype
 def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
     """
     Torch based "projection" of 2D Gaussian parameters to the packed conic-based
@@ -25,7 +26,7 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
          
     """
     alpha = torch.sigmoid(points.alpha_logit) 
-    sigma = torch.exp(points.log_scaling)
+    sigma = points.scaling
 
     v1 = points.rotation / torch.norm(points.rotation, dim=1, keepdim=True)
 
@@ -34,7 +35,7 @@ def project_gaussians2d(points: Gaussians2D) -> torch.Tensor:
 
 
 def point_basis(points:Gaussians2D):
-  scale = torch.exp(points.log_scaling)
+  scale = points.scaling
 
   v1 = points.rotation / torch.norm(points.rotation, dim=1, keepdim=True)
   v2 = torch.stack([-v1[..., 1], v1[..., 0]], dim=-1)
@@ -110,16 +111,13 @@ def repeat_sample_gaussians(samples: torch.Tensor, points: Gaussians2D, n:int=2)
 def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None,  depth_noise:float=1e-2, sep:float=0.7, random_axis:bool=False) -> Gaussians2D:
 
   if random_axis:
-    # """ Randomly chose axis proportional to the scaling """
-    normalized_scaling = F.normalize(points.scaling, dim=1)
+    axis_probs = F.normalize(points.scaling, dim=1)
     # Randomly choose axis proportional to the scaling
-    axis_probs = normalized_scaling / normalized_scaling.sum(dim=1, keepdim=True)
     axis = torch.multinomial(axis_probs, num_samples=1).squeeze(1)
-    axis = F.one_hot(axis, num_classes=2)
   else:
-    axis = F.one_hot(torch.argmax(points.log_scaling, dim=1), num_classes=2)
+    axis = torch.argmax(points.log_scaling, dim=1)
 
-
+  axis = F.one_hot(axis, num_classes=2)
   values = torch.linspace(-sep, sep, n, device=points.position.device)
 
   samples = values.view(1, -1, 1) * axis.view(-1, 1, 2)
@@ -127,13 +125,8 @@ def uniform_split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[flo
 
   if scaling is None:
     scaling = math.sqrt(n) / n
-
-  factor = math.log(scaling)
-
-  points = replace(points, 
-      log_scaling = points.log_scaling + factor * axis,
-      batch_size = points.batch_size)
-
+  
+  points = points.set_scaling(points.scaling * (axis * scaling + (1 - axis)))
 
   return split_with_offsets(points, offsets, depth_noise)
 

@@ -26,7 +26,7 @@ class Rendering:
   """ Collection of outputs from the renderer, 
 
   depth and depth var are optional, as they are only computed if render_depth=True
-  split_heuristics is computed in the backward pass if compute_split_heuristics=True
+  point_heuristics is computed in the backward pass if compute_point_heuristics=True
 
   """
   image: torch.Tensor        # (H, W, C) - rendered image, C channels of features
@@ -36,14 +36,14 @@ class Rendering:
   points_in_view: torch.Tensor  # (N, 1) - indexes of points in view 
   point_depth: torch.Tensor  # (N, 1) - depth of each point
 
-  split_heuristics: Optional[torch.Tensor] = None  # (N, 2) - split and prune heuristic
+  point_heuristics: Optional[torch.Tensor] = None  # (N, 3) - prune heuristic, split heuristic, point visibility
   camera : CameraParams
   config: RasterConfig
 
   depth: Optional[torch.Tensor] = None      # (H, W)    - depth map 
-  depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance map
+  depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance 
 
-  median_depth: Optional[torch.Tensor] = None  # (H, W) - median depth map1
+  median_depth: Optional[torch.Tensor] = None  # (H, W) - median depth map
   gaussians2d: Optional[torch.Tensor] = None     # (N, 7) - 2D gaussians in view
 
   @cached_property
@@ -53,16 +53,19 @@ class Rendering:
 
   @property
   def split_score(self) -> torch.Tensor:
-    return self.split_heuristics[:, 0]  
+    return self.point_heuristics[:, 0]  
   
   @property
   def prune_cost(self) -> torch.Tensor:
-    return self.split_heuristics[:, 1]
+    return self.point_heuristics[:, 1]
   
+  @property
+  def point_visibility(self) -> torch.Tensor:
+    return self.point_heuristics[:, 2]
   
   @property
   def point_scale(self):
-    return self.gaussians2d[:, 4:6] * self.config.gaussian_scale
+    return self.gaussians2d[:, 4:6] * self.config.gaussian_scalesplit_heuristics
   
   @property
   def point_opacity(self):
@@ -187,7 +190,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
     img_depth, img_depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
     feature_image = feature_image[..., 2:]
 
-  heuristics = raster.point_split_heuristics if config.compute_split_heuristics else None
+  heuristics = raster.point_heuristics if config.compute_point_heuristics else None
 
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 
@@ -199,7 +202,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
                   camera=camera_params,
                   config=config,
                     
-                  split_heuristics=heuristics,
+                  point_heuristics=heuristics,
                   points_in_view=indexes,
 
                   point_depth=depths,
