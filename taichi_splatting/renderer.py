@@ -65,7 +65,7 @@ class Rendering:
   
   @property
   def point_scale(self):
-    return self.gaussians2d[:, 4:6] * self.config.gaussian_scalesplit_heuristics
+    return self.gaussians2d[:, 4:6] * self.config.gaussian_scale
   
   @property
   def point_opacity(self):
@@ -81,7 +81,7 @@ class Rendering:
   @cached_property
   def visible_mask(self) -> torch.Tensor:
     """ If a point in the view is visible """
-    return self.prune_cost > 0
+    return self.point_visibility > 0
 
   @cached_property
   def visible_indices(self) -> torch.Tensor:
