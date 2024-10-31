@@ -39,7 +39,12 @@ class RasterConfig:
   # use alpha blending - if set to false, with saturate_threshold can be used to compute quantile (e.g. median)
   use_alpha_blending: bool = True
 
-  compute_point_heuristics: bool = False
+  compute_point_heuristics: bool = False # compute point heuristics (split score, prune score, visibility) in backward pass
+  compute_visibility: bool = False # compute visibility (pixels) for each gaussian
+
+  def __post_init__(self):
+    assert not (self.compute_point_heuristics and self.compute_visibility), \
+        "compute_visibility and compute_point_heuristics cannot both be true (compute_point_heuristics includes visibility in backward pass)"
 
 
 
