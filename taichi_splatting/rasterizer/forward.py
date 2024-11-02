@@ -67,10 +67,11 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
-      tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
-
 
       tile_visibility = (ti.simt.block.SharedArray((tile_area, ), dtype=vec1)
+        if ti.static(config.compute_visibility) else None)
+      
+      tile_point_id = (ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
         if ti.static(config.compute_visibility) else None)
 
       start_offset, end_offset = tile_overlap_ranges[tile_id]
@@ -95,13 +96,13 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
         if load_index < end_offset:
           point_idx = overlap_to_point[load_index]
-          tile_point_id[tile_idx] = point_idx
   
           tile_point[tile_idx] = points[point_idx]
           tile_feature[tile_idx] = point_features[point_idx]
 
           if ti.static(config.compute_visibility):
             tile_visibility[tile_idx] = vec1(0.0)
+            tile_point_id[tile_idx] = point_idx
 
 
         ti.simt.block.sync()
@@ -110,12 +111,8 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
             tile_area, tile_point_count - point_group_id * tile_area)
 
         # in parallel across a block, render all points in the group
-
         
         for in_group_idx in range(max_point_group_offset):
-          # if T_i < ti.static(1 - config.saturate_threshold):
-          #   break  # somehow faster than directly breaking
-
 
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
