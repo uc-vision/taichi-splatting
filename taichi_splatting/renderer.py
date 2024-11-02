@@ -37,9 +37,7 @@ class Rendering:
   point_depth: torch.Tensor  # (N, 1) - depth of each point
 
   point_visibility: Optional[torch.Tensor] = None  # (N, 1) 
-
-  point_prune_cost: Optional[torch.Tensor] = None  # (N, 1) 
-  point_split_score: Optional[torch.Tensor] = None  # (N, 1) 
+  point_heuristics: Optional[torch.Tensor] = None  # (N, 2) 
 
   camera : CameraParams
   config: RasterConfig
@@ -71,7 +69,13 @@ class Rendering:
   def point_radii(self):
     return self.point_scale.max(dim=1).values
   
-  
+  @property
+  def point_prune_cost(self):
+    return self.point_heuristics[..., 0]
+
+  @property
+  def point_split_score(self):
+    return self.point_heuristics[..., 1]
 
   @cached_property
   def visible_mask(self) -> torch.Tensor:

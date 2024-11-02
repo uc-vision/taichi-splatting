@@ -49,9 +49,9 @@ def render_function(config:RasterConfig,
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
       if config.compute_point_heuristics:
-        point_heuristics = torch.zeros((gaussians.shape[0], 3), dtype=dtype, device=features.device)
+        point_heuristics = torch.zeros((gaussians.shape[0], 2), dtype=dtype, device=features.device)
       else:
-        point_heuristics = torch.empty((0,3), dtype=dtype, device=features.device)
+        point_heuristics = torch.empty((0,2), dtype=dtype, device=features.device)
 
       if config.compute_visibility:
         visibility = torch.zeros((gaussians.shape[0], 1), dtype=torch.float32, device=features.device)
