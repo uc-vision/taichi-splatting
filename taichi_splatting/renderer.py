@@ -194,8 +194,6 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
     img_depth, img_depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
     feature_image = feature_image[..., 2:]
 
-  heuristics = raster.point_heuristics if config.compute_point_heuristics else None
-
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 
                   depth=img_depth, 
@@ -205,8 +203,8 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
 
                   camera=camera_params,
                   config=config,
-                    
-                  point_heuristics=heuristics,
+                  point_visibility = raster.visibility if config.compute_visibility else None,  
+                  point_heuristics=raster.point_heuristics if config.compute_point_heuristics else None,
                   points_in_view=indexes,
 
                   point_depth=depths,
