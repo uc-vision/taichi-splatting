@@ -102,11 +102,11 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
         config=config)
       
       
-      raster2 = rasterize(gaussians2d=gaussians2d, 
-        depth=gaussians.z_depth.clamp(0, 1),
-        features=gaussians.feature, 
-        image_size=(w, h), 
-        config=replace(config, compute_visibility=True, compute_point_heuristics=False))
+      # raster2 = rasterize(gaussians2d=gaussians2d, 
+      #   depth=gaussians.z_depth.clamp(0, 1),
+      #   features=gaussians.feature, 
+      #   image_size=(w, h), 
+      #   config=replace(config, compute_visibility=True, compute_point_heuristics=False))
 
 
       scale = torch.exp(gaussians.log_scaling) / min(w, h)
