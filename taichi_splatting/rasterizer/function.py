@@ -2,7 +2,6 @@
 from functools import cache
 from typing import Optional
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
-from taichi_splatting.rasterizer.visibility import visibility_kernel
 
 
 from .forward import RasterConfig, forward_kernel
@@ -25,7 +24,6 @@ RasterOut = NamedTuple('RasterOut',
 def render_function(config:RasterConfig,
                     points_requires_grad:bool,
                     features_requires_grad:bool, 
-                    compute_visibility:bool,
                     feature_size:int,
                     dtype=torch.float32):
   
@@ -35,9 +33,6 @@ def render_function(config:RasterConfig,
                              features_requires_grad, 
                              feature_size, dtype=torch_taichi[dtype])
 
-  calc_visibility = None
-  if compute_visibility:
-    calc_visibility = visibility_kernel(config, dtype=torch_taichi[dtype])
 
   class _module_function(torch.autograd.Function):
     @staticmethod
@@ -53,14 +48,20 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=dtype, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
+      point_heuristics = None
+
       if config.compute_point_heuristics:
         point_heuristics = torch.zeros((gaussians.shape[0], 3), dtype=dtype, device=features.device)
+        ctx.mark_non_differentiable(point_heuristics)
+
+      if config.compute_visibility:
+        visibility = torch.zeros((gaussians.shape[0], 1), dtype=torch.float32, device=features.device)
       else:
-        point_heuristics = None
-  
+        visibility = torch.empty((0,1), dtype=torch.float32, device=features.device)
+
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,
-        image_feature, image_alpha, image_last_valid)
+        image_feature, image_alpha, image_last_valid, visibility)
 
       # Non differentiable parameters
       ctx.overlap_to_point = overlap_to_point
@@ -69,15 +70,9 @@ def render_function(config:RasterConfig,
       ctx.image_alpha = image_alpha
       ctx.image_size = image_size
       ctx.point_heuristics = point_heuristics
-      
+      ctx.visibility = visibility
 
-      if compute_visibility:
-        visibility = calc_visibility(gaussians, features, tile_overlap_ranges, overlap_to_point, image_size)
-        ctx.mark_non_differentiable(visibility)
-      else:
-        visibility = None
-
-      ctx.mark_non_differentiable(image_alpha, image_last_valid, ctx.point_heuristics, overlap_to_point, tile_overlap_ranges)
+      ctx.mark_non_differentiable(image_alpha, image_last_valid, overlap_to_point, tile_overlap_ranges, visibility)
       ctx.save_for_backward(gaussians, features)
     
             

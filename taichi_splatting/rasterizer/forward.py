@@ -4,6 +4,7 @@ import taichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib import get_library
+from taichi_splatting.taichi_lib.concurrent import warp_add_vector_32, warp_add_vector_64
 
 
 
@@ -11,13 +12,14 @@ from taichi_splatting.taichi_lib import get_library
 def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
   lib = get_library(dtype)
-  Gaussian2D = lib.Gaussian2D
+  Gaussian2D, vec1 = lib.Gaussian2D, lib.vec1
 
   feature_vec = ti.types.vector(feature_size, dtype=dtype)
   tile_size = config.tile_size
   tile_area = tile_size * tile_size
 
   gaussian_pdf = lib.gaussian_pdf_antialias if config.antialias else lib.gaussian_pdf
+  warp_add_vector = warp_add_vector_32 if dtype == ti.f32 else warp_add_vector_64
 
 
   @ti.kernel
@@ -35,6 +37,8 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       # needed for backward
       image_alpha: ti.types.ndarray(dtype, ndim=2),       # H, W
       image_last_valid: ti.types.ndarray(ti.i32, ndim=2),  # H, W
+
+      point_visibility: ti.types.ndarray(vec1, ndim=1),  # (M)
   ):
 
     camera_height, camera_width = image_feature.shape
@@ -63,6 +67,11 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       # open the shared memory
       tile_point = ti.simt.block.SharedArray((tile_area, ), dtype=Gaussian2D.vec)
       tile_feature = ti.simt.block.SharedArray((tile_area, ), dtype=feature_vec)
+      tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
+
+
+      tile_visibility = (ti.simt.block.SharedArray((tile_area, ), dtype=vec1)
+        if ti.static(config.compute_visibility) else None)
 
       start_offset, end_offset = tile_overlap_ranges[tile_id]
       tile_point_count = end_offset - start_offset
@@ -83,12 +92,16 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
         # then all threads in the block process those points sequentially
         load_index = group_start_offset + tile_idx
 
+
         if load_index < end_offset:
           point_idx = overlap_to_point[load_index]
-
+          tile_point_id[tile_idx] = point_idx
   
           tile_point[tile_idx] = points[point_idx]
           tile_feature[tile_idx] = point_features[point_idx]
+
+          if ti.static(config.compute_visibility):
+            tile_visibility[tile_idx] = vec1(0.0)
 
 
         ti.simt.block.sync()
@@ -97,9 +110,12 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
             tile_area, tile_point_count - point_group_id * tile_area)
 
         # in parallel across a block, render all points in the group
+
+        
         for in_group_idx in range(max_point_group_offset):
           if T_i < ti.static(1 - config.saturate_threshold):
             break  # somehow faster than directly breaking
+
 
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
@@ -110,9 +126,9 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           if alpha < ti.static(config.alpha_threshold):
             continue
 
-          # weight = alpha * T_i
+          weight = alpha * T_i
           if ti.static(config.use_alpha_blending):
-            accum_feature += tile_feature[in_group_idx] * alpha * T_i
+            accum_feature += tile_feature[in_group_idx] * weight
             alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
           else:
             # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
@@ -121,9 +137,21 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           last_point_idx = group_start_offset + in_group_idx + 1
           T_i = T_i * (1 - alpha)
 
+          # Accumulate visibility in block shared memory tile
+          if ti.static(config.compute_visibility):
+            if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight > 0)):
+              warp_add_vector(tile_visibility[in_group_idx], vec1(weight))
 
-        # end of point group loop
-      # end of point group id loop
+          # end of point group loop
+
+
+        # Atomic add visibility in global memory
+        if ti.static(config.compute_visibility):
+          if load_index < end_offset:
+            point_idx = tile_point_id[tile_idx]
+            ti.atomic_add(point_visibility[point_idx], tile_visibility[tile_idx])
+
+        # end of point group id loop
 
       if pixel.x < camera_width and pixel.y < camera_height:
         image_feature[pixel.y, pixel.x] = accum_feature
