@@ -60,7 +60,7 @@ def bench_rasterizer(args):
     tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
     image_size=args.image_size, config=config)
   
-  benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
+  benchmarked('forward', forward, profile=args.profile, iters=args.iters * 4)  
 
   gaussians.feature.requires_grad_(True)
   
