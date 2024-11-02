@@ -62,6 +62,12 @@ def bench_rasterizer(args):
   
   benchmarked('forward', forward, profile=args.profile, iters=args.iters * 4)  
 
+  forward_visible = partial(rasterize_with_tiles, gaussians2d=gaussians2d, features=gaussians.feature, 
+    tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
+    image_size=args.image_size, config=replace(config, compute_visibility=True))
+
+  benchmarked('forward (visible)', forward_visible, profile=args.profile, iters=args.iters * 4)  
+
   gaussians.feature.requires_grad_(True)
   
   def backward():
@@ -84,7 +90,8 @@ def bench_rasterizer(args):
   def compute_point_heuristics():
     raster = rasterize_with_tiles(gaussians2d=gaussians2d, features=gaussians.feature, 
       tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-      image_size=args.image_size, config=replace(config, compute_point_heuristics=True))
+      image_size=args.image_size, config=replace(config, 
+              compute_visibility=True, compute_point_heuristics=True))
     
     raster.image.sum().backward()
 

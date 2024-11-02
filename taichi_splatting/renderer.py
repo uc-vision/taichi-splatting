@@ -36,7 +36,9 @@ class Rendering:
   points_in_view: torch.Tensor  # (N, 1) - indexes of points in view 
   point_depth: torch.Tensor  # (N, 1) - depth of each point
 
-  point_heuristics: Optional[torch.Tensor] = None  # (N, 3) - prune heuristic, split heuristic, point visibility
+  point_visibility: Optional[torch.Tensor] = None  # (N, 1) 
+  point_heuristics: Optional[torch.Tensor] = None  # (N, 2) 
+
   camera : CameraParams
   config: RasterConfig
 
@@ -50,19 +52,10 @@ class Rendering:
   def ndc_depth(self) -> torch.Tensor:
     return ndc_depth(self.depth, self.camera.near_plane, self.camera.far_plane)
 
+  @cached_property
+  def ndc_median_depth(self) -> torch.Tensor:
+    return ndc_depth(self.median_depth, self.camera.near_plane, self.camera.far_plane)
 
-  @property
-  def split_score(self) -> torch.Tensor:
-    return self.point_heuristics[:, 0]  
-  
-  @property
-  def prune_cost(self) -> torch.Tensor:
-    return self.point_heuristics[:, 1]
-  
-  @property
-  def point_visibility(self) -> torch.Tensor:
-    return self.point_heuristics[:, 2]
-  
   @property
   def point_scale(self):
     return self.gaussians2d[:, 4:6] * self.config.gaussian_scale
@@ -76,17 +69,34 @@ class Rendering:
   def point_radii(self):
     return self.point_scale.max(dim=1).values
   
-  
+  @property
+  def prune_cost(self):
+    return self.point_heuristics[..., 0]
+
+  @property
+  def split_score(self):
+    return self.point_heuristics[..., 1]
 
   @cached_property
   def visible_mask(self) -> torch.Tensor:
     """ If a point in the view is visible """
-    return self.point_visibility > 0
+    if self.point_visibility is not None:
+      return self.point_visibility > 0
+    elif self.point_heuristics is not None:
+      return self.point_heuristics[..., 0] > 0
+    
+    raise ValueError("No visibility information available")
+
 
   @cached_property
   def visible_indices(self) -> torch.Tensor:
     """ Indexes of visible points """
     return self.points_in_view[self.visible_mask]
+  
+  @cached_property
+  def visible(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    """ Visible points and their features """
+    return self.visible_indices, self.point_visibility
 
 
   @property
@@ -113,7 +123,7 @@ def render_gaussians(
   use_sh:bool = False,      
   render_depth:bool = False, 
   use_depth16:bool = False,
-  render_median_depth:bool = False,
+  render_median_depth:bool = False
 ) -> Rendering:
   """
   A complete renderer for 3D gaussians. 
@@ -190,8 +200,6 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
     img_depth, img_depth_var = compute_depth_variance(feature_image[..., :2], raster.image_weight)
     feature_image = feature_image[..., 2:]
 
-  heuristics = raster.point_heuristics if config.compute_point_heuristics else None
-
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight, 
                   depth=img_depth, 
@@ -201,8 +209,8 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
 
                   camera=camera_params,
                   config=config,
-                    
-                  point_heuristics=heuristics,
+                  point_visibility = raster.visibility if config.compute_visibility else None,  
+                  point_heuristics=raster.point_heuristics if config.compute_point_heuristics else None,
                   points_in_view=indexes,
 
                   point_depth=depths,

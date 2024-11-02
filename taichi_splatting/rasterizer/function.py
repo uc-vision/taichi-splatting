@@ -1,5 +1,6 @@
 
 from functools import cache
+from typing import Optional
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
 
 
@@ -16,7 +17,8 @@ from taichi_splatting.taichi_lib.conversions import torch_taichi
 RasterOut = NamedTuple('RasterOut', 
     [('image', torch.Tensor), 
      ('image_weight', torch.Tensor),
-     ('point_heuristics', torch.Tensor) ])
+     ('point_heuristics', Optional[torch.Tensor]),
+     ('visibility', Optional[torch.Tensor])])
 
 @cache
 def render_function(config:RasterConfig,
@@ -30,6 +32,7 @@ def render_function(config:RasterConfig,
   backward = backward_kernel(config, points_requires_grad,
                              features_requires_grad, 
                              feature_size, dtype=torch_taichi[dtype])
+
 
   class _module_function(torch.autograd.Function):
     @staticmethod
@@ -45,14 +48,19 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=dtype, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_heuristics = torch.zeros( (gaussians.shape[0], 3) if config.compute_point_heuristics else (0, 3), 
-                                 dtype=dtype, device=features.device)
-      
+      if config.compute_point_heuristics:
+        point_heuristics = torch.zeros((gaussians.shape[0], 2), dtype=dtype, device=features.device)
+      else:
+        point_heuristics = torch.empty((0,2), dtype=dtype, device=features.device)
+
+      if config.compute_visibility:
+        visibility = torch.zeros((gaussians.shape[0], 1), dtype=torch.float32, device=features.device)
+      else:
+        visibility = torch.empty((0,1), dtype=torch.float32, device=features.device)
 
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,
-        image_feature, image_alpha, image_last_valid)
-
+        image_feature, image_alpha, image_last_valid, visibility)
 
       # Non differentiable parameters
       ctx.overlap_to_point = overlap_to_point
@@ -61,15 +69,19 @@ def render_function(config:RasterConfig,
       ctx.image_alpha = image_alpha
       ctx.image_size = image_size
       ctx.point_heuristics = point_heuristics
+      ctx.visibility = visibility
 
-      ctx.mark_non_differentiable(image_alpha, image_last_valid, point_heuristics, overlap_to_point, tile_overlap_ranges)
+      ctx.mark_non_differentiable(image_alpha, image_last_valid, overlap_to_point, tile_overlap_ranges, visibility, point_heuristics)
       ctx.save_for_backward(gaussians, features)
+    
             
-      return image_feature, image_alpha, point_heuristics
+      return image_feature, image_alpha, point_heuristics, visibility
 
     @staticmethod
     def backward(ctx, grad_image_feature:torch.Tensor, 
-                 grad_alpha:torch.Tensor, grad_point_heuristics:torch.Tensor):
+                 grad_alpha:torch.Tensor, grad_point_heuristics:torch.Tensor,
+                 grad_visibility:torch.Tensor):
+        
         gaussians, features = ctx.saved_tensors
 
         grad_gaussians = torch.zeros_like(gaussians)
@@ -83,9 +95,11 @@ def render_function(config:RasterConfig,
           grad_image_feature.contiguous(),
           grad_gaussians, grad_features, ctx.point_heuristics)
 
-        return grad_gaussians, grad_features, None, None, None, None
-  return _module_function
 
+        return grad_gaussians, grad_features, None, None, None, None
+    
+      
+  return _module_function
 
 
 
@@ -102,6 +116,7 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
   Parameters:
       gaussians2d: (N, 6)  packed gaussians, N is the number of gaussians
       features: (N, F)   features, F is the number of features
+  compute_visibility:bool = False,
 
       tile_overlap_ranges: (TH * TW, 2) M is the number of tiles, 
         maps tile index to range of overlap indices (0..K]
@@ -122,11 +137,11 @@ def rasterize_with_tiles(gaussians2d: torch.Tensor, features: torch.Tensor,
                                       features.shape[1],
                                       dtype=gaussians2d.dtype)
 
-  image, image_weight, point_heuristics = _module_function.apply(gaussians2d, features, 
+  image, image_weight, point_heuristics, visibility = _module_function.apply(gaussians2d, features, 
           overlap_to_point, tile_overlap_ranges, 
           image_size)
   
-  return RasterOut(image, image_weight, point_heuristics)
+  return RasterOut(image, image_weight, point_heuristics, visibility)
 
 
 def rasterize(gaussians2d:torch.Tensor, depth:torch.Tensor, 
