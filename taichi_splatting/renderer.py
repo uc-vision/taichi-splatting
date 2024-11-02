@@ -70,17 +70,23 @@ class Rendering:
     return self.point_scale.max(dim=1).values
   
   @property
-  def point_prune_cost(self):
+  def prune_cost(self):
     return self.point_heuristics[..., 0]
 
   @property
-  def point_split_score(self):
+  def split_score(self):
     return self.point_heuristics[..., 1]
 
   @cached_property
   def visible_mask(self) -> torch.Tensor:
     """ If a point in the view is visible """
-    return self.point_visibility > 0
+    if self.point_visibility is not None:
+      return self.point_visibility > 0
+    elif self.point_heuristics is not None:
+      return self.point_heuristics[..., 0] > 0
+    
+    raise ValueError("No visibility information available")
+
 
   @cached_property
   def visible_indices(self) -> torch.Tensor:
