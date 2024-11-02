@@ -48,11 +48,10 @@ def render_function(config:RasterConfig,
       image_alpha = torch.empty(shape, dtype=dtype, device=features.device)
       image_last_valid = torch.empty(shape, dtype=torch.int32, device=features.device)
 
-      point_heuristics = None
-
       if config.compute_point_heuristics:
         point_heuristics = torch.zeros((gaussians.shape[0], 3), dtype=dtype, device=features.device)
-        ctx.mark_non_differentiable(point_heuristics)
+      else:
+        point_heuristics = torch.empty((0,3), dtype=dtype, device=features.device)
 
       if config.compute_visibility:
         visibility = torch.zeros((gaussians.shape[0], 1), dtype=torch.float32, device=features.device)
@@ -72,7 +71,7 @@ def render_function(config:RasterConfig,
       ctx.point_heuristics = point_heuristics
       ctx.visibility = visibility
 
-      ctx.mark_non_differentiable(image_alpha, image_last_valid, overlap_to_point, tile_overlap_ranges, visibility)
+      ctx.mark_non_differentiable(image_alpha, image_last_valid, overlap_to_point, tile_overlap_ranges, visibility, point_heuristics)
       ctx.save_for_backward(gaussians, features)
     
             

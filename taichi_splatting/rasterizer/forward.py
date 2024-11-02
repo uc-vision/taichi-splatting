@@ -113,37 +113,34 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
         
         for in_group_idx in range(max_point_group_offset):
-          if T_i < ti.static(1 - config.saturate_threshold):
-            break  # somehow faster than directly breaking
+          # if T_i < ti.static(1 - config.saturate_threshold):
+          #   break  # somehow faster than directly breaking
 
 
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
 
           alpha = point_alpha * gaussian_alpha
+          weight = alpha * T_i
+
 
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (configurable as alpha_threshold)
-          if alpha < ti.static(config.alpha_threshold):
-            continue
-
-          weight = alpha * T_i
-          if ti.static(config.use_alpha_blending):
-            accum_feature += tile_feature[in_group_idx] * weight
-            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-          else:
-            # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
-            accum_feature = tile_feature[in_group_idx]
-            
-          last_point_idx = group_start_offset + in_group_idx + 1
-          T_i = T_i * (1 - alpha)
+          if alpha >= ti.static(config.alpha_threshold):
+            if ti.static(config.use_alpha_blending):
+              accum_feature += tile_feature[in_group_idx] * weight
+              alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+            else:
+              # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
+              accum_feature = tile_feature[in_group_idx]
+              
+            last_point_idx = group_start_offset + in_group_idx + 1
+            T_i = T_i * (1 - alpha)
 
           # Accumulate visibility in block shared memory tile
           if ti.static(config.compute_visibility):
             if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight > 0)):
               warp_add_vector(tile_visibility[in_group_idx], vec1(weight))
-
           # end of point group loop
-
 
         # Atomic add visibility in global memory
         if ti.static(config.compute_visibility):
