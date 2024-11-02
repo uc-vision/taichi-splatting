@@ -118,7 +118,7 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
 
 
     check_finite(gaussians, 'gaussians', warn=True)
-    visible = torch.nonzero(raster.point_heuristics[:, 2]).squeeze(1)
+    visible = torch.nonzero(raster.point_heuristics[:, 0]).squeeze(1)
 
     opt.step(visible_indexes = visible, basis=point_basis(gaussians[visible]))
 
@@ -169,7 +169,7 @@ def randomize_n(t:torch.Tensor, n:int):
   return mask
   
 def find_split_prune(n, target, n_prune, point_heuristics):
-    prune_cost, densify_score, weight = point_heuristics.unbind(dim=1)
+    prune_cost, densify_score = point_heuristics.unbind(dim=1)
     
     prune_mask = take_n(prune_cost, n_prune, descending=False)
 
