@@ -80,6 +80,8 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       num_point_groups = (tile_point_count + ti.static(tile_area - 1)) // tile_area
       last_point_idx = -1
 
+      in_bounds = pixel.x < camera_width and pixel.y < camera_height
+
 
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
@@ -118,25 +120,28 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
 
           alpha = point_alpha * gaussian_alpha
-          weight = alpha * T_i
 
+          weight = vec1(0.0)
 
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (configurable as alpha_threshold)
-          if alpha >= ti.static(config.alpha_threshold):
+          if alpha >= ti.static(config.alpha_threshold) and in_bounds:
+
+            alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+            weight[0] = alpha * T_i
+
             if ti.static(config.use_alpha_blending):
-              accum_feature += tile_feature[in_group_idx] * weight
-              alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+              accum_feature += tile_feature[in_group_idx] * weight[0]
             else:
               # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
               accum_feature = tile_feature[in_group_idx]
-              
-            last_point_idx = group_start_offset + in_group_idx + 1
+            
             T_i = T_i * (1 - alpha)
+            last_point_idx = group_start_offset + in_group_idx + 1
 
           # Accumulate visibility in block shared memory tile
           if ti.static(config.compute_visibility):
-            if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight > 0)):
-              warp_add_vector(tile_visibility[in_group_idx], vec1(weight))
+            # if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight > 0)):
+            warp_add_vector(tile_visibility[in_group_idx], weight)
           # end of point group loop
 
         # Atomic add visibility in global memory
@@ -147,7 +152,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
         # end of point group id loop
 
-      if pixel.x < camera_width and pixel.y < camera_height:
+      if in_bounds:
         image_feature[pixel.y, pixel.x] = accum_feature
 
         # No need to accumulate a normalisation factor as it is exactly 1 - T_i
