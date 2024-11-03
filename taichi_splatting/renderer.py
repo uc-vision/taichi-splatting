@@ -36,7 +36,7 @@ class Rendering:
   points_in_view: torch.Tensor  # (N, 1) - indexes of points in view 
   point_depth: torch.Tensor  # (N, 1) - depth of each point
 
-  point_visibility: Optional[torch.Tensor] = None  # (N, 1) 
+  point_visibility: Optional[torch.Tensor] = None  # (N,) 
   point_heuristics: Optional[torch.Tensor] = None  # (N, 2) 
 
   camera : CameraParams
@@ -209,7 +209,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
 
                   camera=camera_params,
                   config=config,
-                  point_visibility = raster.visibility if config.compute_visibility else None,  
+                  point_visibility = raster.visibility.squeeze(1) if config.compute_visibility else None,  
                   point_heuristics=raster.point_heuristics if config.compute_point_heuristics else None,
                   points_in_view=indexes,
 
