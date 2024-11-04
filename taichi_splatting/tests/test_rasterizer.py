@@ -59,7 +59,7 @@ def make_inputs(config, seed, device=torch.device('cuda:0')):
             colors.requires_grad_(True)), rasterize
 
 
-def test_rasterizer_gradcheck(name, config, show = False, iters = 100, device=torch.device('cuda:0')):
+def run_rasterizer_gradcheck(name, config, show = False, iters = 100, device=torch.device('cuda:0')):
   torch.random.manual_seed(0)
   seeds = torch.randint(0, 1000, (iters, ), device=device)
 
@@ -78,21 +78,26 @@ def test_rasterizer_gradcheck(name, config, show = False, iters = 100, device=to
       pbar.update(1)
       pbar.set_postfix(seed=seed.item())
 
+def test_antialias(show=False):
+  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=True, use_alpha_blending=True)
+  run_rasterizer_gradcheck("antialias", config, show)
 
+def test_no_antialias(show=False):
+  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=True)
+  run_rasterizer_gradcheck("no_antialias", config, show)
+
+def test_no_blending(show=False):
+  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=False)
+  run_rasterizer_gradcheck("no_blending", config, show)
 
 def main(show=False, debug=False):
   torch.set_printoptions(precision=10, sci_mode=False)
-
   ti.init(arch=ti.cuda, default_fp=ti.f64, debug=debug)
 
-  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=True, use_alpha_blending=True)
-  test_rasterizer_gradcheck("antialias", config, show)
+  test_antialias(show)
+  test_no_antialias(show)
+  test_no_blending(show)
 
-  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=True)
-  test_rasterizer_gradcheck("no_antialias", config, show)
-
-  config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=False)
-  test_rasterizer_gradcheck("no_blending", config, show)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()

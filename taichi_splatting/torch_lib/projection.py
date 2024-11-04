@@ -19,7 +19,9 @@ def radii_from_cov(uv_cov:torch.Tensor):
 def eig(cov: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
   """ Compute the eigenvalues and eigenvectors of a 2x2 covariance matrix
   """
-  x, y, z = cov[..., 0], cov[..., 1], cov[..., 2]
+  assert cov.shape[-2:] == (2, 2), f"Expected ...x2x2 covariance matrix, got {cov.shape}"
+
+  x, y, z = cov[..., 0,0], cov[..., 0,1], cov[..., 1,1]
   tr = x + z
   det = x * z - y * y
 
@@ -29,7 +31,7 @@ def eig(cov: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
   lam1 = (tr + sqrt_gap) * 0.5
   lam2 = (tr - sqrt_gap) * 0.5
 
-  v1 = F.normalize(torch.stack([cov[..., 0] - lam2, cov[..., 1]], -1), dim=-1)
+  v1 = F.normalize(torch.stack([x - lam2, y], -1), dim=-1)
   v2 = torch.stack([-v1[..., 1], v1[..., 0]], -1)
 
   return torch.stack([lam1, lam2], -1).sqrt(), v1, v2
@@ -171,7 +173,7 @@ def apply(position, log_scaling, rotation, alpha_logit,
   
   sigma, v1, v2 = eig(cov)
   scale = sigma * gaussian_scale
-  lower, upper = ellipse_bounds(mean, v1 * scale[:, 0], v2 * scale[:, 1])
+  lower, upper = ellipse_bounds(mean, v1 * scale[:, 0:1], v2 * scale[:, 1:2])
 
     
   in_view = ((z > depth_range[0]) & (z < depth_range[1]) 

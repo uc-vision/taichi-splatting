@@ -88,7 +88,7 @@ def warp_add_vector_32(dest:ti.template(), val: ti.template()):
 @ti.func
 def warp_add_vector_64(dest:ti.template(), val: ti.template()):
   # placeholder for testing 64 bit functions only
-  return atomic_add_vector(dest, val)
+  atomic_add_vector(dest, val)
 
 
 @ti.func

@@ -23,10 +23,6 @@ def main():
     while True: 
       gaussians = random_2d_gaussians(5, (640, 480), scale_factor=0.2, alpha_range=(1.0, 1.0)).cuda()
 
-      print(gaussians.scaling)
-      gaussians = gaussians.set_scaling(gaussians.scaling)
-
-      print(gaussians.scaling)
 
       rendering = render_gaussians(gaussians, (640, 480))
       display_image('image', rendering.image)

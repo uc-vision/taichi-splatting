@@ -98,11 +98,12 @@ def backward_kernel(config: RasterConfig,
         if ti.static(config.compute_point_heuristics) else None)
 
       
-      last_point_pixel = thread_index(0)
+      last_point_pixel = thread_index(-1)
       T_i = thread_vector(1.0)
       grad_pixel_feature = thread_features(0.0)
       #pixel_feature = thread_features(0.0)
 
+  
       for i, offset in ti.static(pixel_tile):
         pixel = ivec2(offset) + pixel_base
 
