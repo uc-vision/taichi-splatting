@@ -103,7 +103,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           tile_feature[tile_idx] = point_features[point_idx]
 
           if ti.static(config.compute_visibility):
-            tile_visibility[tile_idx] = vec1(0.0)
+            tile_visibility[tile_idx] = 0.0
             tile_point_id[tile_idx] = point_idx
 
 
@@ -127,7 +127,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           if alpha >= ti.static(config.alpha_threshold) and in_bounds:
 
             alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-            weight[0] = 1.0
+            weight[0] = alpha * T_i
 
             if ti.static(config.use_alpha_blending):
               accum_feature += tile_feature[in_group_idx] * alpha * T_i
@@ -138,14 +138,17 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
             T_i = T_i * (1 - alpha)
             last_point_idx = group_start_offset + in_group_idx + 1
 
+
           # Accumulate visibility in block shared memory tile
           if ti.static(config.compute_visibility):
-            # if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight > 0)):
-            warp_add_vector(tile_visibility[in_group_idx], weight)
+            if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight[0] > 0)):
+              warp_add_vector(tile_visibility[in_group_idx], weight)
           # end of point group loop
 
         # Atomic add visibility in global memory
         if ti.static(config.compute_visibility):
+          ti.simt.block.sync()
+
           if load_index < end_offset:
             point_idx = tile_point_id[tile_idx]
             ti.atomic_add(point_visibility[point_idx], tile_visibility[tile_idx])

@@ -86,7 +86,7 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
     
   h, w = ref_image.shape[:2]
 
-  running_heuristics = None
+  point_heuristics = torch.zeros((params.batch_size[0], 3), device=params.position.device)
 
   for i in range(epoch_size):
     opt.zero_grad()
@@ -101,6 +101,12 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
         image_size=(w, h), 
         config=config)
       
+      
+      # raster2 = rasterize(gaussians2d=gaussians2d, 
+      #   depth=gaussians.z_depth.clamp(0, 1),
+      #   features=gaussians.feature, 
+      #   image_size=(w, h), 
+      #   config=replace(config, compute_visibility=True, compute_point_heuristics=False))
 
 
       scale = torch.exp(gaussians.log_scaling) / min(w, h)
@@ -116,19 +122,10 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
 
     opt.step(visible_indexes = visible, basis=point_basis(gaussians[visible]))
 
-    # point_heuristics = torch.cat([raster.point_heuristics, raster.visibility.unsqueeze(1)], dim=1) 
-
-    print(raster.point_heuristics[:, 0:1].mean(), raster.visibility.mean())
-
-    print((raster.point_heuristics[:, 0:1] > 0).sum(), (raster.visibility > 0).sum())
-
-
-    # assert torch.allclose(raster.point_heuristics[:, 0:1], raster.visibility)
-
-    running_heuristics =  raster.point_heuristics if i == 0 \
-        else (1 - grad_alpha) * running_heuristics + grad_alpha * raster.point_heuristics
+    point_heuristics =  raster.point_heuristics if i == 0 \
+        else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
       
-  return raster.image, running_heuristics
+  return raster.image, point_heuristics
 
 
 def make_epochs(total_iters, first_epoch, max_epoch):
@@ -263,7 +260,6 @@ def main():
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
   
   config = RasterConfig(compute_point_heuristics=True,
-                        compute_visibility=True,
                         tile_size=cmd_args.tile_size, 
                         gaussian_scale=3.0, 
                         blur_cov=0.3 if not cmd_args.antialias else 0.0,

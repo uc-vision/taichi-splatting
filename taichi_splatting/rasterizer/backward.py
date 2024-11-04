@@ -210,8 +210,7 @@ def backward_kernel(config: RasterConfig,
 
               if ti.static(config.compute_point_heuristics):
                 gaussian_point_heuristics += vec2(
-                  #(feature_diff**2).sum() * weight, # pruning cost heuristic
-                  weight > 0,
+                  (feature_diff**2).sum() * weight, # pruning cost heuristic
                   ti.abs(pos_grad).sum() # point split heuristic 
                 )
 
