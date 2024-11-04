@@ -127,10 +127,10 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           if alpha >= ti.static(config.alpha_threshold) and in_bounds:
 
             alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
-            weight[0] = alpha * T_i
+            weight[0] = 1.0
 
             if ti.static(config.use_alpha_blending):
-              accum_feature += tile_feature[in_group_idx] * weight[0]
+              accum_feature += tile_feature[in_group_idx] * alpha * T_i
             else:
               # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
               accum_feature = tile_feature[in_group_idx]
