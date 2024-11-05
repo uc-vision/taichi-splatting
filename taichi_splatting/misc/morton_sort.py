@@ -6,6 +6,8 @@ from taichi_splatting import cuda_lib
 from taichi_splatting.taichi_lib.f32 import AABBox
 import torch
 
+from taichi_splatting.taichi_queue import TaichiQueue, queued
+
 
 # https://stackoverflow.com/questions/
 # 1024754/how-to-compute-a-3d-morton-number-interleave-the-bits-of-3-ints 
@@ -88,7 +90,7 @@ class Grid:
     return self.cell_code32(cell)
 
 
-
+@queued
 @ti.kernel
 def code_points32_kernel(
   grid:Grid,
@@ -99,7 +101,7 @@ def code_points32_kernel(
     codes[i] = grid.morton_code32(points[i])
 
 
-
+@queued
 @ti.kernel
 def code_points64_kernel(
   grid:Grid,
@@ -155,7 +157,7 @@ def sort_dedup(points:torch.Tensor, resolution:float):
 
 
 if __name__ == "__main__":
-  ti.init(arch=ti.gpu)
+  TaichiQueue.init(arch=ti.gpu)
 
   points = torch.rand(1000, 3).to(torch.float32).cuda()
 

@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings('ignore') 
 
 
-ti.init(debug=True)
+TaichiQueue.init(debug=True)
 
 def random_inputs(max_dim=3, max_deg=3, max_n=100, device='cpu', dtype=torch.float32):
   def f(seed):

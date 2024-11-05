@@ -31,7 +31,7 @@ def parse_args(args=None):
 
 def bench_projection(args):
 
-  ti.init(arch=ti.cuda, offline_cache=True, log_level=ti.INFO, 
+  TaichiQueue.init(arch=ti.cuda, offline_cache=True, log_level=ti.INFO, 
         device_memory_GB=0.1)
   
      

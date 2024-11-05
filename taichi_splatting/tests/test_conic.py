@@ -7,12 +7,13 @@ from taichi_splatting.taichi_lib.f64 import (
   conic_pdf_with_grad, conic_pdf, vec2, vec3)
 
 from taichi_splatting.tests.util import compare_with_grad
+from taichi_splatting.taichi_queue import TaichiQueue, queued
 
 import warnings
 warnings.filterwarnings('ignore') 
 
 
-ti.init(debug=True)
+TaichiQueue.init(debug=True)
 
 def torch_conic_pdf(xy:torch.Tensor, uv:torch.Tensor, uv_conic:torch.Tensor) -> torch.Tensor:
     # detach gradient as the taichi code doesn't generate gradients for xy
@@ -21,7 +22,7 @@ def torch_conic_pdf(xy:torch.Tensor, uv:torch.Tensor, uv_conic:torch.Tensor) -> 
     return torch.exp(-0.5 * (dx**2 * a + dy**2 * c) - dx * dy * b)
 
 
-
+@queued
 @ti.kernel
 def kernel_conic_pdf_grad(
    xy : ti.types.ndarray(vec2, ndim=1),
@@ -36,6 +37,7 @@ def kernel_conic_pdf_grad(
       dp_duv[i] = grad_uv
       dp_dconic[i] = grad_conic
 
+@queued
 @ti.kernel
 def kernel_conic_pdf(
    xy : ti.types.ndarray(vec2, ndim=1),

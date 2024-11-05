@@ -17,7 +17,7 @@ def display_image(name, image):
         pass
 
 def main():
-    ti.init(ti.gpu)
+    TaichiQueue.init(ti.gpu)
 
     torch.cuda.manual_seed(0)
     while True: 

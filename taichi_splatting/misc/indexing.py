@@ -11,6 +11,7 @@ def indexing_function(size:int, dtype=torch.float32):
   ti_type = torch_taichi[dtype]
   vec = ti.types.vector(n=size, dtype=ti_type)
 
+  @queued
   @ti.kernel
   def indexing_kernel(
     features: ti.types.ndarray(dtype=vec, ndim=1),  # (N, C)

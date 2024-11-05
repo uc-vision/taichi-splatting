@@ -29,7 +29,7 @@ def parse_args(args=None):
 
 def bench_sh(args):
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, 
+  TaichiQueue.init(arch=ti.cuda, log_level=ti.INFO, 
         device_memory_GB=0.1)
   
   torch.manual_seed(args.seed)

@@ -54,9 +54,9 @@ def render_function(config:RasterConfig,
         point_heuristics = torch.empty((0,2), dtype=dtype, device=features.device)
 
       if config.compute_visibility:
-        visibility = torch.zeros((gaussians.shape[0], 1), dtype=dtype, device=features.device)
+        visibility = torch.zeros((gaussians.shape[0], 1), dtype=torch.float32, device=features.device)
       else:
-        visibility = torch.empty((0,1), dtype=dtype, device=features.device)
+        visibility = torch.empty((0,1), dtype=torch.float32, device=features.device)
 
       forward(gaussians, features, 
         tile_overlap_ranges, overlap_to_point,

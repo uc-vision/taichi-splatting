@@ -3,6 +3,8 @@ import torch
 import taichi as ti
 from typing import Optional
 
+from taichi_splatting.taichi_queue import queued
+
 @ti.func
 def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
   return a * t + b * (1.0 - t)
@@ -12,6 +14,7 @@ def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
 def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0, use_point_lr=False, use_mask_lr=False):
   b1, b2 = betas
 
+  @queued
   @ti.kernel
   def kernel(param: ti.types.ndarray(dtype=ti.f32, ndim=2), # N x D
              grad: ti.types.ndarray(dtype=ti.f32, ndim=2),  # N x D
@@ -59,6 +62,8 @@ def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-08, dims=3, use_point_lr=False
   b1, b2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
 
+
+  @queued
   @ti.kernel
   def kernel(param: ti.types.ndarray(dtype=vec, ndim=1), # N x D
              grad: ti.types.ndarray(dtype=vec, ndim=1),  # N x D
@@ -101,7 +106,7 @@ def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999
   b1, b2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
   
-
+  @queued
   @ti.kernel
   def kernel(param: ti.types.ndarray(dtype=vec, ndim=1), # N 
              grad: ti.types.ndarray(dtype=vec, ndim=1),  # N 

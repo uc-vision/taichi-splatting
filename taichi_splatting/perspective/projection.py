@@ -7,6 +7,7 @@ import taichi as ti
 import torch
 from taichi_splatting.data_types import Gaussians3D, RasterConfig
 from taichi_splatting.optim.autograd import restore_grad
+from taichi_splatting.taichi_queue import TaichiQueue, queued
 
 from .params import CameraParams
 from taichi_splatting.taichi_lib import get_library
@@ -25,7 +26,6 @@ warnings.filterwarnings('ignore', '(.*)that is not a leaf Tensor is being access
 def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur_cov=0.0):
   dtype = torch_taichi[torch_dtype]
   lib = get_library(dtype)
-
 
   @ti.kernel
   def project_kernel(  
@@ -75,7 +75,6 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
             sigma = sigma,
             alpha = lib.sigmoid(alpha_logit[idx][0]),
         )
-
 
 
   @ti.kernel
@@ -133,7 +132,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
       gaussian_tensors = (position, log_scaling, rotation, alpha_logit)
 
 
-      project_kernel(*gaussian_tensors, 
+      TaichiQueue.run_sync(project_kernel, *gaussian_tensors, 
             T_camera_world, projection, 
             lib.vec2(image_size), lib.vec2(depth_range),
             points, depth,  # outputs
@@ -169,8 +168,8 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
         points.grad = dpoints.contiguous()
         depth.grad = ddepth.contiguous()
 
-      
-        indexed_project_kernel.grad(
+        TaichiQueue.run_sync(
+          indexed_project_kernel.grad,
           *gaussian_tensors,  
           ctx.indexes,
           T_camera_world, 

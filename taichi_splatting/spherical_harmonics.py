@@ -114,6 +114,7 @@ def sh_function(degree:int=3, dimension:int=3,
   param_mat = ti.types.matrix(n=dimension, m=(degree + 1)**2, dtype=ti_dtype)
   vec = ti.types.vector(n=dimension, dtype=ti_dtype)
 
+  @queued
   @ti.kernel    
   def evaluate_sh_at_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
                           points:ti.types.ndarray(point_vec, ndim=1), 

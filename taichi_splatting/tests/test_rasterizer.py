@@ -8,6 +8,7 @@ from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.misc.renderer2d import  project_gaussians2d
 from taichi_splatting.rasterizer.function import rasterize_with_tiles
 from taichi_splatting.tests.random_data import random_2d_gaussians
+from taichi_splatting.taichi_queue import TaichiQueue
 
 import numpy as np
 
@@ -92,7 +93,7 @@ def test_no_blending(show=False):
 
 def main(show=False, debug=False):
   torch.set_printoptions(precision=10, sci_mode=False)
-  ti.init(arch=ti.cuda, default_fp=ti.f64, debug=debug)
+  TaichiQueue.init(arch=ti.cuda, default_fp=ti.f64, debug=debug)
 
   test_antialias(show)
   test_no_antialias(show)

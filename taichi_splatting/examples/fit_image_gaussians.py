@@ -214,7 +214,7 @@ def main():
 
   h, w = ref_image.shape[:2]
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, 
+  TaichiQueue.init(arch=ti.cuda, log_level=ti.INFO, 
           debug=cmd_args.debug, device_memory_GB=0.1)
 
   print(f'Image size: {w}x{h}')
