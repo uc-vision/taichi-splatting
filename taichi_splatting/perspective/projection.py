@@ -117,6 +117,8 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
 
 
   class _module_function(torch.autograd.Function):
+
+    @queued
     @staticmethod
     def forward(ctx, position, log_scaling, rotation, alpha_logit,
                 T_camera_world,
@@ -132,7 +134,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
       gaussian_tensors = (position, log_scaling, rotation, alpha_logit)
 
 
-      TaichiQueue.run_sync(project_kernel, *gaussian_tensors, 
+      project_kernel(*gaussian_tensors, 
             T_camera_world, projection, 
             lib.vec2(image_size), lib.vec2(depth_range),
             points, depth,  # outputs
@@ -158,6 +160,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
             
       return points, depth, ctx.indexes
 
+    @queued
     @staticmethod
     def backward(ctx, dpoints, ddepth, dindexes):
 
@@ -168,8 +171,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
         points.grad = dpoints.contiguous()
         depth.grad = ddepth.contiguous()
 
-        TaichiQueue.run_sync(
-          indexed_project_kernel.grad,
+        indexed_project_kernel.grad(
           *gaussian_tensors,  
           ctx.indexes,
           T_camera_world, 

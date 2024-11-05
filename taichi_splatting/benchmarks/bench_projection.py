@@ -9,6 +9,7 @@ from taichi_splatting.perspective import projection
 
 
 import taichi as ti
+from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.tests.random_data import random_3d_gaussians, random_camera
 
 

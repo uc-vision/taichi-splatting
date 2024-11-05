@@ -7,6 +7,8 @@ from taichi_splatting import spherical_harmonics
 
 import taichi as ti
 
+from taichi_splatting.taichi_queue import TaichiQueue
+
 
 
 def parse_args(args=None):
