@@ -21,17 +21,17 @@ class TaichiQueue():
     return cls.executor
   
   @staticmethod
-  def _await_run(func, *args) -> any:
+  def _await_run(func, *args, **kwargs) -> any:
     args = [arg.result() if isinstance(arg, Future) else arg for arg in args]
-    return func(*args)
+    return func(*args, **kwargs)
       
   @staticmethod
-  def run_async(func, *args) -> Future:
-    return TaichiQueue.queue().submit(TaichiQueue._await_run, func, *args)
+  def run_async(func, *args, **kwargs) -> Future:
+    return TaichiQueue.queue().submit(TaichiQueue._await_run, func, *args, **kwargs)
   
   @staticmethod
-  def run_sync(func, *args) -> any:
-    return TaichiQueue.run_async(func, *args).result()
+  def run_sync(func, *args, **kwargs) -> any:
+    return TaichiQueue.run_async(func, *args, **kwargs).result()
   
   @classmethod
   def stop(cls) -> None:

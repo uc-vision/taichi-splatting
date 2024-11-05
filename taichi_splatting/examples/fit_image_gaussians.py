@@ -16,6 +16,7 @@ from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.optim.parameter_class import ParameterClass
+from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.tests.random_data import random_2d_gaussians
 
 from taichi_splatting.torch_lib.util import check_finite
