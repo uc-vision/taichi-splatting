@@ -34,7 +34,7 @@ def parse_args(args=None):
 def bench_rasterizer(args):
 
   TaichiQueue.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1, advanced_optimization=True, fast_math=True)
+        device_memory_GB=0.1)
   
      
   torch.manual_seed(args.seed)

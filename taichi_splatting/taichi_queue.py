@@ -41,7 +41,7 @@ class TaichiQueue():
     
   @classmethod
   def queue(cls) -> ThreadPoolExecutor:
-    assert cls.executor is not None, "TaichiQueue not initialized (run TaichiQueue.init() first)"
+    assert cls.executor is not None, "TaichiQueue not initialized (run TaichiQueue.init() in place of ti.init())"
     return cls.executor
   
   @staticmethod
