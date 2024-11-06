@@ -1,19 +1,43 @@
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
+import threading
 
 import taichi as ti
+
+
+class NullExecutor:
+    def __init__(self, initializer, **kwargs):
+        initializer()
+        self._threads = []
+
+    def submit(self, fn, *args, **kwargs):
+        future = Future()
+        future.set_result(fn(*args, **kwargs))
+        return future
+    
+    def shutdown(self, wait=True):
+        pass
+
 
 class TaichiQueue():
   executor: ThreadPoolExecutor = None
 
   @classmethod
-  def init(cls, *args, **kwargs) -> None:
+  def init(cls, *args, threaded=False, **kwargs) -> None:
     if cls.executor is None:
-      cls.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="taichi",
+      executor = ThreadPoolExecutor if threaded else NullExecutor
+
+      cls.executor = executor(max_workers=1, thread_name_prefix="taichi",
         initializer=partial(ti.init, *args, **kwargs))
-      
+
     return cls.executor
+  
+  @staticmethod
+  def thread_id():
+    executor = TaichiQueue.queue()
+    threads = list(executor._threads)
+    return threads[0].ident if len(threads) > 0 else None
     
   @classmethod
   def queue(cls) -> ThreadPoolExecutor:
@@ -31,6 +55,8 @@ class TaichiQueue():
   
   @staticmethod
   def run_sync(func, *args, **kwargs) -> any:
+  
+    assert threading.get_ident() != TaichiQueue.thread_id(), "TaichiQueue.run_sync() called from worker thread (will deadlock)"
     return TaichiQueue.run_async(func, *args, **kwargs).result()
   
   @classmethod

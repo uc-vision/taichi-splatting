@@ -22,7 +22,6 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
   gaussian_pdf = lib.gaussian_pdf_antialias if config.antialias else lib.gaussian_pdf
   warp_add_vector = warp_add_vector_32 if dtype == ti.f32 else warp_add_vector_64
 
-  @queued
   @ti.kernel
   def _forward_kernel(
       points: ti.types.ndarray(Gaussian2D.vec, ndim=1),  # (M, 6)
