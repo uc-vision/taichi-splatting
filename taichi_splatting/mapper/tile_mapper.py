@@ -13,6 +13,7 @@ from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
 from taichi_splatting.taichi_lib.conversions import torch_taichi
 
 from taichi_splatting.taichi_lib.grid_query import make_grid_query
+from taichi_splatting.taichi_queue import queued
 
 def pad_to_tile(image_size: Tuple[Integral, Integral], tile_size: int):
   def pad(x):
@@ -69,7 +70,7 @@ def tile_mapper(config:RasterConfig, use_depth16=False):
     gaussian_scale=config.gaussian_scale)
   
   
-
+  @queued
   @ti.kernel
   def tile_overlaps_kernel(
       gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1),  
@@ -109,7 +110,7 @@ def tile_mapper(config:RasterConfig, use_depth16=False):
             if next_tile_id < max_tile:
               tile_ranges[next_tile_id][0] = idx + 1
 
-
+  @queued
   @ti.kernel
   def generate_sort_keys_kernel(
       depths: ti.types.ndarray(ti.f32, ndim=1),  # (M)

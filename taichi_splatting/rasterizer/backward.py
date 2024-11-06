@@ -7,6 +7,8 @@ from taichi_splatting.taichi_lib.concurrent import WARP_SIZE, block_reduce_i32, 
 from taichi_splatting.taichi_lib import get_library
 from taichi.math import ivec2
 
+from taichi_splatting.taichi_queue import queued
+
 
 
 
@@ -44,7 +46,6 @@ def backward_kernel(config: RasterConfig,
 
 
   gaussian_pdf = lib.gaussian_pdf_antialias_with_grad if config.antialias else lib.gaussian_pdf_with_grad
-
 
   @ti.kernel
   def _backward_kernel(

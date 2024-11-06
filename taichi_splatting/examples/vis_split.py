@@ -2,6 +2,7 @@
 
 from functools import partial
 from taichi_splatting.misc.renderer2d import render_gaussians, split_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.tests.random_data import random_2d_gaussians
 import torch
 import taichi as ti
@@ -17,7 +18,7 @@ def display_image(name, image):
         pass
 
 def main():
-    ti.init(ti.gpu)
+    TaichiQueue.init(ti.gpu)
 
     torch.cuda.manual_seed(0)
     while True: 

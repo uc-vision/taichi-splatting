@@ -1,3 +1,4 @@
+import argparse
 import torch
 
 import taichi as ti
@@ -7,12 +8,11 @@ from taichi_splatting.taichi_lib.f64 import (
   conic_pdf_with_grad, conic_pdf, vec2, vec3)
 
 from taichi_splatting.tests.util import compare_with_grad
+from taichi_splatting.taichi_queue import TaichiQueue, queued, taichi_queue
 
 import warnings
 warnings.filterwarnings('ignore') 
 
-
-ti.init(debug=True)
 
 def torch_conic_pdf(xy:torch.Tensor, uv:torch.Tensor, uv_conic:torch.Tensor) -> torch.Tensor:
     # detach gradient as the taichi code doesn't generate gradients for xy
@@ -21,7 +21,7 @@ def torch_conic_pdf(xy:torch.Tensor, uv:torch.Tensor, uv_conic:torch.Tensor) -> 
     return torch.exp(-0.5 * (dx**2 * a + dy**2 * c) - dx * dy * b)
 
 
-
+@queued
 @ti.kernel
 def kernel_conic_pdf_grad(
    xy : ti.types.ndarray(vec2, ndim=1),
@@ -36,6 +36,7 @@ def kernel_conic_pdf_grad(
       dp_duv[i] = grad_uv
       dp_dconic[i] = grad_conic
 
+@queued
 @ti.kernel
 def kernel_conic_pdf(
    xy : ti.types.ndarray(vec2, ndim=1),
@@ -81,20 +82,27 @@ def random_inputs(n, device='cpu', dtype=torch.float64):
       return (uv + dx), uv.requires_grad_(True), conic.exp().requires_grad_(True)
     return f
 
-def test_conic():
-  compare_with_grad("conic_pdf", ["xy", "uv", "uv_conic"], "p", 
+def test_conic(debug=False):
+  with taichi_queue(arch=ti.cpu, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug):
+    compare_with_grad("conic_pdf", ["xy", "uv", "uv_conic"], "p", 
         ConicPdf.apply, torch_conic_pdf, random_inputs(10), iters=100)
 
-def test_conic_gradcheck(iters = 100, device='cpu'):
-  make_inputs = random_inputs(10)
 
-  seeds = torch.randint(00, 10000, (iters, ), device=device)
-  for seed in tqdm(seeds, desc="conic_gradcheck"):
-      inputs = make_inputs(seed)
-      torch.autograd.gradcheck(ConicPdf.apply, inputs)
+def test_conic_gradcheck(iters = 100, device='cpu', debug=False):
+  with taichi_queue(arch=ti.cpu, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug):
+    make_inputs = random_inputs(10)
+
+    seeds = torch.randint(00, 10000, (iters, ), device=device)
+    for seed in tqdm(seeds, desc="conic_gradcheck"):
+        inputs = make_inputs(seed)
+        torch.autograd.gradcheck(ConicPdf.apply, inputs)
 
 
 if __name__ == '__main__':
-  test_conic()
-  test_conic_gradcheck()
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--debug", action="store_true")
+  args = parser.parse_args()
+
+  test_conic(debug=args.debug)
+  test_conic_gradcheck(debug=args.debug)
   

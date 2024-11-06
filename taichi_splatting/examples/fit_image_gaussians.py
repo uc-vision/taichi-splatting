@@ -1,6 +1,7 @@
 from dataclasses import replace
 from functools import partial
 import math
+import os
 from pathlib import Path
 from beartype import beartype
 import cv2
@@ -16,6 +17,7 @@ from taichi_splatting.optim.sparse_adam import SparseAdam
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.optim.parameter_class import ParameterClass
+from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.tests.random_data import random_2d_gaussians
 
 from taichi_splatting.torch_lib.util import check_finite
@@ -41,6 +43,8 @@ def parse_args():
   parser.add_argument('--prune_rate', type=float, default=0.01, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=100.0)
+
+  parser.add_argument('--threaded', action='store_true', help='Use taichi dedicated thread')
 
   parser.add_argument('--antialias', action='store_true')
 
@@ -214,8 +218,9 @@ def main():
 
   h, w = ref_image.shape[:2]
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, 
-          debug=cmd_args.debug, device_memory_GB=0.1)
+
+  TaichiQueue.init(arch=ti.cuda, log_level=ti.INFO,  
+          debug=cmd_args.debug, device_memory_GB=0.1, threaded=cmd_args.threaded)
 
   print(f'Image size: {w}x{h}')
 
@@ -227,6 +232,7 @@ def main():
   torch.manual_seed(cmd_args.seed)
   lr_range = (1.0, 0.05)
 
+  torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   

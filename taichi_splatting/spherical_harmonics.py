@@ -6,6 +6,7 @@ import torch
 
 from taichi_splatting.optim.autograd import restore_grad
 from taichi_splatting.taichi_lib.conversions import torch_taichi
+from taichi_splatting.taichi_queue import TaichiQueue, queued
 
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics
@@ -139,7 +140,8 @@ def sh_function(degree:int=3, dimension:int=3,
     def forward(ctx, params:torch.Tensor, points:torch.Tensor, indexes:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
         out = torch.empty(indexes.shape[0], params.shape[1], dtype=dtype, device=params.device)
-        evaluate_sh_at_kernel(params, points, indexes, camera_pos, out)
+
+        TaichiQueue.run_sync(evaluate_sh_at_kernel, params, points, indexes, camera_pos, out)
 
         ctx.save_for_backward(params, points, camera_pos, out)
         
@@ -154,7 +156,7 @@ def sh_function(degree:int=3, dimension:int=3,
 
         with restore_grad(params, points, camera_pos, out):
           out.grad = doutput.contiguous()
-          evaluate_sh_at_kernel.grad(params, points, ctx.indexes, camera_pos, out)
+          TaichiQueue.run_sync(evaluate_sh_at_kernel.grad, params, points, ctx.indexes, camera_pos, out)
 
           return params.grad, points.grad, None, camera_pos.grad
         

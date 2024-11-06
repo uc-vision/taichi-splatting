@@ -1,13 +1,13 @@
 
 
 import argparse
-from dataclasses import replace
 
 from tqdm import tqdm
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.misc.renderer2d import  project_gaussians2d
 from taichi_splatting.rasterizer.function import rasterize_with_tiles
 from taichi_splatting.tests.random_data import random_2d_gaussians
+from taichi_splatting.taichi_queue import  taichi_queue
 
 import numpy as np
 
@@ -59,44 +59,46 @@ def make_inputs(config, seed, device=torch.device('cuda:0')):
             colors.requires_grad_(True)), rasterize
 
 
-def run_rasterizer_gradcheck(name, config, show = False, iters = 100, device=torch.device('cuda:0')):
-  torch.random.manual_seed(0)
-  seeds = torch.randint(0, 1000, (iters, ), device=device)
+def run_rasterizer_gradcheck(name, config, show = False, iters = 100, device=torch.device('cuda:0'), debug=False):
+  with taichi_queue(arch=ti.cuda, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug):
+    torch.random.manual_seed(0)
+    seeds = torch.randint(0, 1000, (iters, ), device=device)
 
-  if show:
-    cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+    if show:
+      cv2.namedWindow("image", cv2.WINDOW_NORMAL)
 
-  pbar = tqdm(total=len(seeds), desc=name)
-  for seed in seeds:
-      inputs, render = make_inputs(config, seed)
-      torch.autograd.gradcheck(render, inputs, eps=1e-6, check_grad_dtypes=True, check_undefined_grad=True)
+    pbar = tqdm(total=len(seeds), desc=name)
+    for seed in seeds:
+        inputs, render = make_inputs(config, seed)
+        torch.autograd.gradcheck(render, inputs, eps=1e-6, check_grad_dtypes=True, check_undefined_grad=True)
 
-      if show:
-        image = render(*inputs)
-        display_image("image", image)
-      
-      pbar.update(1)
-      pbar.set_postfix(seed=seed.item())
+        if show:
+          image = render(*inputs)
+          display_image("image", image)
+        
+        pbar.update(1)
+        pbar.set_postfix(seed=seed.item())
 
-def test_antialias(show=False):
+
+
+def test_antialias(show=False, debug=False):
   config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=True, use_alpha_blending=True)
-  run_rasterizer_gradcheck("antialias", config, show)
+  run_rasterizer_gradcheck("antialias", config, show, debug=debug)
 
-def test_no_antialias(show=False):
+def test_no_antialias(show=False, debug=False):
   config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=True)
-  run_rasterizer_gradcheck("no_antialias", config, show)
+  run_rasterizer_gradcheck("no_antialias", config, show, debug=debug)
 
-def test_no_blending(show=False):
+def test_no_blending(show=False, debug=False):
   config = RasterConfig(tile_size=8, pixel_stride=(1, 1), antialias=False, use_alpha_blending=False)
-  run_rasterizer_gradcheck("no_blending", config, show)
+  run_rasterizer_gradcheck("no_blending", config, show, debug=debug)
 
 def main(show=False, debug=False):
   torch.set_printoptions(precision=10, sci_mode=False)
-  ti.init(arch=ti.cuda, default_fp=ti.f64, debug=debug)
 
-  test_antialias(show)
-  test_no_antialias(show)
-  test_no_blending(show)
+  test_antialias(show, debug)
+  test_no_antialias(show, debug)
+  test_no_blending(show, debug)
 
 
 if __name__ == "__main__":

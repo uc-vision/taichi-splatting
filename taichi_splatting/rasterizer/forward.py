@@ -5,6 +5,7 @@ from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib import get_library
 from taichi_splatting.taichi_lib.concurrent import warp_add_vector_32, warp_add_vector_64
+from taichi_splatting.taichi_queue import queued
 
 
 
@@ -20,7 +21,6 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
   gaussian_pdf = lib.gaussian_pdf_antialias if config.antialias else lib.gaussian_pdf
   warp_add_vector = warp_add_vector_32 if dtype == ti.f32 else warp_add_vector_64
-
 
   @ti.kernel
   def _forward_kernel(

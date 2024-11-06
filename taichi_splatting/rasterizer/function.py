@@ -2,6 +2,7 @@
 from functools import cache
 from typing import Optional
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
+from taichi_splatting.taichi_queue import queued
 
 
 from .forward import RasterConfig, forward_kernel
@@ -32,6 +33,9 @@ def render_function(config:RasterConfig,
   backward = backward_kernel(config, points_requires_grad,
                              features_requires_grad, 
                              feature_size, dtype=torch_taichi[dtype])
+  
+  forward = queued(forward)
+  backward = queued(backward)
 
 
   class _module_function(torch.autograd.Function):
@@ -87,8 +91,6 @@ def render_function(config:RasterConfig,
         grad_gaussians = torch.zeros_like(gaussians)
         grad_features = torch.zeros_like(features)
   
-        # with restore_grad(gaussians, features):
-
         backward(gaussians, features, 
           ctx.tile_overlap_ranges, ctx.overlap_to_point,
           ctx.image_alpha, ctx.image_last_valid,
@@ -100,8 +102,6 @@ def render_function(config:RasterConfig,
     
       
   return _module_function
-
-
 
 
 @beartype

@@ -6,6 +6,7 @@ from taichi_splatting.benchmarks.util import benchmarked
 
 from taichi_splatting.rasterizer.function import  RasterConfig
 from taichi_splatting.misc.renderer2d import project_gaussians2d
+from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
 from taichi_splatting.tests.random_data import random_2d_gaussians
 from taichi_splatting.mapper import tile_mapper
 
@@ -30,45 +31,43 @@ def parse_args(args=None):
   return args
 
 
-def bench_rasterizer(args):
+def bench_tilemapper(args):
+  with taichi_queue(arch=ti.cuda, log_level=ti.INFO if not args.debug else ti.DEBUG, debug=args.debug):
 
-  ti.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1, debug=args.debug)
-  
-  torch.manual_seed(args.seed)
+    torch.manual_seed(args.seed)
 
-  depth_range = (0.1, 100.)
-  gaussians = random_2d_gaussians(args.n, args.image_size, 
-          scale_factor=args.scale_factor, alpha_range=(0.5, 1.0), depth_range=depth_range).to(args.device)
-  config = RasterConfig(tile_size=args.tile_size)
-  
-  gaussians2d = project_gaussians2d(gaussians)
+    depth_range = (0.1, 100.)
+    gaussians = random_2d_gaussians(args.n, args.image_size, 
+            scale_factor=args.scale_factor, alpha_range=(0.5, 1.0), depth_range=depth_range).to(args.device)
+    config = RasterConfig(tile_size=args.tile_size)
+    
+    gaussians2d = project_gaussians2d(gaussians)
 
-  for k, module in dict(tile_mapper=tile_mapper).items():
+    for k, module in dict(tile_mapper=tile_mapper).items():
 
-    def map_to_tiles():
+      def map_to_tiles():
 
-      return module.map_to_tiles(gaussians2d, 
-        depth=gaussians.z_depth, 
-        image_size=args.image_size, 
-        config=config,
-        use_depth16=args.depth16)
+        return module.map_to_tiles(gaussians2d, 
+          depth=gaussians.z_depth, 
+          image_size=args.image_size, 
+          config=config,
+          use_depth16=args.depth16)
 
-    _, tile_ranges = map_to_tiles()
+      _, tile_ranges = map_to_tiles()
 
-    points_per_tile = (tile_ranges[:, :, 1] - tile_ranges[:, :, 0])
-    overlap_ratio = points_per_tile.sum() / args.n 
+      points_per_tile = (tile_ranges[:, :, 1] - tile_ranges[:, :, 0])
+      overlap_ratio = points_per_tile.sum() / args.n 
 
-    print(f'{k}: scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={overlap_ratio:.2f} tile_points={points_per_tile.float().mean():.2f}')
-    benchmarked(k, map_to_tiles, profile=args.profile, iters=args.iters)  
+      print(f'{k}: scale_factor={args.scale_factor}, n={args.n}, tile_size={args.tile_size} point_overlap={overlap_ratio:.2f} tile_points={points_per_tile.float().mean():.2f}')
+      benchmarked(k, map_to_tiles, profile=args.profile, iters=args.iters)  
 
-    print('----------------------------------------------------------')    
+      print('----------------------------------------------------------')    
 
 
 
 def main():
   args = parse_args()
-  bench_rasterizer(args)
+  bench_tilemapper(args)
 
 if __name__ == '__main__':
   main()

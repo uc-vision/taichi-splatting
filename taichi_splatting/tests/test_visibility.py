@@ -1,12 +1,14 @@
 
 from tqdm import tqdm
 from taichi_splatting.data_types import RasterConfig
-from taichi_splatting.misc.renderer2d import project_gaussians2d, render_gaussians, split_gaussians2d, uniform_split_gaussians2d
+from taichi_splatting.misc.renderer2d import project_gaussians2d
 from taichi_splatting.rasterizer.function import rasterize
 from taichi_splatting.tests.random_data import random_2d_gaussians
+from taichi_splatting.taichi_queue import taichi_queue
+
+
 import torch
 import taichi as ti
-import torch.nn.functional as F
 import cv2
 import argparse
 import numpy as np
@@ -27,7 +29,7 @@ def parse_args():
 
 
 def test_visibility(debug=False, max_n=10000):
-    ti.init(ti.gpu, debug=debug)
+  with taichi_queue(arch=ti.gpu, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug):
 
     torch.cuda.manual_seed(0)
     torch.manual_seed(0)
