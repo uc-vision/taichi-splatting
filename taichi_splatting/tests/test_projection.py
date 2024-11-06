@@ -4,7 +4,7 @@ from tqdm import tqdm
 from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.perspective.params import CameraParams
 
-from taichi_splatting.taichi_queue import TaichiQueue
+from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
 from taichi_splatting.tests.util import eval_with_grad
 import taichi_splatting.torch_lib.projection as torch_proj
 from taichi_splatting.torch_lib.util import check_finite
@@ -71,51 +71,53 @@ def compare_grads(grad1, grad2):
   compare("projection grad", projection1, projection2)
   compare("camera_world grad", camera_world1, camera_world2)
 
-def test_projection(iters = 100, dtype=torch.float64):
-  gen_inputs = random_inputs(max_points=10000, dtype=dtype)
+def test_projection(iters = 100, dtype=torch.float64, debug=False):
+  with taichi_queue(arch=ti.cpu, offline_cache=True, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug):
+    gen_inputs = random_inputs(max_points=10000, dtype=dtype)
 
-  for i in tqdm(range(iters)):
-    gaussians, camera = gen_inputs(i)
-    inputs = [*gaussians.shape_tensors(),
-                camera.T_camera_world,
-                camera.projection, camera.image_size, camera.depth_range]
-
-    out1, grad1 = eval_with_grad(ti_proj.apply, *inputs)
-    out2, grad2 = eval_with_grad(torch_proj.apply, *inputs)
-
-    try:
-      compare_outputs(out1, out2)
-      compare_grads(grad1, grad2)
-
-    except AssertionError as e:
-      print(f"seed={i}")
-      print(f"camera={camera}")
-      raise e
-
-def test_projection_grad(iters = 100):
-  gen_inputs = random_inputs(max_points=20, dtype=torch.float64)
-
-  for i in tqdm(range(iters), desc="projection_gradcheck"):
+    for i in tqdm(range(iters)):
       gaussians, camera = gen_inputs(i)
-
       inputs = [*gaussians.shape_tensors(),
-                camera.T_camera_world,
-                camera.projection, camera.image_size, camera.depth_range]
-      
+                  camera.T_camera_world,
+                  camera.projection, camera.image_size, camera.depth_range]
+
+      out1, grad1 = eval_with_grad(ti_proj.apply, *inputs)
+      out2, grad2 = eval_with_grad(torch_proj.apply, *inputs)
+
       try:
-        torch.autograd.gradcheck(ti_proj.apply, inputs)
-      except GradcheckError as e:
+        compare_outputs(out1, out2)
+        compare_grads(grad1, grad2)
+
+      except AssertionError as e:
         print(f"seed={i}")
         print(f"camera={camera}")
         raise e
+  
+
+
+def test_projection_grad(iters = 100, debug=False):
+  with taichi_queue(arch=ti.cpu, offline_cache=True, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug):
+
+    gen_inputs = random_inputs(max_points=20, dtype=torch.float64)
+    for i in tqdm(range(iters), desc="projection_gradcheck"):
+        gaussians, camera = gen_inputs(i)
+
+        inputs = [*gaussians.shape_tensors(),
+                  camera.T_camera_world,
+                  camera.projection, camera.image_size, camera.depth_range]
+        
+        try:
+          torch.autograd.gradcheck(ti_proj.apply, inputs)
+        except GradcheckError as e:
+          print(f"seed={i}")
+          print(f"camera={camera}")
+          raise e
 
 def main(debug=False):
   torch.set_printoptions(precision=8, sci_mode=False)
-  TaichiQueue.init(arch=ti.cpu, offline_cache=True, log_level=ti.INFO if not debug else ti.DEBUG, debug=debug)
 
-
-  test_projection()
-  test_projection_grad()
+  test_projection(debug=debug)
+  test_projection_grad(debug=debug)
 
 
 if __name__ == "__main__":

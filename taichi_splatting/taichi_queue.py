@@ -20,16 +20,34 @@ class NullExecutor:
         pass
 
 
+class TaichiQueueContext:
+  def __init__(self, *args, **kwargs):
+    self.args = args
+    self.kwargs = kwargs
+
+  def __enter__(self):
+    TaichiQueue.init(*self.args, **self.kwargs)
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    TaichiQueue.stop()
+
+
+def taichi_queue(*args, **kwargs):
+  return TaichiQueueContext(*args, **kwargs)
+
+
+
 class TaichiQueue():
   executor: ThreadPoolExecutor = None
 
   @classmethod
   def init(cls, *args, threaded=False, **kwargs) -> None:
-    if cls.executor is None:
-      executor = ThreadPoolExecutor if threaded else NullExecutor
+    assert cls.executor is None, "TaichiQueue already initialized"
+    
+    executor = ThreadPoolExecutor if threaded else NullExecutor
 
-      cls.executor = executor(max_workers=1, thread_name_prefix="taichi",
-        initializer=partial(ti.init, *args, **kwargs))
+    cls.executor = executor(max_workers=1, thread_name_prefix="taichi",
+      initializer=partial(ti.init, *args, **kwargs))
 
     return cls.executor
   

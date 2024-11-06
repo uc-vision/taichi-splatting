@@ -7,7 +7,7 @@ from taichi_splatting import spherical_harmonics
 
 import taichi as ti
 
-from taichi_splatting.taichi_queue import TaichiQueue
+from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
 
 
 
@@ -21,7 +21,7 @@ def parse_args(args=None):
   parser.add_argument('--seed', type=int, default=0)
   parser.add_argument('--iters', type=int, default=200)
   parser.add_argument('--degree', type=int, default=3)
-  
+  parser.add_argument('--debug', action='store_true')
   
   args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
@@ -30,35 +30,32 @@ def parse_args(args=None):
 
 
 def bench_sh(args):
+  with taichi_queue(arch=ti.cuda, log_level=ti.INFO if not args.debug else ti.DEBUG, debug=args.debug):
+    torch.manual_seed(args.seed)
 
-  TaichiQueue.init(arch=ti.cuda, log_level=ti.INFO, 
-        device_memory_GB=0.1)
-  
-  torch.manual_seed(args.seed)
+    with torch.no_grad():
+      sh_features = torch.randn(args.n, 3, (args.degree+1)**2, device=args.device).to(args.device)
+      points = torch.randn(args.n, 3, device=args.device).to(args.device)
 
-  with torch.no_grad():
-    sh_features = torch.randn(args.n, 3, (args.degree+1)**2, device=args.device).to(args.device)
-    points = torch.randn(args.n, 3, device=args.device).to(args.device)
+      indexes = torch.arange(args.n, device=args.device)
+      
+      camera_pos = torch.zeros(3, device=args.device)
 
-    indexes = torch.arange(args.n, device=args.device)
-    
-    camera_pos = torch.zeros(3, device=args.device)
+      forward = partial(spherical_harmonics.evaluate_sh_at, sh_features, points, indexes, camera_pos)
+      benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
-    forward = partial(spherical_harmonics.evaluate_sh_at, sh_features, points, indexes, camera_pos)
-    benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
+    def backward():
+      colors = spherical_harmonics.evaluate_sh_at(sh_features, points, indexes, camera_pos)
+      loss = colors.sum()
+      loss.backward()
 
-  def backward():
-    colors = spherical_harmonics.evaluate_sh_at(sh_features, points, indexes, camera_pos)
-    loss = colors.sum()
-    loss.backward()
+    sh_features.requires_grad_(True)
+    benchmarked('backward (sh_features)', backward, profile=args.profile, iters=args.iters)  
 
-  sh_features.requires_grad_(True)
-  benchmarked('backward (sh_features)', backward, profile=args.profile, iters=args.iters)  
-
-  sh_features.requires_grad_(True)
-  points.requires_grad_(True)
-  camera_pos.requires_grad_(True)
-  benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
+    sh_features.requires_grad_(True)
+    points.requires_grad_(True)
+    camera_pos.requires_grad_(True)
+    benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
 
 
 def main():

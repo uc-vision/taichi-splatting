@@ -11,7 +11,6 @@ import warnings
 warnings.filterwarnings('ignore') 
 
 
-TaichiQueue.init(debug=True)
 
 def random_inputs(max_dim=3, max_deg=3, max_n=100, device='cpu', dtype=torch.float32):
   def f(seed):
@@ -32,6 +31,8 @@ def random_inputs(max_dim=3, max_deg=3, max_n=100, device='cpu', dtype=torch.flo
   return f
 
 def test_sh(iters = 100, device='cpu'):
+  TaichiQueue.init(debug=True)
+
   make_inputs = random_inputs(max_n=100, device=device, dtype=torch.float32)
   compare_with_grad("spherical_harmonics", 
     input_names=["params", "dirs", "camera_pos"], 
@@ -41,7 +42,7 @@ def test_sh(iters = 100, device='cpu'):
     gen_inputs=make_inputs,
     iters=iters)
   
-
+  TaichiQueue.stop()
 
 
 def gradcheck(func, args, **kwargs):
@@ -49,6 +50,8 @@ def gradcheck(func, args, **kwargs):
   torch.autograd.gradcheck(func, args, **kwargs)
 
 def test_sh_gradcheck(iters = 100, device='cpu'):
+  TaichiQueue.init(debug=True)
+
   make_inputs = random_inputs(max_dim=2, max_n=10, device=device, dtype=torch.float64)
 
   seeds = torch.randint(40, 10000, (iters, ), device=device)
@@ -56,6 +59,10 @@ def test_sh_gradcheck(iters = 100, device='cpu'):
       inputs = make_inputs(seed)
       gradcheck(taichi_sh.evaluate_sh_at, inputs)
 
+  TaichiQueue.stop()
+
 if __name__ == '__main__':
+  
+
   test_sh()
   test_sh_gradcheck()
