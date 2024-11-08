@@ -118,6 +118,7 @@ class ParameterClass():
     self.optimizer.step(**kwargs)
 
 
+
   def keys(self):
     return self.tensors.keys()
 
@@ -185,7 +186,11 @@ class ParameterClass():
   def tensor_state(self) -> TensorDict:
     def get_tensor_states(state):
       return {k : v for k, v in state.items() if torch.is_tensor(v)}
-    return TensorDict.from_dict(self._get_state(get_tensor_states), batch_dims=self.batch_dims)
+    
+    return TensorDict.from_dict(
+      self._get_state(get_tensor_states), 
+      batch_dims=self.batch_dims
+    )
   
   @property
   def other_state(self) -> Dict:

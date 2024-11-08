@@ -11,7 +11,7 @@ def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
 
 
 @cache
-def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0, use_point_lr=False, use_mask_lr=False):
+def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=False):
   b1, b2 = betas
 
   @queued
@@ -42,8 +42,6 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0, use_point_lr=Fa
       for j in range(param.shape[1]):
         g = grad[idx, j]
 
-        if ti.static(weight_decay != 0.0):
-          g += weight_decay * param[idx, j]
 
         avg = lerp(b1, exp_avg[idx, j], g)
         avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
@@ -203,7 +201,7 @@ def scalar_adam_step(group:dict, param: torch.Tensor, state: dict, visible_index
   point_lr, use_point_lr = get_point_lr(group, param)
   mask_lr, use_mask_lr = get_mask_lr(group, param)
 
-  kernel = adam_kernel(betas=group["betas"], eps=group["eps"], weight_decay=group["weight_decay"], 
+  kernel = adam_kernel(betas=group["betas"], eps=group["eps"], 
                         use_point_lr=use_point_lr, use_mask_lr=use_mask_lr)
   
   kernel(param, grad, step, exp_avg, exp_avg_sq, visible_indexes, 
@@ -238,20 +236,23 @@ def local_vector_adam_step(group:dict, param: torch.Tensor, state: dict, visible
   kernel(param, grad, step, exp_avg, exp_avg_sq, visible_indexes, 
           basis=basis, lr=group["lr"])
 
+
+
 class SparseAdam(torch.optim.Optimizer):
   def __init__(self, params, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0):
+               betas=(0.9, 0.999), eps=1e-08):
     
     if not 0.0 <= lr:
       raise ValueError(f"Invalid learning rate: {lr}")
+    
     if not 0.0 <= eps:
-      raise ValueError(f"Invalid epsilon value:point_lr {eps}")
+      raise ValueError(f"Invalid epsilon {eps}")
     if not 0.0 <= betas[0] < 1.0:
-      raise ValueError(f"Invalid beta parameter at index 0: {betas[0]}")
+      raise ValueError(f"Invalid beta1 {betas[0]}")
     if not 0.0 <= betas[1] < 1.0:
-      raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
+      raise ValueError(f"Invalid beta2 {betas[1]}")
 
-    defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, point_lr=None, mask_lr=None, basis=None, type="scalar")  
+    defaults = dict(lr=lr, betas=betas, eps=eps, point_lr=None, mask_lr=None, basis=None, type="scalar")  
     super().__init__(params, defaults)
 
   def update_group(self, param, **kwargs):

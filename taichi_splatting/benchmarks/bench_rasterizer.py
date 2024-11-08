@@ -33,7 +33,9 @@ def parse_args(args=None):
 
 
 def bench_rasterizer(args):
-  with taichi_queue(arch=ti.cuda, log_level=ti.INFO if not args.debug else ti.DEBUG, debug=args.debug):
+  with taichi_queue(arch=ti.cuda, 
+                    log_level=ti.INFO if not args.debug else ti.DEBUG, 
+                    debug=args.debug):
     torch.manual_seed(args.seed)
 
     depth_range = (0.1, 100.)
