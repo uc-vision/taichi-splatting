@@ -45,7 +45,12 @@ class ParameterClass():
       tensor_state, other_state = optimizer_state
 
       for k in tensor_state.keys():
-        self.optimizer.state[self.tensors[k]] = {**tensor_state[k].to_dict(), **other_state[k]}
+        if k == "shared":
+          self.optimizer.shared_state.update({**tensor_state[k].to_dict(), **other_state[k]})
+        else:
+
+          assert k in self.tensors.keys(), f"state parameter {k} not in {self.tensors.keys()}"
+          self.optimizer.state[self.tensors[k]] = {**tensor_state[k].to_dict(), **other_state[k]}
 
   
   @property
@@ -178,9 +183,13 @@ class ParameterClass():
     return self.tensors.batch_dims
 
   def _get_state(self, f):
-     return {name:f(self.optimizer.state[param])
+    state = {name:f(self.optimizer.state[param])
               for name, param in self.tensors.items()
                 if param in self.optimizer.state}
+    
+    # SparseAdam has some shared state indexed as None
+    if hasattr(self.optimizer, "shared_state"):
+      state["shared"] = f(self.optimizer.shared_state)
 
   @property
   def tensor_state(self) -> TensorDict:

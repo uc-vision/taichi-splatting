@@ -13,18 +13,21 @@ def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
 @cache
 def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=False):
   b1, b2 = betas
+  gamma1 = 1 - b1
+  gamma2 = 1 - b2
 
   @queued
   @ti.kernel
   def kernel(param: ti.types.ndarray(dtype=ti.f32, ndim=2), # N x D
              grad: ti.types.ndarray(dtype=ti.f32, ndim=2),  # N x D
 
-             step: ti.types.ndarray(dtype=ti.f32, ndim=1), # N
+             step: ti.types.ndarray(dtype=ti.f32, ndim=1), # N step for each point (total weight)
 
              exp_avg: ti.types.ndarray(dtype=ti.f32, ndim=2),    # N x D
              exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=2), # N x D
 
              indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
+             weight: ti.types.ndarray(dtype=ti.f32, ndim=1),    # M weight of each visible index
 
              point_lr: ti.types.ndarray(dtype=ti.f32, ndim=1), # N learning rate multipliers across points
              mask_lr: ti.types.ndarray(dtype=ti.f32, ndim=1),  # D learning rate multipliers for each member of a param vector
@@ -33,20 +36,21 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=
 
     for i in indexes:
       idx = indexes[i]
+      w = weight[i]
+
+      w1 = 1 - gamma1 * w 
+      w2 = 1 - gamma2 * w ** 2
+
       lr_idx = point_lr[idx] if ti.static(use_point_lr) else 1.0
-
-      step[idx] += 1 
       bias_factor = ti.sqrt(1 - b2 ** step[idx])  / (1 - b1 ** step[idx])
-
 
       for j in range(param.shape[1]):
         g = grad[idx, j]
 
+        avg = lerp(w1, exp_avg[idx, j], g)
+        avg_sq = lerp(w2, exp_avg_sq[idx, j], g * g)
 
-        avg = lerp(b1, exp_avg[idx, j], g)
-        avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
-
-        lr = global_lr * lr_idx * (mask_lr[j] if ti.static(use_mask_lr) else 1.0)
+        lr = global_lr * lr_idx * (mask_lr[j] if ti.static(use_mask_lr) else 1.0) * ti.math.sqrt(w)
         param[idx, j] -= lr * avg / (ti.sqrt(avg_sq) + eps) * bias_factor
 
         exp_avg[idx, j] = avg
@@ -79,8 +83,6 @@ def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-08, dims=3, use_point_lr=False
 
     for i in indexes:
       idx = indexes[i]
-
-      step[idx] += 1
       bias_factor = ti.sqrt(1 - b2 ** step[idx])  / (1 - b1 ** step[idx])
 
 
@@ -175,28 +177,32 @@ def get_mask_lr(group: dict, param: torch.Tensor):
 
 def get_vector_state(state:dict, param: torch.Tensor):
   if len(state) == 0:
-    state['step'] = torch.zeros(param.shape[0], dtype=torch.float32, device=param.device)
     state['exp_avg'] = torch.zeros(*param.shape, dtype=torch.float32, device=param.device)
     state['exp_avg_sq'] = torch.zeros((param.shape[0],), dtype=torch.float32, device=param.device)
 
-  step, exp_avg, exp_avg_sq = state['step'], state['exp_avg'], state['exp_avg_sq']
-  return step, exp_avg, exp_avg_sq
+  exp_avg, exp_avg_sq =  state['exp_avg'], state['exp_avg_sq']
+  return  exp_avg, exp_avg_sq
 
 
 def get_scalar_state(state:dict, param: torch.Tensor):
   if len(state) == 0:
-    state['step'] = torch.zeros(param.shape[0], dtype=torch.float32, device=param.device)
     state['exp_avg'] = torch.zeros_like(param)
     state['exp_avg_sq'] = torch.zeros_like(param)
 
-  step, exp_avg, exp_avg_sq = state['step'], state['exp_avg'], state['exp_avg_sq']
-  return step, exp_avg, exp_avg_sq
+  exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+  return exp_avg, exp_avg_sq
 
 
-def scalar_adam_step(group:dict, param: torch.Tensor, state: dict, visible_indexes: torch.Tensor):
+def scalar_adam_step(group:dict, param: torch.Tensor, state: dict,
+
+    step: torch.Tensor,                 
+    visible_weight: torch.Tensor,
+    visible_indexes: torch.Tensor,
+
+  ):
   grad = param.grad.view(param.shape[0], -1)
   param = param.view(param.shape[0], -1) 
-  step, exp_avg, exp_avg_sq = get_scalar_state(state, param)
+  exp_avg, exp_avg_sq = get_scalar_state(state, param)
 
   point_lr, use_point_lr = get_point_lr(group, param)
   mask_lr, use_mask_lr = get_mask_lr(group, param)
@@ -204,8 +210,10 @@ def scalar_adam_step(group:dict, param: torch.Tensor, state: dict, visible_index
   kernel = adam_kernel(betas=group["betas"], eps=group["eps"], 
                         use_point_lr=use_point_lr, use_mask_lr=use_mask_lr)
   
-  kernel(param, grad, step, exp_avg, exp_avg_sq, visible_indexes, 
-          point_lr=point_lr, mask_lr=mask_lr, global_lr=group["lr"])
+  kernel(param, grad, step, 
+         exp_avg, exp_avg_sq, 
+         visible_indexes, visible_weight,
+         point_lr=point_lr, mask_lr=mask_lr, global_lr=group["lr"])
 
 
 
@@ -262,7 +270,11 @@ class SparseAdam(torch.optim.Optimizer):
 
 
   @torch.no_grad()
-  def step(self, visible_indexes: torch.Tensor, basis: Optional[torch.Tensor]=None):
+  def step(self, 
+           visible_indexes: torch.Tensor, 
+          #  visibility: torch.Tensor,
+           basis: Optional[torch.Tensor]=None):
+    
     named = {group["name"]: group for group in self.param_groups}
     
     def get_params(k):
@@ -271,6 +283,8 @@ class SparseAdam(torch.optim.Optimizer):
       n = len(group["params"])
       assert n == 1, f"expected 1 tensor in group {k}, got {n}"
       return group["params"][0]
+    
+
 
     for k, group in named.items():
       param = get_params(k)
