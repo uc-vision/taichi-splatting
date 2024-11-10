@@ -100,61 +100,61 @@ def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, use_point_lr=False
   return kernel
 
 
-@cache
-def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999), eps=1e-16, dims=2):
-  b1, b2 = betas
-  vec = ti.types.vector(n=dims, dtype=ti.f32)
+# @cache
+# def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999), eps=1e-16, dims=2):
+#   b1, b2 = betas
+#   vec = ti.types.vector(n=dims, dtype=ti.f32)
   
-  @queued
-  @ti.kernel
-  def kernel(param: ti.types.ndarray(dtype=vec, ndim=1), # N 
-             grad: ti.types.ndarray(dtype=vec, ndim=1),  # N 
+#   @queued
+#   @ti.kernel
+#   def kernel(param: ti.types.ndarray(dtype=vec, ndim=1), # N 
+#              grad: ti.types.ndarray(dtype=vec, ndim=1),  # N 
 
-             step: ti.types.ndarray(dtype=ti.f32, ndim=1), # N
+#              step: ti.types.ndarray(dtype=ti.f32, ndim=1), # N
 
-             exp_avg: ti.types.ndarray(dtype=vec, ndim=1),    # N 
-             exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=1), # N 
+#              exp_avg: ti.types.ndarray(dtype=vec, ndim=1),    # N 
+#              exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=1), # N 
 
-             indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
-             basis: ti.types.ndarray(dtype=basis_type, ndim=1), # N 
+#              indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
+#              basis: ti.types.ndarray(dtype=basis_type, ndim=1), # N 
 
-             lr: ti.f32):
+#              lr: ti.f32):
 
-    for i in indexes:
-      idx = indexes[i]
+#     for i in indexes:
+#       idx = indexes[i]
 
-      step[idx] += 1
-      bias_factor = ti.sqrt(1 - b2 ** step[idx])  / (1 - b1 ** step[idx])
+#       step[idx] += 1
+#       bias_factor = ti.sqrt(1 - b2 ** step[idx])  / (1 - b1 ** step[idx])
 
-      local_grad = to_local(grad[idx], basis[i])
-      avg = lerp(b1, exp_avg[idx], local_grad)
+#       local_grad = to_local(grad[idx], basis[i])
+#       avg = lerp(b1, exp_avg[idx], local_grad)
 
-      norm = ti.math.dot(local_grad, local_grad)
-      avg_sq = lerp(b2, exp_avg_sq[idx], norm)
+#       norm = ti.math.dot(local_grad, local_grad)
+#       avg_sq = lerp(b2, exp_avg_sq[idx], norm)
 
-      local_step = lr * avg / ti.max(ti.sqrt(avg_sq),  eps) * bias_factor
-      param[idx] -= from_local(local_step, basis[i])
+#       local_step = lr * avg / ti.max(ti.sqrt(avg_sq),  eps) * bias_factor
+#       param[idx] -= from_local(local_step, basis[i])
 
-      exp_avg[idx] = avg
-      exp_avg_sq[idx] = avg_sq
+#       exp_avg[idx] = avg
+#       exp_avg_sq[idx] = avg_sq
 
-  return kernel
+#   return kernel
 
-@cache
-def basis_kernel(betas=(0.9, 0.999), eps=1e-16, dims=2):
+# @cache
+# def basis_kernel(betas=(0.9, 0.999), eps=1e-16, dims=2):
 
-  vec = ti.types.vector(n=dims, dtype=ti.f32)
-  basis = ti.types.matrix(n=dims, m=dims, dtype=ti.f32)
+#   vec = ti.types.vector(n=dims, dtype=ti.f32)
+#   basis = ti.types.matrix(n=dims, m=dims, dtype=ti.f32)
 
-  @ti.func
-  def to_local(g: vec, b: basis):
-    return ti.math.inverse(b) @ g
+#   @ti.func
+#   def to_local(g: vec, b: basis):
+#     return ti.math.inverse(b) @ g
 
-  @ti.func
-  def from_local(g: vec, b: basis):
-    return (b @ g)
+#   @ti.func
+#   def from_local(g: vec, b: basis):
+#     return (b @ g)
   
-  return local_vector_adam_kernel(basis, to_local, from_local, betas, eps, dims)
+#   return local_vector_adam_kernel(basis, to_local, from_local, betas, eps, dims)
 
 def get_point_lr(group: dict, param: torch.Tensor):
   if group["point_lr"] is not None:
@@ -179,8 +179,7 @@ def get_vector_state(state:dict, param: torch.Tensor):
     state['exp_avg'] = torch.zeros(*param.shape, dtype=torch.float32, device=param.device)
     state['exp_avg_sq'] = torch.zeros((param.shape[0],), dtype=torch.float32, device=param.device)
 
-  exp_avg, exp_avg_sq =  state['exp_avg'], state['exp_avg_sq']
-  return  exp_avg, exp_avg_sq
+  return state
 
 
 def get_scalar_state(state:dict, param: torch.Tensor):
@@ -188,60 +187,54 @@ def get_scalar_state(state:dict, param: torch.Tensor):
     state['exp_avg'] = torch.zeros_like(param)
     state['exp_avg_sq'] = torch.zeros_like(param)
 
-  exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
-  return exp_avg, exp_avg_sq
+  return state
 
 
 def scalar_adam_step(group:dict, param: torch.Tensor, state: dict,
 
-    step: torch.Tensor,                 
     visible_weight: torch.Tensor,
     visible_indexes: torch.Tensor,
 
   ):
   grad = param.grad.view(param.shape[0], -1)
   param = param.view(param.shape[0], -1) 
-  exp_avg, exp_avg_sq = get_scalar_state(state, param)
+  param_step = param.new_zeros(param.shape[0])
 
-  point_lr, use_point_lr = get_point_lr(group, param)
-  mask_lr, use_mask_lr = get_mask_lr(group, param)
-
-  kernel = adam_kernel(betas=group["betas"], eps=group["eps"], 
-                        use_point_lr=use_point_lr, use_mask_lr=use_mask_lr)
+  kernel = adam_kernel(betas=group["betas"], eps=group["eps"])
   
-  kernel(param, grad, step, 
-         exp_avg, exp_avg_sq, 
-         visible_indexes, visible_weight,
-         point_lr=point_lr, mask_lr=mask_lr, global_lr=group["lr"])
+  kernel(param_step, grad, 
+         state['total_weight'], state['exp_avg'], state['exp_avg_sq'], 
+         visible_indexes, visible_weight)
+  
+  return param_step
 
 
+def vector_adam_step(group:dict, param: torch.Tensor, state: dict, 
+                     visible_weight: torch.Tensor,
+                     visible_indexes: torch.Tensor, 
 
-
-def vector_adam_step(group:dict, param: torch.Tensor, state: dict, visible_indexes: torch.Tensor):
+                     basis: Optional[torch.Tensor]=None):
   grad = param.grad.view(param.shape[0], -1)
   param = param.view(param.shape[0], -1) 
+  param_step = param.new_zeros()
 
-  step, exp_avg, exp_avg_sq = get_vector_state(state, param)
   dim = param.shape[1]
 
-  point_lr, use_point_lr = get_point_lr(group, param)
-  kernel = vector_adam_kernel(betas=group["betas"], eps=group["eps"], dims=dim, use_point_lr=use_point_lr)
-  kernel(param, grad, step, exp_avg, exp_avg_sq, visible_indexes, point_lr=point_lr, lr=group["lr"])
+  kernel = vector_adam_kernel(betas=group["betas"], eps=group["eps"], dims=dim)
 
+  if basis is not None:
+    inv_basis = torch.linalg.inv(basis)
+    grad = inv_basis @ grad
 
-def local_vector_adam_step(group:dict, param: torch.Tensor, state: dict, visible_indexes: torch.Tensor, basis: torch.Tensor):
-  grad = param.grad.view(param.shape[0], -1)
-  param = param.view(param.shape[0], -1) 
+  kernel(param_step, grad, 
+         state['total_weight'], state['exp_avg'], state['exp_avg_sq'], 
+         visible_indexes, visible_weight)
 
-  step, exp_avg, exp_avg_sq = get_vector_state(state, param)
-  dim = param.shape[1]
+  if basis is not None:
+    param_step = basis @ param_step
 
-  if basis.shape != (visible_indexes.shape[0], dim, dim):
-    raise ValueError(f"basis shape {basis.shape} != {visible_indexes.shape[0], dim, dim}")
+  return param_step
 
-  kernel = basis_kernel(betas=group["betas"], eps=group["eps"], dims=dim)
-  kernel(param, grad, step, exp_avg, exp_avg_sq, visible_indexes, 
-          basis=basis, lr=group["lr"])
 
 @torch.compile
 def exp_lerp(t, a, b):
@@ -288,7 +281,6 @@ class SparseAdam(torch.optim.Optimizer):
 
     weight = visibility / running_vis
     total_weight.index_add_(0, visible_indexes, weight)
-    return dict(total_weight=total_weight, running_vis=running_vis)
 
 
   @torch.no_grad()
@@ -309,7 +301,7 @@ class SparseAdam(torch.optim.Optimizer):
     
 
     n = get_params(keys[0]).shape[0]
-    global_state = self.update_visibility(visibility, visible_indexes, n)
+    self.update_visibility(visibility, visible_indexes, n)
 
 
     for k, group in named.items():
@@ -320,13 +312,16 @@ class SparseAdam(torch.optim.Optimizer):
       assert param.shape[0] == n, f"param shape {param.shape[0]} != {n}"
 
       state = self.state[param]
+
       if group["type"] == "vector":
-        vector_adam_step(group, param, state, visible_indexes)
+        vector_adam_step(group, param, get_vector_state(state, param), visible_indexes)
       elif group["type"] == "local_vector":
         assert basis is not None, "basis is required for basis optimizer"
-        local_vector_adam_step(group, param, state, visible_indexes, basis=basis)
+        local_vector_adam_step(group, param, get_vector_state(state, param), visible_indexes, basis=basis)
+
+
       elif group["type"] == "scalar":
-        scalar_adam_step(group, param, state, visible_indexes)
+        scalar_adam_step(group, param, get_scalar_state(state, param), visible_indexes)
       else:
         raise ValueError(f"unknown group type {group['type']}")
     
