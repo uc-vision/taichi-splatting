@@ -12,9 +12,8 @@ def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
 
 @cache
 def adam_kernel(betas=(0.9, 0.999), eps=1e-16,  use_point_lr=False, use_mask_lr=False):
-  b1, b2 = betas
-  gamma1 = 1 - b1
-  gamma2 = 1 - b2
+  beta1, beta2 = betas
+
 
   @queued
   @ti.kernel
@@ -39,8 +38,8 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-16,  use_point_lr=False, use_mask_lr=
       idx = indexes[i]
       w = weight[i]
 
-      w1 = 1 - gamma1 * w 
-      w2 = 1 - gamma2 * w ** 2
+      b1 = beta1 ** w 
+      b2 = beta2 ** w
 
       lr_idx = point_lr[idx] if ti.static(use_point_lr) else 1.0
       bias_factor = ti.sqrt(1 - b2 ** total_weight[idx])  / (1 - b1 ** total_weight[idx])
@@ -48,11 +47,11 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-16,  use_point_lr=False, use_mask_lr=
       for j in range(param.shape[1]):
         g = grad[idx, j]
 
-        avg = lerp(w1, exp_avg[idx, j], g)
-        avg_sq = lerp(w2, exp_avg_sq[idx, j], g * g)
+        avg = lerp(b1, exp_avg[idx, j], g)
+        avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
 
-        lr = global_lr * lr_idx * (mask_lr[j] if ti.static(use_mask_lr) else 1.0) * ti.math.sqrt(w)
-        param[idx, j] -= lr * avg / ti.max(ti.sqrt(avg_sq),  eps) * bias_factor
+        lr = global_lr * lr_idx * (mask_lr[j] if ti.static(use_mask_lr) else 1.0) 
+        param[idx, j] -= lr * (avg / ti.max(ti.sqrt(avg_sq),  eps)) * bias_factor * ti.math.sqrt(w)
 
         exp_avg[idx, j] = avg
         exp_avg_sq[idx, j] = avg_sq
@@ -244,11 +243,14 @@ def local_vector_adam_step(group:dict, param: torch.Tensor, state: dict, visible
   kernel(param, grad, step, exp_avg, exp_avg_sq, visible_indexes, 
           basis=basis, lr=group["lr"])
 
-
+@torch.compile
+def exp_lerp(t, a, b):
+    max_ab = torch.maximum(a, b)
+    return max_ab + torch.log(torch.lerp(torch.exp(a - max_ab), torch.exp(b - max_ab), t))
 
 class SparseAdam(torch.optim.Optimizer):
   def __init__(self, params, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16):
+               betas=(0.9, 0.999), vis_beta=0.9, eps=1e-16):
     
     if not 0.0 <= lr:
       raise ValueError(f"Invalid learning rate: {lr}")
@@ -259,8 +261,15 @@ class SparseAdam(torch.optim.Optimizer):
       raise ValueError(f"Invalid beta1 {betas[0]}")
     if not 0.0 <= betas[1] < 1.0:
       raise ValueError(f"Invalid beta2 {betas[1]}")
+    if not 0.0 <= vis_beta < 1.0:
+      raise ValueError(f"Invalid visibility beta {vis_beta}")
+    
+
+    self.vis_beta = vis_beta
 
     defaults = dict(lr=lr, betas=betas, eps=eps, point_lr=None, mask_lr=None, basis=None, type="scalar")  
+    self.shared_state = {}
+
     super().__init__(params, defaults)
 
   def update_group(self, param, **kwargs):
@@ -269,13 +278,27 @@ class SparseAdam(torch.optim.Optimizer):
         group.update(kwargs)
 
 
+  def update_visibility(self, visibility: torch.Tensor, visible_indexes: torch.Tensor, n:int):
+    if 'weight' not in self.shared_state:
+      self.shared_state['total_weight'] = torch.zeros(n, dtype=torch.float32, device=visibility.device)
+      self.shared_state['running_vis'] = torch.zeros(n, dtype=torch.float32, device=visibility.device)
+
+    total_weight, running_vis = self.shared_state['total_weight'], self.shared_state['running_vis']
+    running_vis[visible_indexes] = exp_lerp(self.vis_beta,running_vis[visible_indexes], visibility)
+
+    weight = visibility / running_vis
+    total_weight.index_add_(0, visible_indexes, weight)
+    return dict(total_weight=total_weight, running_vis=running_vis)
+
+
   @torch.no_grad()
   def step(self, 
            visible_indexes: torch.Tensor, 
-          #  visibility: torch.Tensor,
+           visibility: torch.Tensor,
            basis: Optional[torch.Tensor]=None):
     
     named = {group["name"]: group for group in self.param_groups}
+    keys = list(named.keys())
     
     def get_params(k):
       group = named[k]
@@ -285,12 +308,17 @@ class SparseAdam(torch.optim.Optimizer):
       return group["params"][0]
     
 
+    n = get_params(keys[0]).shape[0]
+    global_state = self.update_visibility(visibility, visible_indexes, n)
+
 
     for k, group in named.items():
       param = get_params(k)
       if param.grad is None:
         continue
       
+      assert param.shape[0] == n, f"param shape {param.shape[0]} != {n}"
+
       state = self.state[param]
       if group["type"] == "vector":
         vector_adam_step(group, param, state, visible_indexes)
