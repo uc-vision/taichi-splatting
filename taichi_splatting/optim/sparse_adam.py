@@ -11,7 +11,7 @@ def lerp(t: ti.f32, a: ti.template(), b: ti.template()):
 
 
 @cache
-def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=False):
+def adam_kernel(betas=(0.9, 0.999), eps=1e-16,  use_point_lr=False, use_mask_lr=False):
   b1, b2 = betas
   gamma1 = 1 - b1
   gamma2 = 1 - b2
@@ -21,13 +21,14 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=
   def kernel(param: ti.types.ndarray(dtype=ti.f32, ndim=2), # N x D
              grad: ti.types.ndarray(dtype=ti.f32, ndim=2),  # N x D
 
-             step: ti.types.ndarray(dtype=ti.f32, ndim=1), # N step for each point (total weight)
 
              exp_avg: ti.types.ndarray(dtype=ti.f32, ndim=2),    # N x D
              exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=2), # N x D
 
              indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
              weight: ti.types.ndarray(dtype=ti.f32, ndim=1),    # M weight of each visible index
+
+             total_weight: ti.types.ndarray(dtype=ti.f32, ndim=1), # N step for each point (total weight)
 
              point_lr: ti.types.ndarray(dtype=ti.f32, ndim=1), # N learning rate multipliers across points
              mask_lr: ti.types.ndarray(dtype=ti.f32, ndim=1),  # D learning rate multipliers for each member of a param vector
@@ -42,7 +43,7 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=
       w2 = 1 - gamma2 * w ** 2
 
       lr_idx = point_lr[idx] if ti.static(use_point_lr) else 1.0
-      bias_factor = ti.sqrt(1 - b2 ** step[idx])  / (1 - b1 ** step[idx])
+      bias_factor = ti.sqrt(1 - b2 ** total_weight[idx])  / (1 - b1 ** total_weight[idx])
 
       for j in range(param.shape[1]):
         g = grad[idx, j]
@@ -51,7 +52,7 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=
         avg_sq = lerp(w2, exp_avg_sq[idx, j], g * g)
 
         lr = global_lr * lr_idx * (mask_lr[j] if ti.static(use_mask_lr) else 1.0) * ti.math.sqrt(w)
-        param[idx, j] -= lr * avg / (ti.sqrt(avg_sq) + eps) * bias_factor
+        param[idx, j] -= lr * avg / ti.max(ti.sqrt(avg_sq),  eps) * bias_factor
 
         exp_avg[idx, j] = avg
         exp_avg_sq[idx, j] = avg_sq
@@ -60,7 +61,7 @@ def adam_kernel(betas=(0.9, 0.999), eps=1e-08,  use_point_lr=False, use_mask_lr=
   return kernel
 
 @cache
-def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-08, dims=3, use_point_lr=False):
+def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, use_point_lr=False):
   b1, b2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
 
@@ -76,7 +77,6 @@ def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-08, dims=3, use_point_lr=False
              exp_avg_sq: ti.types.ndarray(dtype=ti.f32, ndim=1), # N x D
 
              indexes: ti.types.ndarray(dtype=ti.int64, ndim=1), # M visible indexes
-
              point_lr: ti.types.ndarray(dtype=ti.f32, ndim=1), # N learning rate multipliers across points
 
              lr: ti.f32):
@@ -93,7 +93,7 @@ def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-08, dims=3, use_point_lr=False
       avg_sq = lerp(b2, exp_avg_sq[idx], norm)
 
       lr_idx = point_lr[idx] if ti.static(use_point_lr) else 1.0
-      param[idx] -= lr * avg / (ti.sqrt(avg_sq) + eps) * bias_factor * lr_idx
+      param[idx] -= lr * avg / ti.max(ti.sqrt(avg_sq),  eps) * bias_factor * lr_idx
 
       exp_avg[idx] = avg
       exp_avg_sq[idx] = avg_sq
@@ -102,7 +102,7 @@ def vector_adam_kernel(betas=(0.9, 0.999), eps=1e-08, dims=3, use_point_lr=False
 
 
 @cache
-def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999), eps=1e-08, dims=2):
+def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999), eps=1e-16, dims=2):
   b1, b2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
   
@@ -133,7 +133,7 @@ def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999
       norm = ti.math.dot(local_grad, local_grad)
       avg_sq = lerp(b2, exp_avg_sq[idx], norm)
 
-      local_step = lr * avg / (ti.sqrt(avg_sq) + eps) * bias_factor
+      local_step = lr * avg / ti.max(ti.sqrt(avg_sq),  eps) * bias_factor
       param[idx] -= from_local(local_step, basis[i])
 
       exp_avg[idx] = avg
@@ -142,7 +142,7 @@ def local_vector_adam_kernel(basis_type, to_local, from_local, betas=(0.9, 0.999
   return kernel
 
 @cache
-def basis_kernel(betas=(0.9, 0.999), eps=1e-08, dims=2):
+def basis_kernel(betas=(0.9, 0.999), eps=1e-16, dims=2):
 
   vec = ti.types.vector(n=dims, dtype=ti.f32)
   basis = ti.types.matrix(n=dims, m=dims, dtype=ti.f32)
@@ -248,7 +248,7 @@ def local_vector_adam_step(group:dict, param: torch.Tensor, state: dict, visible
 
 class SparseAdam(torch.optim.Optimizer):
   def __init__(self, params, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-08):
+               betas=(0.9, 0.999), eps=1e-16):
     
     if not 0.0 <= lr:
       raise ValueError(f"Invalid learning rate: {lr}")
