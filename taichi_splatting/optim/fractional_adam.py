@@ -251,7 +251,6 @@ class FractionalAdam(torch.optim.Optimizer):
     n = get_params(keys[0]).shape[0]
     weight, total_weight = self.update_visibility(visibility, visible_indexes, n)
 
-
     for k, group in named.items():
       param = get_params(k)
       if param.grad is None:
@@ -281,8 +280,6 @@ class FractionalAdam(torch.optim.Optimizer):
       else:
         raise ValueError(f"unknown group type {group_type}")
     
-      print(param_step.shape)
-
 
       # Apply per-point and per-element learning rates
       if group["point_lr"] is not None:

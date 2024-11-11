@@ -191,6 +191,8 @@ class ParameterClass():
     if hasattr(self.optimizer, "shared_state"):
       state["shared"] = f(self.optimizer.shared_state)
 
+    return state
+
   @property
   def tensor_state(self) -> TensorDict:
     def get_tensor_states(state):
