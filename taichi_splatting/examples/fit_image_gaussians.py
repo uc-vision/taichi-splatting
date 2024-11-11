@@ -115,7 +115,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
 
 
     check_finite(gaussians, 'gaussians', warn=True)
-    visible = torch.nonzero(raster.point_heuristics[:, 0]).squeeze(1)
+    visible = raster.visibility.nonzero().squeeze(1)
 
     opt.step(visible_indexes = visible, 
              visibility=raster.visibility[visible], 
@@ -234,7 +234,7 @@ def main():
 
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5).to(torch.device('cuda:0'))
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
