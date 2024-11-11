@@ -209,7 +209,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
 
                   camera=camera_params,
                   config=config,
-                  point_visibility = raster.visibility.squeeze(1) if config.compute_visibility else None,  
+                  point_visibility = raster.visibility if config.compute_visibility else None,  
                   point_heuristics=raster.point_heuristics if config.compute_point_heuristics else None,
                   points_in_view=indexes,
 

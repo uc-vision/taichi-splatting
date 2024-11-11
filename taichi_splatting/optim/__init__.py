@@ -1,6 +1,6 @@
 from .autograd import restore_grad
 from .parameter_class import ParameterClass
-from .sparse_adam import SparseAdam
+from .fractional_adam import FractionalAdam
 
 
-__all__ = ['ParameterClass', 'SparseAdam', 'restore_grad']
+__all__ = ['ParameterClass', 'FractionalAdam', 'restore_grad']

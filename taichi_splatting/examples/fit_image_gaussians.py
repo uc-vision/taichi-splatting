@@ -13,7 +13,7 @@ from tqdm import tqdm
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
-from taichi_splatting.optim.sparse_adam import SparseAdam
+from taichi_splatting.optim.fractional_adam import FractionalAdam
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.optim.parameter_class import ParameterClass
@@ -81,7 +81,7 @@ def display_image(name, image):
 def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
-def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image, 
+def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image, 
         config:RasterConfig,        
         epoch_size=100, 
         grad_alpha=0.9, 
@@ -106,8 +106,6 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
         config=config)
       
   
-
-
       scale = torch.exp(gaussians.log_scaling) / min(w, h)
       loss = (torch.nn.functional.l1_loss(raster.image, ref_image) 
               + opacity_reg * gaussians.opacity.mean()
@@ -119,7 +117,9 @@ def train_epoch(opt:SparseAdam, params:ParameterClass, ref_image,
     check_finite(gaussians, 'gaussians', warn=True)
     visible = torch.nonzero(raster.point_heuristics[:, 0]).squeeze(1)
 
-    opt.step(visible_indexes = visible, basis=point_basis(gaussians[visible]))
+    opt.step(visible_indexes = visible, 
+             visibility=raster.visibility[visible], 
+             basis=point_basis(gaussians[visible]))
 
     point_heuristics =  raster.point_heuristics if i == 0 \
         else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
@@ -245,7 +245,7 @@ def main():
     feature=dict(lr=0.03, type='vector')
   )
 
-  create_optimizer = partial(SparseAdam, betas=(0.9, 0.95))
+  create_optimizer = partial(FractionalAdam, betas=(0.9, 0.95))
 
 
   params = ParameterClass(gaussians.to_tensordict(), 
@@ -261,6 +261,7 @@ def main():
   ref_image = torch.from_numpy(ref_image).to(dtype=torch.float32, device=device) / 255
   
   config = RasterConfig(compute_point_heuristics=True,
+                        compute_visibility=True,
                         tile_size=cmd_args.tile_size, 
                         gaussian_scale=3.0, 
                         blur_cov=0.3 if not cmd_args.antialias else 0.0,
