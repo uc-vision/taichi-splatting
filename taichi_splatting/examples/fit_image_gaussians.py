@@ -13,7 +13,7 @@ from tqdm import tqdm
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
-from taichi_splatting.optim.fractional_adam import FractionalAdam
+from taichi_splatting.optim.optimizer import FractionalAdam
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.optim.parameter_class import ParameterClass
