@@ -5,7 +5,7 @@ from taichi_splatting.taichi_queue import queued
 from taichi_splatting.taichi_lib.f32 import lerp
 
 @cache
-def fractional_laprop_kernel(betas=(0.9, 0.999), eps=1e-16):
+def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
   b1, b2 = betas
 
   @queued
@@ -45,7 +45,7 @@ def fractional_laprop_kernel(betas=(0.9, 0.999), eps=1e-16):
   return kernel
 
 @cache
-def fractional_vector_laprop_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
+def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
   b1, b2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
 
@@ -83,3 +83,4 @@ def fractional_vector_laprop_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
       exp_avg[idx] = avg
 
   return kernel
+
