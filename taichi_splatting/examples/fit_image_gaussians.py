@@ -14,7 +14,7 @@ from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.optim.fractional import FractionalAdam
-from taichi_splatting.optim.visibility_aware import VisibilityAwareAdam
+from taichi_splatting.optim.visibility_aware import VisibilityAwareAdam, VisibilityAwareLaProp
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.optim.parameter_class import ParameterClass
@@ -116,7 +116,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
 
 
     check_finite(gaussians, 'gaussians', warn=True)
-    visible = (raster.visibility > 1e-4).nonzero().squeeze(1)
+    visible = (raster.visibility > 1e-8).nonzero().squeeze(1)
 
     opt.step(visible_indexes = visible, 
              visibility=raster.visibility[visible], 
@@ -231,7 +231,7 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (1.0, 0.1)
+  lr_range = (4.0, 0.2)
 
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
@@ -239,14 +239,14 @@ def main():
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.025),
+    log_scaling=dict(lr=0.01),
 
     rotation=dict(lr=0.25),
-    alpha_logit=dict(lr=0.1),
+    alpha_logit=dict(lr=0.05),
     feature=dict(lr=0.02, type='vector')
   )
 
-  create_optimizer = partial(VisibilityAwareAdam, betas=(0.85, 0.95), eps=1e-16)
+  create_optimizer = partial(VisibilityAwareAdam, vis_beta=0.9, betas=(0.9, 0.9), eps=1e-16)
 
   params = ParameterClass(gaussians.to_tensordict(), 
         parameter_groups, optimizer=create_optimizer)

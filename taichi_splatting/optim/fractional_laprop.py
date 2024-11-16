@@ -46,7 +46,7 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
 
 @cache
 def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
-  b1, b2 = betas
+  beta1, beta2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
 
   @queued
@@ -68,13 +68,13 @@ def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
       idx = indexes[i]
       w = weight[i]
       
-      exp_avg_lr_1 = 1.0 - b1 ** total_weight[idx]
-      exp_avg_lr_2 = 1.0 - b2 ** total_weight[idx]
+      exp_avg_lr_1 = 1.0 - beta1 ** total_weight[idx]
+      exp_avg_lr_2 = 1.0 - beta2 ** total_weight[idx]
 
       g = grad[idx]
       
-      avg_sq = lerp(b2, exp_avg_sq[idx], g.dot(g))
-      avg = lerp(b1, exp_avg[idx], 
+      avg_sq = lerp(beta2 ** w, exp_avg_sq[idx], g.dot(g))
+      avg = lerp(beta1 ** w, exp_avg[idx], 
                  g / ti.max(ti.sqrt(avg_sq / exp_avg_lr_2), eps))
       
       lr_step[i] = avg * w * lr / exp_avg_lr_1
