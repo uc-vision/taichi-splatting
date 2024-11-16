@@ -6,7 +6,7 @@ from taichi_splatting.taichi_lib.f32 import lerp
 
 @cache
 def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
-  b1, b2 = betas
+  beta1, beta2 = betas
 
   @queued
   @ti.kernel
@@ -27,14 +27,14 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
       idx = indexes[i]
       w = weight[i]
       
-      exp_avg_lr_1 = 1.0 - b1 ** total_weight[idx]
-      exp_avg_lr_2 = 1.0 - b2 ** total_weight[idx]
+      exp_avg_lr_1 = 1.0 - beta1 ** total_weight[idx]
+      exp_avg_lr_2 = 1.0 - beta2 ** total_weight[idx]
 
       for j in range(grad.shape[1]):
         g = grad[idx, j]
         
-        avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
-        avg = lerp(b1, exp_avg[idx, j], 
+        avg_sq = lerp(beta2 ** w, exp_avg_sq[idx, j], g * g)
+        avg = lerp(beta1 ** w, exp_avg[idx, j], 
                    g / ti.max(ti.sqrt(avg_sq / exp_avg_lr_2), eps))
         
         lr_step[i, j] = avg * w * lr / exp_avg_lr_1

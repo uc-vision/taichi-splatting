@@ -27,15 +27,12 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
       idx = indexes[i]
       w = weight[i]
 
-      b1 = beta1 ** w 
-      b2 = beta2 ** w
-
-      bias_factor = ti.sqrt(1 - b2 ** total_weight[idx])  / (1 - b1 ** total_weight[idx])
+      bias_factor = ti.sqrt(1 - beta2 ** total_weight[idx])  / (1 - beta1 ** total_weight[idx])
       for j in range(lr_step.shape[1]):
         g = grad[idx, j]
 
-        avg = lerp(b1, exp_avg[idx, j], g)
-        avg_sq = lerp(b2, exp_avg_sq[idx, j], g * g)
+        avg = lerp(beta1 ** w, exp_avg[idx, j], g)
+        avg_sq = lerp(beta2 ** w, exp_avg_sq[idx, j], g * g)
 
         lr_step[i, j] = (avg / ti.max(ti.sqrt(avg_sq),  eps)) * bias_factor * w * lr
 
