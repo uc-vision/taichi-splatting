@@ -38,12 +38,12 @@ def parse_args():
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--iters', type=int, default=2000)
 
-  parser.add_argument('--epoch', type=int, default=4, help='base epoch size (increases with t)')
+  parser.add_argument('--epoch', type=int, default=8, help='base epoch size (increases with t)')
   parser.add_argument('--max_epoch', type=int, default=64)
 
   parser.add_argument('--prune_rate', type=float, default=0.01, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
-  parser.add_argument('--scale_reg', type=float, default=20.0)
+  parser.add_argument('--scale_reg', type=float, default=10.0)
 
   parser.add_argument('--threaded', action='store_true', help='Use taichi dedicated thread')
 
@@ -124,6 +124,9 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
 
     params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
 
+    # point_heuristics *= raster.visibility.clamp(1e-8).unsqueeze(1).sqrt()
+    largest = torch.exp(gaussians.log_scaling).min(dim=1).values 
+    point_heuristics[:, 1] *= largest
 
     point_heuristics =  raster.point_heuristics if i == 0 \
         else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
@@ -198,6 +201,7 @@ def split_prune(params:ParameterClass, t, target, prune_rate, point_heuristics):
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
   optim_state = to_split.tensor_state.new_zeros(to_split.batch_size[0], 2)
 
+
   params = params[~(split_mask | prune_mask)]
   params = params.append_tensors(splits.to_tensordict(), optim_state.reshape(splits.batch_size))
   # params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
@@ -243,7 +247,7 @@ def main():
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.05),
+    log_scaling=dict(lr=0.025),
 
     rotation=dict(lr=0.5),
     alpha_logit=dict(lr=0.05),
@@ -252,7 +256,7 @@ def main():
   
 
   params = ParameterClass(gaussians.to_tensordict(), 
-        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.5, betas=(0.9, 0.95), eps=1e-16)
+        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.75, betas=(0.9, 0.95), eps=1e-16, bias_correction=False)
   
   keys = set(params.keys())
   trainable = set(params.optimized_keys())

@@ -32,13 +32,13 @@ def update_visibility(running_vis: torch.Tensor,
                       total_weight: torch.Tensor,
                       beta: float = 0.9):
 
-  # updated_vis = exp_lerp(beta, running_vis[visible_indexes], visibility)
-  updated_vis = power_lerp(beta, running_vis[visible_indexes], visibility, 2)
-  running_vis[visible_indexes] = updated_vis
-  
-  weight = visibility / torch.clamp_min(updated_vis, 1e-12)
-  # bias = 1.0 - beta ** (total_weight[visible_indexes] + weight)
+  if beta == 0.0:
+    updated_vis = visibility
+  else:
+    updated_vis = power_lerp(beta, running_vis[visible_indexes], visibility, 2)
+    running_vis[visible_indexes] = updated_vis
 
+  weight = visibility / torch.clamp_min(updated_vis, 1e-12)
   return weight
 
 
@@ -54,7 +54,7 @@ def saturate(x:torch.Tensor):
 class VisibilityOptimizer(torch.optim.Optimizer):
   
   def __init__(self, kernels:types.ModuleType, param_groups:list[dict], lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.9):
+               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.9, bias_correction=True):
     
     assert lr > 0, f"Invalid learning rate: {lr}"
     assert eps > 0, f"Invalid epsilon: {eps}"
@@ -64,6 +64,7 @@ class VisibilityOptimizer(torch.optim.Optimizer):
     defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, type="scalar")  
 
     self.vis_beta = vis_beta
+    self.bias_correction = bias_correction
     self.kernels = kernels
     super().__init__(param_groups, defaults)
 
@@ -104,13 +105,15 @@ class VisibilityOptimizer(torch.optim.Optimizer):
 
 class VisibilityAwareAdam(VisibilityOptimizer):
   def __init__(self, param_groups, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5):
-    super().__init__(fractional_adam, param_groups=param_groups, lr=lr, betas=betas, eps=eps, vis_beta=vis_beta)
+               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5, bias_correction=True):
+    super().__init__(fractional_adam, param_groups=param_groups,
+                     lr=lr, betas=betas, eps=eps, vis_beta=vis_beta, bias_correction=bias_correction)
 
 
 class VisibilityAwareLaProp(VisibilityOptimizer):
   def __init__(self, param_groups, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5):
+               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5, bias_correction=True):
     
     
-    super().__init__(fractional_laprop, param_groups=param_groups, lr=lr, betas=betas, eps=eps, vis_beta=vis_beta)
+    super().__init__(fractional_laprop, param_groups=param_groups,
+                     lr=lr, betas=betas, eps=eps, vis_beta=vis_beta, bias_correction=bias_correction)

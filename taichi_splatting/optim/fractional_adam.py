@@ -5,7 +5,7 @@ from taichi_splatting.taichi_queue import queued
 from taichi_splatting.taichi_lib.f32 import lerp
 
 @cache
-def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
+def scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
   beta1, beta2 = betas
 
   @queued
@@ -27,7 +27,9 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
       idx = indexes[i]
       w = weight[i]
 
-      bias_factor = ti.sqrt(1 - beta2 ** total_weight[idx])  / (1 - beta1 ** total_weight[idx])
+      bias_factor = (ti.sqrt(1 - beta2 ** total_weight[idx])  / (1 - beta1 ** total_weight[idx])
+                      if ti.static(bias_correction) else 1.0)
+
       for j in range(lr_step.shape[1]):
         g = grad[idx, j]
 
@@ -43,7 +45,7 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16):
   return kernel
 
 @cache
-def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
+def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, bias_correction=True):
   b1, b2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
 
@@ -64,7 +66,9 @@ def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3):
 
     for i in indexes:
       idx = indexes[i]
-      bias_factor = ti.sqrt(1 - b2 ** total_weight[idx])  / (1 - b1 ** total_weight[idx])
+
+      bias_factor = (ti.sqrt(1 - b2 ** total_weight[idx])  / (1 - b1 ** total_weight[idx])
+                      if ti.static(bias_correction) else 1.0)
 
       g = grad[idx]
       avg = lerp(b1, exp_avg[idx], g)
