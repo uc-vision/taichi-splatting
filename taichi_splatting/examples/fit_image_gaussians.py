@@ -122,6 +122,9 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
              visibility=raster.visibility[visible], 
              basis=point_basis(gaussians[visible]))
 
+    params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
+
+
     point_heuristics =  raster.point_heuristics if i == 0 \
         else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
       
@@ -193,10 +196,11 @@ def split_prune(params:ParameterClass, t, target, prune_rate, point_heuristics):
 
   
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
+  optim_state = to_split.tensor_state.new_zeros(to_split.batch_size[0], 2)
 
   params = params[~(split_mask | prune_mask)]
-  params = params.append_tensors(splits.to_tensordict())
-  params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
+  params = params.append_tensors(splits.to_tensordict(), optim_state.reshape(splits.batch_size))
+  # params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
 
   return params, dict(      
     split = split_mask.sum().item(),
@@ -231,28 +235,25 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (4.0, 0.2)
+  lr_range = (1.0, 0.1)
 
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=1.0).to(torch.device('cuda:0'))
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.01),
+    log_scaling=dict(lr=0.05),
 
-    rotation=dict(lr=0.25),
+    rotation=dict(lr=0.5),
     alpha_logit=dict(lr=0.05),
     feature=dict(lr=0.02, type='vector')
   )
-
-  create_optimizer = partial(VisibilityAwareAdam, vis_beta=0.9, betas=(0.9, 0.9), eps=1e-16)
-
-  params = ParameterClass(gaussians.to_tensordict(), 
-        parameter_groups, optimizer=create_optimizer)
   
 
-
+  params = ParameterClass(gaussians.to_tensordict(), 
+        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.5, betas=(0.9, 0.95), eps=1e-16)
+  
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
 

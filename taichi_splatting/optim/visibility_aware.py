@@ -29,15 +29,17 @@ def power_lerp(t, a, b, k):
 
 def update_visibility(running_vis: torch.Tensor, 
                       visibility: torch.Tensor, visible_indexes: torch.Tensor, 
+                      total_weight: torch.Tensor,
                       beta: float = 0.9):
 
-  updated_vis = exp_lerp(beta, running_vis[visible_indexes], visibility)
-  # updated_vis = power_lerp(beta, running_vis[visible_indexes], visibility, 4)
-  weight = visibility / (updated_vis + 1e-12)
+  # updated_vis = exp_lerp(beta, running_vis[visible_indexes], visibility)
+  updated_vis = power_lerp(beta, running_vis[visible_indexes], visibility, 2)
   running_vis[visible_indexes] = updated_vis
+  
+  weight = visibility / torch.clamp_min(updated_vis, 1e-12)
+  # bias = 1.0 - beta ** (total_weight[visible_indexes] + weight)
 
   return weight
-  # return saturate(weight)
 
 
 def set_indexes(target:torch.Tensor, values:torch.Tensor, indexes:torch.Tensor):
@@ -47,7 +49,7 @@ def set_indexes(target:torch.Tensor, values:torch.Tensor, indexes:torch.Tensor):
 
 
 def saturate(x:torch.Tensor):
-  return 1 - 1/torch.exp(2 * x)
+  return 1 - 1/torch.exp(2 *x)
 
 class VisibilityOptimizer(torch.optim.Optimizer):
   
@@ -80,7 +82,7 @@ class VisibilityOptimizer(torch.optim.Optimizer):
     total_weight = get_total_weight(groups[0].state, n, device=visibility.device)
     running_vis = get_running_vis(groups[0].state, n, device=visibility.device)
 
-    weight = update_visibility(running_vis, visibility, visible_indexes, self.vis_beta)
+    weight = update_visibility(running_vis, visibility, visible_indexes, total_weight, self.vis_beta)
     total_weight[visible_indexes] += weight
 
     for group in groups:
@@ -94,7 +96,8 @@ class VisibilityOptimizer(torch.optim.Optimizer):
 
       lr_step = weighted_step(group, weight, visible_indexes, total_weight, self.kernels, basis)
 
-      group.param[visible_indexes] -= lr_step * weight.sqrt().unsqueeze(1)
+      # group.param[visible_indexes] -= lr_step * weight.unsqueeze(1)
+      group.param[visible_indexes] -= lr_step * saturate(weight).unsqueeze(1)
 
 
 
@@ -108,4 +111,6 @@ class VisibilityAwareAdam(VisibilityOptimizer):
 class VisibilityAwareLaProp(VisibilityOptimizer):
   def __init__(self, param_groups, lr=0.001, 
                betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5):
+    
+    
     super().__init__(fractional_laprop, param_groups=param_groups, lr=lr, betas=betas, eps=eps, vis_beta=vis_beta)
