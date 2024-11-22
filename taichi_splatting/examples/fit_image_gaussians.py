@@ -37,6 +37,8 @@ def parse_args():
   parser.add_argument('--n', type=int, default=1000)
   parser.add_argument('--target', type=int, default=None)
   parser.add_argument('--iters', type=int, default=2000)
+  parser.add_argument('--max_lr', type=float, default=1.0)
+  parser.add_argument('--min_lr', type=float, default=0.1)
 
   parser.add_argument('--epoch', type=int, default=8, help='base epoch size (increases with t)')
   parser.add_argument('--max_epoch', type=int, default=64)
@@ -239,7 +241,7 @@ def main():
 
 
   torch.manual_seed(cmd_args.seed)
-  lr_range = (1.0, 0.1)
+  lr_range = (cmd_args.max_lr, cmd_args.min_lr)
 
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
