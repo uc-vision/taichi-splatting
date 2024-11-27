@@ -36,7 +36,7 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
         avg = lerp(beta1 ** w, exp_avg[idx, j], g)
         avg_sq = lerp(beta2 ** w, exp_avg_sq[idx, j], g * g)
 
-        lr_step[i, j] = (avg / ti.max(ti.sqrt(avg_sq),  eps)) * bias_factor * w * lr
+        lr_step[i, j] = (avg / ti.max(ti.sqrt(avg_sq),  eps)) * bias_factor * lr
 
         exp_avg[idx, j] = avg
         exp_avg_sq[idx, j] = avg_sq
@@ -46,7 +46,7 @@ def scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
 
 @cache
 def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, bias_correction=True):
-  b1, b2 = betas
+  beta1, beta2 = betas
   vec = ti.types.vector(n=dims, dtype=ti.f32)
 
   @queued
@@ -66,17 +66,18 @@ def vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, bias_correction=True):
 
     for i in indexes:
       idx = indexes[i]
+      w = weight[i]
 
-      bias_factor = (ti.sqrt(1 - b2 ** total_weight[idx])  / (1 - b1 ** total_weight[idx])
+      bias_factor = (ti.sqrt(1 - beta2 ** total_weight[idx])  / (1 - beta1 ** total_weight[idx])
                       if ti.static(bias_correction) else 1.0)
 
       g = grad[idx]
-      avg = lerp(b1, exp_avg[idx], g)
+      avg = lerp(beta1 ** w, exp_avg[idx], g)
 
       norm = ti.math.dot(g, g)
-      avg_sq = lerp(b2, exp_avg_sq[idx], norm)
+      avg_sq = lerp(beta2 ** w, exp_avg_sq[idx], norm)
 
-      lr_step[i] = (avg / ti.max(ti.sqrt(avg_sq),  eps)) * bias_factor * weight[i] * lr
+      lr_step[i] = (avg / ti.max(ti.sqrt(avg_sq),  eps)) * bias_factor * lr
 
       exp_avg[idx] = avg
       exp_avg_sq[idx] = avg_sq

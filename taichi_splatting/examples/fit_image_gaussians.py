@@ -258,7 +258,7 @@ def main():
   
 
   params = ParameterClass(gaussians.to_tensordict(), 
-        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.75, betas=(0.9, 0.95), eps=1e-16, bias_correction=False)
+        parameter_groups, optimizer=VisibilityAwareAdam, vis_beta=0.75, betas=(0.9, 0.95), eps=1e-16, bias_correction=False)
   
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
