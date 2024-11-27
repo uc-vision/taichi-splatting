@@ -13,7 +13,7 @@ from tqdm import tqdm
 from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
-from taichi_splatting.optim.fractional import FractionalAdam
+from taichi_splatting.optim.fractional import FractionalAdam, SparseAdam, SparseLaProp
 from taichi_splatting.optim.visibility_aware import VisibilityAwareAdam, VisibilityAwareLaProp
 from taichi_splatting.rasterizer.function import rasterize
 
@@ -120,7 +120,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
     check_finite(gaussians, 'gaussians', warn=True)
     visible = (raster.visibility > 1e-8).nonzero().squeeze(1)
 
-    opt.step(visible_indexes = visible, 
+    opt.step(indexes = visible, 
              visibility=raster.visibility[visible], 
              basis=point_basis(gaussians[visible]))
 
@@ -245,20 +245,22 @@ def main():
 
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5).to(torch.device('cuda:0'))
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.1).to(torch.device('cuda:0'))
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.025),
+    log_scaling=dict(lr=0.05),
 
     rotation=dict(lr=0.5),
     alpha_logit=dict(lr=0.05),
-    feature=dict(lr=0.02, type='vector')
+    feature=dict(lr=0.025, type='vector')
   )
   
+  # params = ParameterClass(gaussians.to_tensordict(), 
+  #       parameter_groups, optimizer=SparseAdam, betas=(0.9, 0.95), eps=1e-16, bias_correction=True)
 
   params = ParameterClass(gaussians.to_tensordict(), 
-        parameter_groups, optimizer=VisibilityAwareAdam, vis_beta=0.75, betas=(0.9, 0.95), eps=1e-16, bias_correction=False)
+        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.75, betas=(0.8, 0.95), eps=1e-16, bias_correction=True)
   
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
@@ -276,8 +278,6 @@ def main():
                         pixel_stride=cmd_args.pixel_tile or (2, 2))
 
   
-
-
 
   def timed_epoch(*args, **kwargs):
     start = time.time()

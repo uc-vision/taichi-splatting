@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 
 from taichi_splatting.optim import fractional_adam, fractional_laprop
-from taichi_splatting.optim.fractional import make_group, weighted_step
+from taichi_splatting.optim.fractional import make_group, saturate, weighted_step
 from taichi_splatting.optim.util import get_total_weight
 
 def get_running_vis(state:dict,  n:float, device:torch.device):
@@ -28,15 +28,15 @@ def power_lerp(t, a, b, k):
 
 
 def update_visibility(running_vis: torch.Tensor, 
-                      visibility: torch.Tensor, visible_indexes: torch.Tensor, 
+                      visibility: torch.Tensor, indexes: torch.Tensor, 
                       total_weight: torch.Tensor,
                       beta: float = 0.9):
 
   if beta == 0.0:
     updated_vis = visibility
   else:
-    updated_vis = power_lerp(beta, running_vis[visible_indexes], visibility, 2)
-    running_vis[visible_indexes] = updated_vis
+    updated_vis = power_lerp(beta, running_vis[indexes], visibility, 2)
+    running_vis[indexes] = updated_vis
 
   weight = visibility / torch.clamp_min(updated_vis, 1e-12)
   return weight
@@ -48,8 +48,7 @@ def set_indexes(target:torch.Tensor, values:torch.Tensor, indexes:torch.Tensor):
   return result
 
 
-def saturate(x:torch.Tensor):
-  return 1 - 1/torch.exp(2 *x)
+
 
 class VisibilityOptimizer(torch.optim.Optimizer):
   
@@ -61,21 +60,20 @@ class VisibilityOptimizer(torch.optim.Optimizer):
     assert 0.0 <= betas[0] < 1.0, f"Invalid beta1: {betas[0]}"
     assert 0.0 <= betas[1] < 1.0, f"Invalid beta2: {betas[1]}"
     assert 0.0 <= vis_beta < 1.0, f"Invalid visibility beta: {vis_beta}"
-    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, type="scalar")  
+    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, type="scalar", bias_correction=bias_correction)  
 
     self.vis_beta = vis_beta
-    self.bias_correction = bias_correction
     self.kernels = kernels
     super().__init__(param_groups, defaults)
 
 
   @torch.no_grad()
   def step(self, 
-          visible_indexes: torch.Tensor, 
+          indexes: torch.Tensor, 
           visibility: torch.Tensor, 
           basis: Optional[torch.Tensor]=None):
     
-    assert visibility.shape == visible_indexes.shape, f"shape mismatch {visibility.shape} != {visible_indexes.shape}"
+    assert visibility.shape == indexes.shape, f"shape mismatch {visibility.shape} != {indexes.shape}"
 
     groups = [make_group(group, self.state) for group in self.param_groups]
     n = groups[0].num_points
@@ -83,8 +81,8 @@ class VisibilityOptimizer(torch.optim.Optimizer):
     total_weight = get_total_weight(groups[0].state, n, device=visibility.device)
     running_vis = get_running_vis(groups[0].state, n, device=visibility.device)
 
-    weight = update_visibility(running_vis, visibility, visible_indexes, total_weight, self.vis_beta)
-    total_weight[visible_indexes] += weight
+    weight = update_visibility(running_vis, visibility, indexes, total_weight, self.vis_beta)
+    total_weight[indexes] += weight
 
     for group in groups:
       if group.grad is None: 
@@ -92,13 +90,13 @@ class VisibilityOptimizer(torch.optim.Optimizer):
 
       assert group.num_points == n, f"param shape {group.num_points} != {n}"
       group = replace(group, grad=set_indexes(group.grad, 
-                        group.grad[visible_indexes] / visibility.unsqueeze(1), 
-                        visible_indexes))
+                        group.grad[indexes] / visibility.unsqueeze(1), 
+                          indexes))
 
-      lr_step = weighted_step(group, weight, visible_indexes, total_weight, self.kernels, basis)
+      lr_step = weighted_step(group, weight, indexes, total_weight, self.kernels, basis)
 
-      # group.param[visible_indexes] -= lr_step * weight.unsqueeze(1)
-      group.param[visible_indexes] -= lr_step * saturate(weight).unsqueeze(1)
+      # group.param[visible_indexes] -= lr_step * weight.sqrt().unsqueeze(1)
+      group.param[indexes] -= lr_step * saturate(weight).unsqueeze(1)
 
 
 

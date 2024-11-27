@@ -22,6 +22,7 @@ class Group:
   betas: Tuple[float, float]
   eps: float
   mask_lr: Optional[torch.Tensor]
+  bias_correction: bool
 
   type: str
 
@@ -39,6 +40,7 @@ def make_group(group, state) -> Group:
                state, lr=group["lr"], 
                betas=group["betas"], eps=group["eps"], 
                mask_lr=group["mask_lr"],   
+               bias_correction=group["bias_correction"],
                type=group["type"])
 
 
@@ -53,10 +55,10 @@ def weighted_step(group:Group,
 
   if group.type in ["vector", "local_vector"]:
     avg_exp, avg_exp_sq = get_vector_state(group.state, group.param)
-    kernel = module.vector_kernel(betas=group.betas, eps=group.eps, dims=group.param.shape[1])
+    kernel = module.vector_kernel(betas=group.betas, eps=group.eps, dims=group.param.shape[1], bias_correction=group.bias_correction)
   elif group.type == "scalar":
     avg_exp, avg_exp_sq = get_scalar_state(group.state, group.param)
-    kernel = module.scalar_kernel(betas=group.betas, eps=group.eps)
+    kernel = module.scalar_kernel(betas=group.betas, eps=group.eps, bias_correction=group.bias_correction)
   else:
     raise ValueError(f"unknown group type {group.type}")
     
@@ -80,18 +82,22 @@ def weighted_step(group:Group,
 
   return lr_step
 
+def saturate(x:torch.Tensor):
+  return 1 - 1/torch.exp(2 *x)
+
 
 class FractionalOpt(torch.optim.Optimizer):
   
   def __init__(self, kernels:types.ModuleType, param_groups:list[dict], lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16):
+               betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
     
     assert lr > 0, f"Invalid learning rate: {lr}"
     assert eps > 0, f"Invalid epsilon: {eps}"
     assert 0.0 <= betas[0] < 1.0, f"Invalid beta1: {betas[0]}"
     assert 0.0 <= betas[1] < 1.0, f"Invalid beta2: {betas[1]}"
 
-    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, type="scalar")  
+    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, type="scalar", bias_correction=bias_correction)  
+
 
     self.kernels = kernels
     super().__init__(param_groups, defaults)
@@ -108,31 +114,45 @@ class FractionalOpt(torch.optim.Optimizer):
     groups = [make_group(group, self.state) for group in self.param_groups]
     n = groups[0].param.shape[0]
 
-    total_weight = get_total_weight(groups[0].state, (1,))
-    
+    total_weight = get_total_weight(groups[0].state, n, device=weight.device)
+    total_weight[indexes] += weight
+
     for group in groups:
-      if group.param.grad is None:
+      if group.grad is None:
         continue
       
       assert group.num_points == n, f"param shape {group.num_points} != {n}"
+      lr_step = weighted_step(group, weight, indexes, total_weight, self.kernels, basis)    
 
-      lr_step = weighted_step(group, weight, indexes, total_weight, self.kernels, basis)
-      group.param[indexes] -= lr_step
-
-    total_weight[indexes] += weight
+      group.param[indexes] -= lr_step * saturate(weight).unsqueeze(1)
 
 class FractionalAdam(FractionalOpt):
   def __init__(self, params, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16):
-    super().__init__(fractional_adam, params, lr, betas, eps)
+               betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
+    super().__init__(fractional_adam, params, lr, betas, eps, bias_correction)
 
 
 class FractionalLaProp(FractionalOpt):
   def __init__(self, params, lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16):
-    super().__init__(fractional_laprop, params, lr, betas, eps)
+               betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
+    super().__init__(fractional_laprop, params, lr, betas, eps, bias_correction)
 
 
+class SparseAdam(FractionalOpt):
+  def __init__(self, params, lr=0.001, 
+               betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
+    super().__init__(fractional_adam, params, lr, betas, eps, bias_correction)
 
+  def step(self, indexes: torch.Tensor, basis: Optional[torch.Tensor]=None):
+    weight = torch.ones(indexes.shape[0], device=indexes.device, dtype=torch.float32)
+    super().step(indexes, weight, basis)
 
+class SparseLaProp(FractionalOpt):
+  def __init__(self, params, lr=0.001, 
+               betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
+    super().__init__(fractional_laprop, params, lr, betas, eps, bias_correction)
+
+  def step(self, indexes: torch.Tensor, basis: Optional[torch.Tensor]=None):
+    weight = torch.ones(indexes.shape[0], device=indexes.device, dtype=torch.float32)
+    super().step(indexes, weight, basis)
 
