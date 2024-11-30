@@ -14,7 +14,7 @@ from taichi_splatting.data_types import Gaussians2D, RasterConfig
 from taichi_splatting.misc.renderer2d import point_basis, project_gaussians2d, uniform_split_gaussians2d
 
 from taichi_splatting.optim.fractional import FractionalAdam, SparseAdam, SparseLaProp
-from taichi_splatting.optim.visibility_aware import VisibilityAwareAdam, VisibilityAwareLaProp
+from taichi_splatting.optim.visibility_aware import VisibilityAwareAdam, VisibilityAwareLaProp, VisibilityOptimizer
 from taichi_splatting.rasterizer.function import rasterize
 
 from taichi_splatting.optim.parameter_class import ParameterClass
@@ -120,9 +120,13 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
     check_finite(gaussians, 'gaussians', warn=True)
     visible = (raster.visibility > 1e-8).nonzero().squeeze(1)
 
-    opt.step(indexes = visible, 
-             visibility=raster.visibility[visible], 
-             basis=point_basis(gaussians[visible]))
+    if isinstance(opt, VisibilityOptimizer):
+      opt.step(indexes = visible, 
+              visibility=raster.visibility[visible], 
+              basis=point_basis(gaussians[visible]))
+    else:
+      opt.step(indexes = visible, 
+              basis=point_basis(gaussians[visible]))
 
     params.replace(rotation = torch.nn.functional.normalize(params.rotation.detach()))
 
@@ -249,7 +253,7 @@ def main():
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.05),
+    log_scaling=dict(lr=0.025),
 
     rotation=dict(lr=0.5),
     alpha_logit=dict(lr=0.05),
@@ -260,7 +264,7 @@ def main():
   #       parameter_groups, optimizer=SparseAdam, betas=(0.9, 0.95), eps=1e-16, bias_correction=True)
 
   params = ParameterClass(gaussians.to_tensordict(), 
-        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.75, betas=(0.8, 0.95), eps=1e-16, bias_correction=True)
+        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.75, betas=(0.9, 0.95), eps=1e-16, bias_correction=False)
   
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
