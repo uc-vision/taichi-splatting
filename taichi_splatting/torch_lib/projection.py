@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from taichi_splatting.perspective import CameraParams
 from taichi_splatting.data_types import Gaussians3D, RasterConfig
+from taichi_splatting.taichi_queue import queued
 from taichi_splatting.torch_lib.transforms import make_homog, quat_to_mat, transform44
 
 def radii_from_cov(uv_cov:torch.Tensor):
@@ -116,17 +117,16 @@ def cov_to_conic(cov: torch.Tensor) -> torch.Tensor:
   inv_det = 1 / (x * z - y * y)
   return torch.stack([inv_det * z, -inv_det * y, inv_det * x], -1)
 
-
 @torch.compile
 def ndc_depth(depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
   # ndc from 0 (near) to 1 (far)
   return 1 - (1./depth - 1./far) / (1./near - 1./far)
 
+
 @torch.compile
 def inverse_ndc_depth(ndc_depth: torch.Tensor, near: float, far: float) -> torch.Tensor:
   # inverse ndc from 0 (near) to 1 (far) -> depth
   return 1.0 / ((1.0 - ndc_depth) * (1/near - 1/far) + 1/far)
-
 
 @torch.compile
 def generalized_ndc(depth: torch.Tensor, near: float, far: float, k:float) -> torch.Tensor:

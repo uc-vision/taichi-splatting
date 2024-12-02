@@ -116,6 +116,10 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
         
         for in_group_idx in range(max_point_group_offset):
 
+          # saturated = ti.cast(T_i < ti.static(1.0 - config.saturate_threshold), ti.i32)
+          # if ti.simt.block.sync_all_nonzero(saturated):
+          #   break
+
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
 
@@ -133,7 +137,8 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
               accum_feature += tile_feature[in_group_idx] * alpha * T_i
             else:
               # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
-              accum_feature = tile_feature[in_group_idx]
+              if T_i >= ti.static(1.0 - config.saturate_threshold):
+                accum_feature = tile_feature[in_group_idx]
             
             T_i = T_i * (1 - alpha)
             last_point_idx = group_start_offset + in_group_idx + 1

@@ -15,6 +15,7 @@ from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 from taichi_splatting.perspective import (CameraParams)
 
 from taichi_splatting.perspective.projection import project_to_image
+from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.torch_lib.projection import ndc_depth
 
 
@@ -172,7 +173,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
 
       render_depth:bool = False,  use_depth16:bool = False, render_median_depth:bool = False, use_ndc_depth:bool = False):
 
-  ndc_depths = ndc_depth(depths, camera_params.near_plane, camera_params.far_plane)
+  ndc_depths = TaichiQueue.run_sync(ndc_depth, depths, camera_params.near_plane, camera_params.far_plane)
 
   if render_depth:
     depths = ndc_depth if use_ndc_depth else depths
