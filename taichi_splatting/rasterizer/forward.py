@@ -81,12 +81,14 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       last_point_idx = -1
 
       in_bounds = pixel.x < camera_width and pixel.y < camera_height
-
+      saturated = False
 
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
 
-        ti.simt.block.sync()
+        if ti.simt.block.sync_all_nonzero(ti.cast(saturated, ti.i32)):
+          break
+        # ti.simt.block.sync()
 
         # The offset of the first point in the group
         group_start_offset = start_offset + point_group_id * tile_area
@@ -116,10 +118,6 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
         
         for in_group_idx in range(max_point_group_offset):
 
-          # saturated = ti.cast(T_i < ti.static(1.0 - config.saturate_threshold), ti.i32)
-          # if ti.simt.block.sync_all_nonzero(saturated):
-          #   break
-
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
 
@@ -128,7 +126,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           weight = vec1(0.0)
 
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (configurable as alpha_threshold)
-          if alpha >= ti.static(config.alpha_threshold) and in_bounds:
+          if alpha >= ti.static(config.alpha_threshold) and in_bounds and not saturated:
 
             alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
             weight[0] = alpha * T_i
@@ -143,6 +141,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
             T_i = T_i * (1 - alpha)
             last_point_idx = group_start_offset + in_group_idx + 1
 
+            saturated = T_i < ti.static(1.0 - config.saturate_threshold)
 
           # Accumulate visibility in block shared memory tile
           if ti.static(config.compute_visibility):
