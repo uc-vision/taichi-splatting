@@ -88,7 +88,6 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
         if ti.simt.block.sync_all_nonzero(ti.cast(saturated, ti.i32)):
           break
-        # ti.simt.block.sync()
 
         # The offset of the first point in the group
         group_start_offset = start_offset + point_group_id * tile_area
@@ -117,7 +116,6 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
         # in parallel across a block, render all points in the group
         
         for in_group_idx in range(max_point_group_offset):
-
           mean, axis, sigma, point_alpha = Gaussian2D.unpack(tile_point[in_group_idx])
           gaussian_alpha = gaussian_pdf(pixelf, mean, axis, sigma)
 
