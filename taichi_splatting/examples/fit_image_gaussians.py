@@ -42,9 +42,9 @@ def parse_args():
   parser.add_argument('--min_lr', type=float, default=0.1)
 
   parser.add_argument('--epoch', type=int, default=4, help='base epoch size (increases with t)')
-  parser.add_argument('--max_epoch', type=int, default=32)
+  parser.add_argument('--max_epoch', type=int, default=16)
 
-  parser.add_argument('--prune_rate', type=float, default=0.04, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--prune_rate', type=float, default=0.02, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=10.0)
 
@@ -257,7 +257,7 @@ def main():
   
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.025),
+    log_scaling=dict(lr=0.05),
 
     rotation=dict(lr=1.0),
     alpha_logit=dict(lr=0.1),
