@@ -23,23 +23,25 @@ def lerp(t, a, b):
   return a + (b - a) * t
 
 
-def power_lerp(t, a, b, k):
+def power_lerp(t, a, b, k=2):
   return lerp(t, a ** k, b ** k) ** (1/k)
 
 
 def update_visibility(running_vis: torch.Tensor, 
                       visibility: torch.Tensor, indexes: torch.Tensor, 
                       total_weight: torch.Tensor,
-                      beta: float = 0.9):
+                      beta: float = 0.9,
+                      eps:float=1e-12):
 
-  if beta == 0.0:
-    updated_vis = visibility
-  else:
-    updated_vis = power_lerp(beta, running_vis[indexes], visibility, 2)
-    running_vis[indexes] = updated_vis
+  # updated_vis = power_lerp(beta, visibility, running_vis[indexes])
+  updated_vis = exp_lerp(beta, visibility, running_vis[indexes])
+  running_vis[indexes] = updated_vis
 
-  weight = visibility / torch.clamp_min(updated_vis, 1e-12)
-  return weight
+  # bias_correction = (1 - beta ** total_weight[indexes])
+
+  weight = visibility / torch.clamp_min(updated_vis, eps)
+  return saturate(weight)
+  # return weight
 
 
 def set_indexes(target:torch.Tensor, values:torch.Tensor, indexes:torch.Tensor):
@@ -96,7 +98,7 @@ class VisibilityOptimizer(torch.optim.Optimizer):
       lr_step = weighted_step(group, weight, indexes, total_weight, self.kernels, basis)
 
       # group.param[visible_indexes] -= lr_step * weight.sqrt().unsqueeze(1)
-      group.param[indexes] -= lr_step * saturate(weight).unsqueeze(1)
+      group.param[indexes] -= lr_step * weight.unsqueeze(1)
 
 
 

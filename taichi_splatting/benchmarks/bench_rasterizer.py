@@ -20,6 +20,8 @@ def parse_args(args=None):
   parser.add_argument('--image_size', type=str, default='1024,768')
   parser.add_argument('--device', type=str, default='cuda:0')
   parser.add_argument('--n', type=int, default=1000000)
+
+  parser.add_argument('--num_channels', type=int, default=3)
   parser.add_argument('--scale_factor', type=int, default=4)
   parser.add_argument('--tile_size', type=int, default=16)
   parser.add_argument('--seed', type=int, default=0)
@@ -39,7 +41,7 @@ def bench_rasterizer(args):
     torch.manual_seed(args.seed)
 
     depth_range = (0.1, 100.)
-    gaussians = random_2d_gaussians(args.n, args.image_size, 
+    gaussians = random_2d_gaussians(args.n, args.image_size, num_channels=args.num_channels,
             scale_factor=args.scale_factor, alpha_range=(0.75, 1.0), depth_range=depth_range).to(args.device)
     config = RasterConfig(tile_size=args.tile_size, antialias=args.antialias)
     
