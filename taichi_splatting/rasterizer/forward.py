@@ -142,7 +142,6 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
             saturated = T_i < ti.static(1.0 - config.saturate_threshold)
 
-
           # Accumulate visibility in block shared memory tile
           if ti.static(config.compute_visibility):
             if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(weight[0] > 0)):
