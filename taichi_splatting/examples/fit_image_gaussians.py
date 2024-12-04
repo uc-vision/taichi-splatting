@@ -276,7 +276,6 @@ def main():
   config = RasterConfig(compute_point_heuristics=True,
                         compute_visibility=True,
                         tile_size=cmd_args.tile_size, 
-                        gaussian_scale=3.0, 
                         blur_cov=0.3 if not cmd_args.antialias else 0.0,
                         antialias=cmd_args.antialias,
                         pixel_stride=cmd_args.pixel_tile or (2, 2))

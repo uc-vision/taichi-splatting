@@ -86,8 +86,9 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
 
-        if ti.simt.block.sync_all_nonzero(ti.cast(saturated, ti.i32)):
-          break
+        ti.simt.block.sync()
+        # if ti.simt.block.sync_all_nonzero(ti.cast(saturated, ti.i32)):
+        #   break
 
         # The offset of the first point in the group
         group_start_offset = start_offset + point_group_id * tile_area

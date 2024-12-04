@@ -18,9 +18,6 @@ class RasterConfig:
 
   margin_tiles: int = 3
 
-  # cutoff N standard deviations from mean
-  gaussian_scale: float = 3.0 
-
   # clamp position to within this margin of the image for affine jaocbian
   clamp_margin: float = 0.15  
   
