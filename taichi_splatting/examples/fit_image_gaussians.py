@@ -44,7 +44,7 @@ def parse_args():
   parser.add_argument('--epoch', type=int, default=4, help='base epoch size (increases with t)')
   parser.add_argument('--max_epoch', type=int, default=16)
 
-  parser.add_argument('--prune_rate', type=float, default=0.02, help='Rate of pruning proportional to number of points')
+  parser.add_argument('--prune_rate', type=float, default=0.04, help='Rate of pruning proportional to number of points')
   parser.add_argument('--opacity_reg', type=float, default=0.0001)
   parser.add_argument('--scale_reg', type=float, default=10.0)
 
@@ -94,7 +94,8 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
     
   h, w = ref_image.shape[:2]
 
-  point_heuristics = torch.zeros((params.batch_size[0], 3), device=params.position.device)
+  point_heuristics = torch.zeros((params.batch_size[0], 2), device=params.position.device)
+  visibility = torch.zeros((params.batch_size[0]), device=params.position.device)
 
   for i in range(epoch_size):
     opt.zero_grad()
@@ -135,13 +136,10 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
     )
 
     # point_heuristics *= raster.visibility.clamp(1e-8).unsqueeze(1).sqrt()
-    largest = torch.exp(gaussians.log_scaling).min(dim=1).values 
-    point_heuristics[:, 1] *= largest
+    visibility += raster.visibility
+    point_heuristics +=  raster.point_heuristics
 
-    point_heuristics =  raster.point_heuristics if i == 0 \
-        else (1 - grad_alpha) * point_heuristics + grad_alpha * raster.point_heuristics
-      
-  return raster.image, point_heuristics
+  return raster.image, point_heuristics 
 
 
 def make_epochs(total_iters, first_epoch, max_epoch):
@@ -211,6 +209,7 @@ def split_prune(params:ParameterClass, t, target, prune_rate, point_heuristics):
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
   optim_state = to_split.tensor_state.new_zeros(to_split.batch_size[0], 2)
 
+  # optim_state['position']['running_vis'][:] = to_split.tensor_state['position']['running_vis'].unsqueeze(1) * 0.5
 
   params = params[~(split_mask | prune_mask)]
   params = params.append_tensors(splits.to_tensordict(), optim_state.reshape(splits.batch_size))
@@ -268,7 +267,7 @@ def main():
   #       parameter_groups, optimizer=SparseAdam, betas=(0.9, 0.95), eps=1e-16, bias_correction=True)
 
   params = ParameterClass(gaussians.to_tensordict(), 
-        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.6, betas=(0.8, 0.9), eps=1e-16, bias_correction=False)
+        parameter_groups, optimizer=VisibilityAwareLaProp, vis_beta=0.9, betas=(0.9, 0.9), eps=1e-16, bias_correction=False)
   
   keys = set(params.keys())
   trainable = set(params.optimized_keys())
@@ -282,6 +281,7 @@ def main():
                         tile_size=cmd_args.tile_size, 
                         blur_cov=0.3 if not cmd_args.antialias else 0.0,
                         antialias=cmd_args.antialias,
+                        # alpha_threshold=1/8192,
                         pixel_stride=cmd_args.pixel_tile or (2, 2))
 
   
