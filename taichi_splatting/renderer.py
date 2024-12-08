@@ -59,12 +59,20 @@ class Rendering:
 
   @property
   def point_scale(self):
-    return self.gaussians2d[:, 4:6] * self.config.gaussian_scale
-  
+    return self.gaussians2d[:, 4:6]
+
   @property
   def point_opacity(self):
     return self.gaussians2d[:, 6]
-  
+
+
+  @property
+  def gaussian_scale(self):
+    """ Factor of the gaussian bounds used for culling,
+     Original gaussian splatting uses gaussian_scale = 3.0
+   """
+    return torch.sqrt(2 * torch.log(self.point_opacity / self.config.alpha_threshold))
+
 
   @property
   def point_radii(self):

@@ -57,7 +57,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
       sigma, v1, v2 = lib.eig(cov)
 
       alpha = lib.sigmoid(alpha_logit[idx][0])
-      gaussian_scale = ti.sqrt(ti.log(alpha / alpha_threshold))
+      gaussian_scale = ti.sqrt(2 * ti.log(alpha / alpha_threshold))
 
       sx, sy = sigma * gaussian_scale
       lower, upper = lib.ellipse_bounds(mean, v1 * sx, v2 * sy)
@@ -224,7 +224,7 @@ def project_to_image(gaussians:Gaussians3D,  camera_params: CameraParams, config
   Parameters:
     gaussians3D: 3D gaussian representation tensorclass
     camera_params: CameraParams
-    gaussian_scale: float - scale of the gaussian 'radius' to use for culling
+    config: RasterConfig
 
   Returns:
     points:    torch.Tensor (N, 6)  - packed 2D gaussians in image space
