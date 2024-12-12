@@ -81,14 +81,14 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       last_point_idx = -1
 
       in_bounds = pixel.x < camera_width and pixel.y < camera_height
-      saturated = False
+      saturated = not in_bounds
 
       # Loop through the range in groups of tile_area
       for point_group_id in range(num_point_groups):
 
-        ti.simt.block.sync()
-        # if ti.simt.block.sync_all_nonzero(ti.cast(saturated, ti.i32)):
-        #   break
+        # ti.simt.block.sync()
+        if ti.simt.block.sync_all_nonzero(ti.cast(saturated, ti.i32)):
+          break
 
         # The offset of the first point in the group
         group_start_offset = start_offset + point_group_id * tile_area
@@ -125,7 +125,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           weight = vec1(0.0)
 
           # from paper: we skip any blending updates with 𝛼 < 𝜖 (configurable as alpha_threshold)
-          if alpha >= ti.static(config.alpha_threshold) and in_bounds and not saturated:
+          if alpha >= ti.static(config.alpha_threshold) and not saturated:
 
             alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
             weight[0] = alpha * T_i
