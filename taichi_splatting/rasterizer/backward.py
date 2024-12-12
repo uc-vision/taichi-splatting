@@ -211,10 +211,8 @@ def backward_kernel(config: RasterConfig,
 
               if ti.static(config.compute_point_heuristics):
                 gaussian_point_heuristics += vec2(
-                  # (feature_diff**2).sum() * weight, # pruning cost heuristic
-                  # (dp_dmean.norm() * feature_diff.norm() * weight),
-                  dp_dmean.norm(2) * weight,
-                  ti.abs(pos_grad).sum() # point split heuristic 
+                  weight,
+                  lib.l1_norm(pos_grad)
                 )
 
           if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(has_grad)):
