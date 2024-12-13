@@ -119,7 +119,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
       loss.backward()
 
 
-    check_finite(gaussians, 'gaussians', warn=True)
+    check_finite(gaussians, 'gaussians')
     visible = (raster.visibility > 1e-8).nonzero().squeeze(1)
 
     if isinstance(opt, VisibilityOptimizer):
