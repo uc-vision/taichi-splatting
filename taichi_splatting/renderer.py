@@ -2,13 +2,15 @@
 
 from dataclasses import fields, dataclass, replace
 from functools import cached_property
+from numbers import Integral
+from typing import Any
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
-from taichi_splatting.rasterizer import rasterize, RasterConfig
+from taichi_splatting.rasterizer import RasterConfig
 from taichi_splatting.rasterizer.function import rasterize_with_tiles
 from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
@@ -19,7 +21,7 @@ from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.torch_lib.projection import ndc_depth
 
 
-def unpack(dc) -> tuple:
+def unpack(dc) -> dict[str, Any]:
     return {field.name:getattr(dc, field.name) for field in fields(dc)}
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,7 +29,7 @@ class Rendering:
   """ Collection of outputs from the renderer, 
 
   depth and depth var are optional, as they are only computed if render_depth=True
-  point_heuristics is computed in the backward pass if compute_point_heuristics=True
+  point_heuristic is computed in the backward pass if compute_point_heuristic=True
 
   """
   image: torch.Tensor        # (H, W, C) - rendered image, C channels of features
@@ -38,7 +40,7 @@ class Rendering:
   point_depth: torch.Tensor  # (N, 1) - depth of each point
 
   point_visibility: Optional[torch.Tensor] = None  # (N,) 
-  point_heuristics: Optional[torch.Tensor] = None  # (N, 2) 
+  point_heuristic: Optional[torch.Tensor] = None  # (N, 2) 
 
   camera : CameraParams
   config: RasterConfig
@@ -47,7 +49,7 @@ class Rendering:
   depth_var: Optional[torch.Tensor] = None  # (H, W) - depth variance 
 
   median_depth: Optional[torch.Tensor] = None  # (H, W) - median depth map
-  gaussians2d: Optional[torch.Tensor] = None     # (N, 7) - 2D gaussians in view
+  gaussians2d: torch.Tensor     # (N, 7) - 2D gaussians in view
 
   @cached_property
   def ndc_depth(self) -> torch.Tensor:
@@ -56,6 +58,10 @@ class Rendering:
   @cached_property
   def ndc_median_depth(self) -> torch.Tensor:
     return ndc_depth(self.median_depth, self.camera.near_plane, self.camera.far_plane)
+  
+  @property
+  def ndc_point_depth(self) -> torch.Tensor:
+    return ndc_depth(self.point_depth, self.camera.near_plane, self.camera.far_plane)
 
   @property
   def point_scale(self):
@@ -69,7 +75,7 @@ class Rendering:
   @property
   def gaussian_scale(self):
     """ Factor of the gaussian bounds used for culling,
-     Original gaussian splatting uses gaussian_scale = 3.0
+     Original gaussian splatting uses fixed gaussian_scale = 3.0
    """
     return torch.sqrt(2 * torch.log(self.point_opacity / self.config.alpha_threshold))
 
@@ -80,23 +86,25 @@ class Rendering:
   
   @property
   def prune_cost(self):
-    return self.point_heuristics[..., 0]
+    assert self.config.compute_point_heuristic, "No point heuristic information available (use config.compute_point_heuristic=True)"
+    return self.point_heuristic[:, 0]
 
   @property
   def split_score(self):
-    return self.point_heuristics[..., 1]
+    assert self.config.compute_point_heuristic, "No point heuristic information available (use config.compute_point_heuristic=True)"
+    return self.point_heuristic[:, 1]
+  
+  @property
+  def _point_visibility(self) -> torch.Tensor:
+    assert self.point_visibility is not None, "No visibility information available (use config.compute_visibility=True)"
+    return self.point_visibility
 
   @cached_property
   def visible_mask(self) -> torch.Tensor:
-    """ If a point in the view is visible """
-    if self.point_visibility is not None:
-      return self.point_visibility > 0
-    elif self.point_heuristics is not None:
-      return self.point_heuristics[..., 0] > 0
+    """ mask of when a point in the view is visible """
+    return self._point_visibility > 0
     
-    raise ValueError("No visibility information available")
-
-
+  
   @cached_property
   def visible_indices(self) -> torch.Tensor:
     """ Indexes of visible points """
@@ -104,12 +112,12 @@ class Rendering:
   
   @cached_property
   def visible(self) -> Tuple[torch.Tensor, torch.Tensor]:
-    """ Visible points and their features """
-    return self.visible_indices, self.point_visibility
+    """ Returns visible point indexes, and their features """
+    return self.visible_indices, self._point_visibility[self.visible_mask]
 
 
   @property
-  def image_size(self) -> Tuple[int, int]:
+  def image_size(self) -> Tuple[Integral, Integral]:
     return self.camera.image_size
   
   @property
@@ -117,8 +125,6 @@ class Rendering:
     return self.points_in_view.shape[0]
   
   def detach(self):
-
-    
     return Rendering(
       **{k: x.detach() if hasattr(x, 'detach') else x
           for k, x in unpack(self).items()})
@@ -152,7 +158,6 @@ def render_gaussians(
     
   """
 
-
   gaussians2d, depths, indexes = project_to_image(gaussians, camera_params, config)
 
   if use_sh:
@@ -184,7 +189,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
   ndc_depths = TaichiQueue.run_sync(ndc_depth, depths, camera_params.near_plane, camera_params.far_plane)
 
   if render_depth:
-    depths = ndc_depth if use_ndc_depth else depths
+    depths = ndc_depths if use_ndc_depth else depths
     features = torch.cat([depths, depths**2, features], dim=1)
 
   overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, ndc_depths, 
@@ -219,7 +224,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
                   camera=camera_params,
                   config=config,
                   point_visibility = raster.visibility if config.compute_visibility else None,  
-                  point_heuristics=raster.point_heuristics if config.compute_point_heuristics else None,
+                  point_heuristic=raster.point_heuristic if config.compute_point_heuristic else None,
                   points_in_view=indexes,
 
                   point_depth=depths,

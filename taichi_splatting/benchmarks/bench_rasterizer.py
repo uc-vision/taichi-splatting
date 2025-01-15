@@ -6,7 +6,7 @@ import torch
 import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
 
-from taichi_splatting.rasterizer.function import rasterize_with_tiles, RasterConfig
+from taichi_splatting.rasterizer.function import  rasterize_with_tiles, RasterConfig
 from taichi_splatting.misc.renderer2d import project_gaussians2d
 from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
 from taichi_splatting.tests.random_data import random_2d_gaussians
@@ -28,9 +28,14 @@ def parse_args(args=None):
   parser.add_argument('--iters', type=int, default=1000)
   parser.add_argument('--antialias', action='store_true')
   parser.add_argument('--debug', action='store_true')
+  parser.add_argument('--skip_forward', action='store_true')
+  parser.add_argument('--saturate_threshold', type=float, default=0.9999)
+  parser.add_argument('--alpha_threshold', type=float, default=1/255)
+  parser.add_argument('--pixel_stride', type=str, default='2,2')
 
   args = parser.parse_args(args)
   args.image_size = tuple(map(int, args.image_size.split(',')))
+  args.pixel_stride = tuple(map(int, args.pixel_stride.split(',')))
   return args
 
 
@@ -43,7 +48,8 @@ def bench_rasterizer(args):
     depth_range = (0.1, 100.)
     gaussians = random_2d_gaussians(args.n, args.image_size, num_channels=args.num_channels,
             scale_factor=args.scale_factor, alpha_range=(0.75, 1.0), depth_range=depth_range).to(args.device)
-    config = RasterConfig(tile_size=args.tile_size, antialias=args.antialias)
+    config = RasterConfig(tile_size=args.tile_size, antialias=args.antialias, pixel_stride=args.pixel_stride, 
+      saturate_threshold=args.saturate_threshold, alpha_threshold=args.alpha_threshold)
     
     gaussians2d = project_gaussians2d(gaussians)
 
@@ -63,13 +69,14 @@ def bench_rasterizer(args):
       tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
       image_size=args.image_size, config=config)
     
-    benchmarked('forward', forward, profile=args.profile, iters=args.iters * 4)  
+    if not args.skip_forward:
+      benchmarked('forward', forward, profile=args.profile, iters=args.iters * 4)  
 
-    forward_visible = partial(rasterize_with_tiles, gaussians2d=gaussians2d, features=gaussians.feature, 
-      tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-      image_size=args.image_size, config=replace(config, compute_visibility=True))
-
-    benchmarked('forward (visible)', forward_visible, profile=args.profile, iters=args.iters * 4)  
+      forward_vis = partial(rasterize_with_tiles, gaussians2d=gaussians2d, features=gaussians.feature, 
+        tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
+        image_size=args.image_size, config=replace(config, compute_visibility=True))
+      
+      benchmarked('forward_vis', forward_vis, profile=args.profile, iters=args.iters * 4)  
 
     gaussians.feature.requires_grad_(True)
     
@@ -90,15 +97,14 @@ def bench_rasterizer(args):
     benchmarked('backward (all)', backward, profile=args.profile, iters=args.iters)  
 
     
-    def compute_point_heuristics():
+    def compute_point_heuristic():
       raster = rasterize_with_tiles(gaussians2d=gaussians2d, features=gaussians.feature, 
         tile_overlap_ranges=tile_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-        image_size=args.image_size, config=replace(config, 
-                compute_visibility=True, compute_point_heuristics=True))
+        image_size=args.image_size, config=replace(config, compute_point_heuristic=True))
       
       raster.image.sum().backward()
 
-    benchmarked('backward (compute_point_heuristics)', compute_point_heuristics, profile=args.profile, iters=args.iters)  
+    benchmarked('backward (compute_point_heuristic)', compute_point_heuristic, profile=args.profile, iters=args.iters)  
 
 
 def main():

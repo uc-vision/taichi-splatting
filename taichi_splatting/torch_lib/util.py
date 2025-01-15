@@ -1,6 +1,5 @@
 import torch
 from typing import Mapping, Sequence
-from tensordict import TensorDict
 from tensordict.tensorclass import is_tensorclass
 
 def check_finite(t, name, warn=False):

@@ -1,22 +1,21 @@
 from dataclasses import dataclass, replace
 from beartype.typing import Tuple
 from beartype import beartype
-from tensordict import tensorclass
 import torch
 
 from torch.nn import functional as F
+from tensordict import tensorclass
 
 
   
 @beartype
-@dataclass(frozen=True, eq=True)
+@dataclass(frozen=True, eq=True, kw_only=True)
 class RasterConfig:
   tile_size: int = 16
 
   # pixel tilin per thread in the backwards pass 
   pixel_stride: Tuple[int, int] = (2, 2)
 
-  margin_tiles: int = 3
 
   # clamp position to within this margin of the image for affine jaocbian
   clamp_margin: float = 0.15  
@@ -36,17 +35,18 @@ class RasterConfig:
   # use alpha blending - if set to false, with saturate_threshold can be used to compute quantile (e.g. median)
   use_alpha_blending: bool = True
 
-  compute_point_heuristics: bool = False # compute point heuristics (split score, prune score, visibility) in backward pass
+  compute_point_heuristic: bool = False # implies compute_visibility
   compute_visibility: bool = False # compute visibility (pixels) for each gaussian
 
 
+
+    
 
 def check_packed3d(packed_gaussians: torch.Tensor):
   assert len(packed_gaussians.shape) == 2 and packed_gaussians.shape[1] == 11, f"Expected shape (N, 11), got {packed_gaussians.shape}"  
 
 def check_packed2d(packed_gaussians: torch.Tensor):
   assert len(packed_gaussians.shape) == 2 and packed_gaussians.shape[1] == 6, f"Expected shape (N, 6), got {packed_gaussians.shape}"  
-
 
 
 @tensorclass
@@ -78,14 +78,7 @@ class Gaussians3D():
   @property
   def alpha(self):
     return torch.sigmoid(self.alpha_logit)
-  
-  def requires_grad_(self, requires_grad):
-    self.position.requires_grad_(requires_grad)
-    self.log_scaling.requires_grad_(requires_grad)
-    self.rotation.requires_grad_(requires_grad)
-    self.alpha_logit.requires_grad_(requires_grad)
-    self.feature.requires_grad_(requires_grad)
-    return self
+
   
   def replace(self, **kwargs):
     return replace(self, **kwargs, batch_size=self.batch_size)
@@ -102,6 +95,7 @@ class Gaussians3D():
   
 def inverse_sigmoid(x:torch.Tensor):
   return torch.log(x / (1 - x))
+
 
 @tensorclass
 class Gaussians2D():
