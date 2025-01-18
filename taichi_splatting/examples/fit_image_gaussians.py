@@ -106,7 +106,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
       gaussians2d = project_gaussians2d(gaussians)  
 
       raster = rasterize(gaussians2d=gaussians2d, 
-        depth=gaussians.z_depth.clamp(0, 1),
+        depth=gaussians.depths.clamp(0, 1),
         features=gaussians.feature, 
         image_size=(w, h), 
         config=config)

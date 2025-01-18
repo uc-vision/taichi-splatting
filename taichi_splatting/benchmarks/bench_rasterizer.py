@@ -6,6 +6,7 @@ import torch
 import taichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
 
+from taichi_splatting.data_types import Gaussians2D
 from taichi_splatting.rasterizer.function import  rasterize_with_tiles, RasterConfig
 from taichi_splatting.misc.renderer2d import project_gaussians2d
 from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
@@ -46,7 +47,7 @@ def bench_rasterizer(args):
     torch.manual_seed(args.seed)
 
     depth_range = (0.1, 100.)
-    gaussians = random_2d_gaussians(args.n, args.image_size, num_channels=args.num_channels,
+    gaussians:Gaussians2D = random_2d_gaussians(args.n, args.image_size, num_channels=args.num_channels,
             scale_factor=args.scale_factor, alpha_range=(0.75, 1.0), depth_range=depth_range).to(args.device)
     config = RasterConfig(tile_size=args.tile_size, antialias=args.antialias, pixel_stride=args.pixel_stride, 
       saturate_threshold=args.saturate_threshold, alpha_threshold=args.alpha_threshold)
@@ -54,7 +55,7 @@ def bench_rasterizer(args):
     gaussians2d = project_gaussians2d(gaussians)
 
     overlap_to_point, tile_ranges = map_to_tiles(gaussians2d, 
-        depth=gaussians.z_depth, 
+        depth=gaussians.depths, 
         image_size=args.image_size, 
         config=config)
     
