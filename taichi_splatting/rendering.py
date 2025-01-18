@@ -51,7 +51,11 @@ class RenderedPoints:
   
   @cached_property
   def visible(self) -> 'RenderedPoints':
-    return self[self._visibility > 0.0]
+    return self[self.visible_mask]
+  
+  @property
+  def visible_mask(self) -> torch.Tensor:
+    return self._visibility > 0.0
   
   def gaussian_scale(self, alpha_threshold:float=1.0/255):
     """ Factor of the gaussian bounds used for culling,
