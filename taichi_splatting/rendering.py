@@ -99,6 +99,19 @@ class Rendering:
   def median_ndc_image(self) -> torch.Tensor:
     return ndc_depth(self.median_depth_image, self.camera.near_plane, self.camera.far_plane)
   
+
+  @property
+  def visible_idx(self) -> torch.Tensor:
+    return self.points.idx[self.points.visible_mask]
+  
+  @property
+  def in_view_idx(self) -> torch.Tensor:
+    return self.points.idx
+  
+  @property
+  def visible_points(self) -> RenderedPoints:
+    return self.points[self.visible_idx]
+  
   @property
   def image_size(self) -> Tuple[int, int]:
     return self.camera.image_size
