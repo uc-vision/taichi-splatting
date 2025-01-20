@@ -40,8 +40,6 @@ class ParameterClass():
       dict(params=[self.tensors[name]], name=name, **group)
         for name, group in parameter_groups.items()
     ]
-    self.mlp = mlp
-    self.mlp_opt = mlp_opt
     self.optimizer = optimizer(param_groups, **optim_kwargs)
     self.optim_kwargs = optim_kwargs
 
