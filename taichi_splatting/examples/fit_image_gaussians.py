@@ -111,9 +111,8 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
         image_size=(w, h), 
         config=config)
       
-      image = raster.image.sigmoid()
+      image = raster.image
 
-      
       scale = torch.exp(gaussians.log_scaling) / min(w, h)
       loss = (torch.nn.functional.mse_loss(image, ref_image) 
               + opacity_reg * gaussians.opacity.mean()

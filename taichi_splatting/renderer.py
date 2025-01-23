@@ -1,11 +1,7 @@
 
 
-from dataclasses import fields, dataclass, replace
-from functools import cached_property
-from numbers import Integral
-from typing import Any
+from dataclasses import replace
 from beartype import beartype
-from beartype.typing import Optional, Tuple
 import torch
 
 from taichi_splatting.data_types import Gaussians3D
@@ -20,8 +16,6 @@ from taichi_splatting.perspective import (CameraParams)
 from taichi_splatting.perspective.projection import project_to_image
 from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.torch_lib.projection import ndc_depth
-
-from tensordict import tensorclass
 
 
 
@@ -62,23 +56,17 @@ def render_gaussians(
     assert len(features.shape) == 2, f"Features must be (N, C) if use_sh=False, got {features.shape}"
 
   return render_projected(indexes, gaussians2d, features, depths, camera_params, config, 
-                   render_depth=render_depth, use_depth16=use_depth16, render_median_depth=render_median_depth)
-
-
-
+                  use_depth16=use_depth16, render_median_depth=render_median_depth)
 
 
 def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor, 
       features:torch.Tensor, depths:torch.Tensor, 
       camera_params: CameraParams, config:RasterConfig,      
-
-      render_depth:bool = False,  use_depth16:bool = False, render_median_depth:bool = False):
+      use_depth16:bool = False, render_median_depth:bool = False):
 
   ndc_depths = TaichiQueue.run_sync(ndc_depth, depths, camera_params.near_plane, camera_params.far_plane)
-
-  if render_depth:
-    features = torch.cat([depths, depths**2, features], dim=1)
-
+  device = features.device
+  
   overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, ndc_depths, 
     image_size=camera_params.image_size, config=config, use_depth16=use_depth16)
   
@@ -97,12 +85,6 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
   img_depth = None
   feature_image = raster.image
 
-  if render_depth:
-    # normalise alpha-blended depth
-    img_depth = feature_image[..., :2] / raster.image_weight
-    feature_image = feature_image[..., 2:]
-
-
   points = RenderedPoints(idx=indexes,
                   depths=depths,
                   gaussians2d=gaussians2d,
@@ -116,6 +98,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
                   image_weight=raster.image_weight,  
                   depth_image=img_depth, 
                   median_depth_image=median_depth,
+                  reg_losses=torch.tensor(0.0, device=device),
 
                   points=points,
                   camera=camera_params,
