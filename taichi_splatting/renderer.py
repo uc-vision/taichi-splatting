@@ -16,7 +16,7 @@ from taichi_splatting.perspective import (CameraParams)
 from taichi_splatting.perspective.projection import project_to_image
 from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.torch_lib.projection import ndc_depth
-
+from tensordict import TensorDict
 
 
 @beartype
@@ -62,10 +62,9 @@ def render_gaussians(
 def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor, 
       features:torch.Tensor, depths:torch.Tensor, 
       camera_params: CameraParams, config:RasterConfig,      
-      use_depth16:bool = False, render_median_depth:bool = False):
+      use_depth16:bool = False, render_median_depth:bool = False) -> Rendering:
 
   ndc_depths = TaichiQueue.run_sync(ndc_depth, depths, camera_params.near_plane, camera_params.far_plane)
-  device = features.device
   
   overlap_to_point, tile_overlap_ranges = map_to_tiles(gaussians2d, ndc_depths, 
     image_size=camera_params.image_size, config=config, use_depth16=use_depth16)
@@ -85,6 +84,9 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
   img_depth = None
   feature_image = raster.image
 
+  point_shape = (depths.shape[0],)
+
+
   points = RenderedPoints(idx=indexes,
                   depths=depths,
                   gaussians2d=gaussians2d,
@@ -92,13 +94,14 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
                   _visibility = raster.visibility if config.compute_visibility else None,  
                   _prune_cost=raster.point_heuristic[:, 0] if config.compute_point_heuristic else None,
                   _split_score=raster.point_heuristic[:, 1] if config.compute_point_heuristic else None,
-                  batch_size=(depths.shape[0],))
+                  features=features, 
+                  attributes=None,
+                  batch_size=point_shape)
 
   return Rendering(image=feature_image, 
                   image_weight=raster.image_weight,  
                   depth_image=img_depth, 
                   median_depth_image=median_depth,
-                  reg_losses=torch.tensor(0.0, device=device),
 
                   points=points,
                   camera=camera_params,

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from functools import cached_property
 from numbers import Integral
 from typing import Any, Optional, Tuple
@@ -7,7 +7,7 @@ from taichi_splatting.perspective.params import CameraParams
 import torch
 
 from taichi_splatting.torch_lib.projection import ndc_depth
-from tensordict import tensorclass
+from tensordict import tensorclass, TensorDict
 
 
 def unpack(dc) -> dict[str, Any]:
@@ -34,11 +34,13 @@ class RenderedPoints:
     depths: torch.Tensor # 1, point depths
 
     gaussians2d: torch.Tensor # 7, gaussians2d, 2d gaussians after projection
+    features: torch.Tensor # N - rendered features of points e.g. color
 
     _prune_cost: Optional[torch.Tensor] = None # 1, prune cost - heuristic for point pruning computed in backward pass
     _split_score: Optional[torch.Tensor] = None # 1, split score - heuristic for point splitting computed in backward pass
 
     _visibility: Optional[torch.Tensor] = None # 1, visibility - sum of pre-multiplied alpha values during rasterization
+    attributes: Optional[TensorDict] = None # to allow other attributes to be added
 
     @property
     def prune_cost(self):
@@ -112,11 +114,9 @@ class Rendering:
     image_weight: torch.Tensor  # (H, W, 1) - weight of each pixel (total alpha)
 
     depth_image: Optional[torch.Tensor] = None  # (H, W)    - depth map
-    median_depth_image: Optional[
-        torch.Tensor] = None  # (H, W) - median depth map
+    median_depth_image: Optional[torch.Tensor] = None  # (H, W) - median depth map
 
     points: RenderedPoints    # (N,) renderered points which were in view
-    reg_losses: torch.Tensor  # 1, regularization loss
 
     camera: CameraParams
     config: RasterConfig
