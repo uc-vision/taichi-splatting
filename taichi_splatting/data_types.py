@@ -38,8 +38,6 @@ class RasterConfig:
   compute_point_heuristic: bool = False # implies compute_visibility
   compute_visibility: bool = False # compute visibility (pixels) for each gaussian
 
-
-
     
 
 def check_packed3d(packed_gaussians: torch.Tensor):
@@ -100,7 +98,7 @@ def inverse_sigmoid(x:torch.Tensor):
 @tensorclass
 class Gaussians2D():
   position     : torch.Tensor # 2  - xy
-  z_depth        : torch.Tensor # 1  - for sorting
+  depths        : torch.Tensor # 1  - for sorting
   log_scaling   : torch.Tensor # 2
 
   rotation      : torch.Tensor # 2  - unit length imaginary number

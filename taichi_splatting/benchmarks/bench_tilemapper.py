@@ -48,7 +48,7 @@ def bench_tilemapper(args):
       def map_to_tiles():
 
         return module.map_to_tiles(gaussians2d, 
-          depth=gaussians.z_depth, 
+          depth=gaussians.depths, 
           image_size=args.image_size, 
           config=config,
           use_depth16=args.depth16)

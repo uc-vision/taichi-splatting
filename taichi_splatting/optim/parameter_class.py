@@ -211,13 +211,16 @@ class ParameterClass():
 
   @beartype
   def __getitem__(self, idx:torch.Tensor | str):
-
     if isinstance(idx, str):
       return self.tensors[idx]
     else:
+      # Convert boolean mask to indices if needed
+      if idx.dtype == torch.bool:
+          idx = idx.nonzero().squeeze(1)
+      
       state = (self.tensor_state[idx], self.other_state)
       return ParameterClass(self.tensors[idx], self.parameter_groups, 
-                            state, optimizer=type(self.optimizer), **self.optim_kwargs)
+                          state, optimizer=type(self.optimizer), **self.optim_kwargs)
   
   def append_tensors(self, tensors:TensorDict, tensor_state:Optional[TensorDict]=None):
     if tensor_state is not None:

@@ -51,7 +51,7 @@ def test_visibility(debug=False, max_n=10000):
 
       gaussians2d = project_gaussians2d(gaussians)
       raster = rasterize(gaussians2d=gaussians2d, 
-        depth = torch.clamp(gaussians.z_depth, 0, 1).to(torch.float32),
+        depth = torch.clamp(gaussians.depths, 0, 1).to(torch.float32),
         features=gaussians.feature, 
         image_size=image_size, 
         config=config)

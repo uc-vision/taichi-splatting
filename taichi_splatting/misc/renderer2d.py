@@ -66,7 +66,7 @@ def split_with_offsets(points: Gaussians2D, offsets: torch.Tensor, depth_noise:f
   
   return replace(gaussians,
     position = gaussians.position + offsets.view(-1,  2),
-    z_depth = torch.clamp_min(gaussians.z_depth + torch.randn_like(gaussians.z_depth) * depth_noise, 1e-6),
+    depths = torch.clamp_min(gaussians.depths + torch.randn_like(gaussians.depths) * depth_noise, 1e-6),
     batch_size=(num_points * n, ))
    
 
@@ -141,7 +141,7 @@ def render_gaussians(
   gaussians2d = project_gaussians2d(gaussians)
   
   raster = rasterize(gaussians2d=gaussians2d, 
-    depth = torch.clamp(gaussians.z_depth, 0, 1),
+    depth = torch.clamp(gaussians.depths, 0, 1),
     features=gaussians.feature, 
     image_size=image_size, 
     config=raster_config)

@@ -20,7 +20,6 @@ def backward_kernel(config: RasterConfig,
   lib = get_library(dtype)
   Gaussian2D = lib.Gaussian2D
   vec2 = lib.vec2
-  vec1 = lib.vec1
 
   # Configure data types
   feature_vec = ti.types.vector(feature_size, dtype=dtype)
