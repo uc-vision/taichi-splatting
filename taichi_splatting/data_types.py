@@ -1,4 +1,5 @@
 from dataclasses import dataclass, replace
+import math
 from beartype.typing import Tuple
 from beartype import beartype
 import torch
@@ -68,6 +69,12 @@ class Gaussians3D():
   
   def shape_tensors(self):
     return (self.position, self.log_scaling, self.rotation, self.alpha_logit)
+
+  def scaled(self, scale:float) -> 'Gaussians3D':
+    return self.replace(log_scaling=math.log(scale) + self.log_scaling)
+
+  def translated(self, translation:torch.Tensor) -> 'Gaussians3D':
+    return self.replace(position=self.position + translation.view(1, 3))
 
   @property
   def scale(self):
