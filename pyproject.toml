@@ -14,7 +14,8 @@ dependencies = [
   "beartype", 
   "taichi", 
   "tqdm", 
-  "tensordict"
+  "tensordict",
+  "packaging"
 ]
 
 
