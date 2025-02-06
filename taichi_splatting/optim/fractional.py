@@ -23,7 +23,7 @@ class Group:
   betas: Tuple[float, float]
   eps: float
   bias_correction: bool
-  
+  clip: Optional[float]
   # Learning rate masking
   mask_lr: Optional[torch.Tensor]
   point_lr: Optional[torch.Tensor]
@@ -96,6 +96,7 @@ def make_group(group, state) -> Group:
       betas=group["betas"],
       eps=group["eps"],
       bias_correction=group["bias_correction"],
+      clip=group.get("clip", None),
       
       # Learning rate masking
       mask_lr=group["mask_lr"],
@@ -134,6 +135,10 @@ def weighted_step(group:Group,
         m, v, total_weight,
         group.grad, group.lr)
 
+  if group.clip is not None:
+    max_step = group.lr * group.clip
+    lr_step.clamp_(-max_step, max_step)
+
   if group.type == "local_vector":
     lr_step = torch.einsum('bij,bj->bi', basis, lr_step)
 
@@ -153,14 +158,14 @@ def saturate(x:torch.Tensor):
 class FractionalOpt(torch.optim.Optimizer):
   
   def __init__(self, kernels:types.ModuleType, param_groups:list[dict], lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
+               betas=(0.9, 0.999), eps=1e-16, bias_correction=True, clip:Optional[float]=None):
     
     assert lr > 0, f"Invalid learning rate: {lr}"
     assert eps > 0, f"Invalid epsilon: {eps}"
     assert 0.0 <= betas[0] < 1.0, f"Invalid beta1: {betas[0]}"
     assert 0.0 <= betas[1] < 1.0, f"Invalid beta2: {betas[1]}"
 
-    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, point_lr=None, type="scalar", bias_correction=bias_correction)  
+    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, point_lr=None, type="scalar", bias_correction=bias_correction, clip=clip)  
 
 
     self.kernels = kernels
