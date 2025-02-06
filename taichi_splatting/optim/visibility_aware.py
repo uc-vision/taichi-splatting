@@ -55,18 +55,18 @@ def set_indexes(target:torch.Tensor, values:torch.Tensor, indexes:torch.Tensor):
 class VisibilityOptimizer(torch.optim.Optimizer):
   
   def __init__(self, kernels:types.ModuleType, params:list[dict], lr=0.001, 
-               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.9, vis_smooth:float=0.01, bias_correction=True, grad_scale:float=1.0):
+               betas=(0.9, 0.999), eps=1e-16, vis_beta=0.9, vis_smooth:float=0.01, 
+               bias_correction=True, grad_clip:Optional[float]=None):
     
     assert lr > 0, f"Invalid learning rate: {lr}"
     assert eps > 0, f"Invalid epsilon: {eps}"
     assert 0.0 <= betas[0] < 1.0, f"Invalid beta1: {betas[0]}"
     assert 0.0 <= betas[1] < 1.0, f"Invalid beta2: {betas[1]}"
     assert 0.0 <= vis_beta < 1.0, f"Invalid visibility beta: {vis_beta}"
-    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, point_lr=None, type="scalar", bias_correction=bias_correction)  
+    defaults = dict(lr=lr, betas=betas, eps=eps, mask_lr=None, point_lr=None, type="scalar", bias_correction=bias_correction, clip=grad_clip)  
 
     self.vis_beta = vis_beta
     self.vis_smooth = vis_smooth
-    self.grad_scale = grad_scale
     self.kernels = kernels
     super().__init__(params, defaults)
 
@@ -97,12 +97,11 @@ class VisibilityOptimizer(torch.optim.Optimizer):
 
       assert group.num_points == n, f"param shape {group.num_points} != {n}"
       group = replace(group, grad=set_indexes(group.grad, 
-                        group.grad[indexes] * self.grad_scale  / (visibility.unsqueeze(1) + self.vis_smooth), 
+                        group.grad[indexes]  / (visibility.unsqueeze(1) + self.vis_smooth), 
                           indexes))
 
       lr_step = weighted_step(group, weight, indexes, total_weight, self.kernels, basis)
 
-      # group.param[indexes] -= lr_step * weight.unsqueeze(1)
       group.param[indexes] -= lr_step * saturate(weight).unsqueeze(1)
 
 
@@ -110,18 +109,18 @@ class VisibilityOptimizer(torch.optim.Optimizer):
 class VisibilityAwareAdam(VisibilityOptimizer):
   def __init__(self, params, lr=0.001, 
                betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5, 
-               vis_smooth:float = 0.01, bias_correction=True):
+               vis_smooth:float = 0.01, bias_correction=True, grad_clip:Optional[float]=None):
     super().__init__(fractional_adam, params,
                      lr=lr, betas=betas, eps=eps, vis_beta=vis_beta, 
-                     vis_smooth=vis_smooth, bias_correction=bias_correction)
+                     vis_smooth=vis_smooth, bias_correction=bias_correction, grad_clip=grad_clip)
 
 
 class VisibilityAwareLaProp(VisibilityOptimizer):
   def __init__(self, params, lr=0.001, 
                betas=(0.9, 0.999), eps=1e-16, vis_beta=0.5, 
-               vis_smooth:float=0.01, bias_correction=True):
+               vis_smooth:float=0.01, bias_correction=True, grad_clip:Optional[float]=None):
     
     
     super().__init__(fractional_laprop, params,
                      lr=lr, betas=betas, eps=eps, vis_beta=vis_beta, 
-                     vis_smooth=vis_smooth, bias_correction=bias_correction)
+                     vis_smooth=vis_smooth, bias_correction=bias_correction, grad_clip=grad_clip)

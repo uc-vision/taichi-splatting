@@ -69,6 +69,10 @@ class RenderedPoints:
     def visible(self) -> 'RenderedPoints':
         return self[self.visible_mask]
     
+    @property
+    def num_visible(self) -> int:
+        return self.visible_mask.sum().item()
+    
     @cached_property
     def indexed_visibility(self) -> Indexed:
         return Indexed(idx=self.idx, data=self.visibility)
