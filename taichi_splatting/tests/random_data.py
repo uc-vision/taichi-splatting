@@ -53,7 +53,7 @@ def random_3d_gaussians(n, camera_params:CameraParams,
   w, h = camera_params.image_size
   uv_pos = (torch.rand(n, 2) * (1 + margin) - margin * 0.5) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
 
-  depth = torch_proj.inverse_ndc_depth(torch.rand(n), camera_params.near_plane, camera_params.far_plane)
+  depth = torch_proj.inverse_ndc_depth(torch.rand(n), camera_params.near_plane * 2, camera_params.far_plane)
 
   position = torch_proj.unproject_points(uv_pos, depth.unsqueeze(1), camera_params.T_image_world)
   fx = camera_params.T_image_camera[0, 0]
