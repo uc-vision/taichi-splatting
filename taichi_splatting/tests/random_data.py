@@ -45,22 +45,19 @@ def random_camera(pos_scale:float=1., image_size:Optional[Tuple[int, int]]=None,
   )
 
 
-
-
-
 def random_3d_gaussians(n, camera_params:CameraParams, 
   scale_factor:float=1.0, alpha_range=(0.1, 0.9), margin=0.0) -> Gaussians3D:
   
   w, h = camera_params.image_size
   uv_pos = (torch.rand(n, 2) * (1 + margin) - margin * 0.5) * torch.tensor([w, h], dtype=torch.float32).unsqueeze(0)
 
-  depth = torch_proj.inverse_ndc_depth(torch.rand(n), camera_params.far_plane / 2, camera_params.far_plane)
+  depth = torch_proj.inverse_ndc_depth(torch.rand(n), camera_params.near_plane * 2, camera_params.far_plane)
 
   position = torch_proj.unproject_points(uv_pos, depth.unsqueeze(1), camera_params.T_image_world)
   fx = camera_params.T_image_camera[0, 0]
 
   scale =  (w / math.sqrt(n)) * (depth / fx) * scale_factor
-  scaling = F.normalize(torch.rand(n, 3) + 0.01, dim=1) * scale.unsqueeze(1) 
+  scaling = torch.randn(n, 3) * scale.unsqueeze(1) 
 
   rotation = torch.randn(n, 4) 
   rotation = F.normalize(rotation, dim=1)
