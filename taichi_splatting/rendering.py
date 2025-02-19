@@ -1,6 +1,5 @@
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from functools import cached_property
-from numbers import Integral
 from typing import Any, Optional, Tuple
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.perspective.params import CameraParams
