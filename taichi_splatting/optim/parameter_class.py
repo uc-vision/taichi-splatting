@@ -32,8 +32,10 @@ class ParameterClass():
 
                **optim_kwargs):
 
-    self.tensors:TensorDict = as_parameters(tensors, parameter_groups.keys())
+    assert tensors.batch_dims == 1 and tensors.batch_size[0] > 0, f"got {tensors.batch_size}"
+    assert tensors.device is not None, f"tensors.device is None, got {tensors.device}"
 
+    self.tensors:TensorDict = as_parameters(tensors, parameter_groups.keys())
 
     param_groups = [
       dict(params=[self.tensors[name]], name=name, **group)
@@ -50,7 +52,7 @@ class ParameterClass():
           assert k in self.tensors.keys(), f"state parameter {k} not in {self.tensors.keys()}"
           self.optimizer.state[self.tensors[k]] = {**tensor_state[k].to_dict(), **other_state[k]}
 
-  
+
   @property
   def parameter_groups(self):
 
@@ -105,10 +107,10 @@ class ParameterClass():
 
   
   @staticmethod
-  def from_state_dict(state:dict, optimizer=optim.Adam, **optim_kwargs) -> 'ParameterClass':
+  def from_state_dict(state:dict, device:torch.device, optimizer=optim.Adam, **optim_kwargs) -> 'ParameterClass':
     tensor_state, other_state = state['optimizer']
     return ParameterClass(
-      TensorDict.from_dict(state['tensors'], batch_dims=1), 
+      TensorDict.from_dict(state['tensors'], batch_dims=1, device=device), 
       parameter_groups=state['parameter_groups'],
       optimizer_state=(TensorDict.from_dict(tensor_state), other_state),
       optimizer=optimizer,
@@ -243,7 +245,7 @@ class ParameterClass():
 
 
 @beartype
-def as_parameters(tensors:TensorDict | Mapping[str, torch.Tensor], keys:Iterable[str]):
+def as_parameters(tensors:TensorDict, keys:Iterable[str]):
   
     param_dict = {
       k: torch.nn.Parameter(x.detach(), requires_grad=True) 
@@ -251,7 +253,7 @@ def as_parameters(tensors:TensorDict | Mapping[str, torch.Tensor], keys:Iterable
         for k, x in tensors.items()}
 
     cls = type(tensors)
-    return cls.from_dict(param_dict) 
+    return cls.from_dict(param_dict, batch_dims=tensors.batch_dims, device=tensors.device) 
 
 
 def replace_dict(d, **kwargs):
