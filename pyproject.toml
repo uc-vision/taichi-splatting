@@ -14,7 +14,7 @@ dependencies = [
   "beartype", 
   "taichi", 
   "tqdm", 
-  "tensordict",
+  "tensordict >=0.7.0",
   "packaging" 
 ]
 
@@ -28,12 +28,10 @@ exclude = ["profiles", "benchmarks"]
 "Homepage" = "https://github.com/uc-vision/taichi-splatting"
 
 [build-system]
-requires = ["setuptools>=43.0.0",  "wheel", "setuptools-scm"]
-build-backend = "setuptools.build_meta"
+# Hatching
+requires = ["hatchling>=1.5.0"]
+build-backend = "hatchling.build"
 
-
-[options]
-dependency_links = ["https://pypi.taichi.graphics/simple/"]
 
 [project.scripts]  # Optional
 fit_image_gaussians = "taichi_splatting.examples.fit_image_gaussians:main"

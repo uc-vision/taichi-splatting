@@ -6,7 +6,7 @@ from taichi_splatting.perspective.params import CameraParams
 import torch
 
 from taichi_splatting.torch_lib.projection import ndc_depth
-from tensordict import tensorclass, TensorDict
+from tensordict import TensorClass, TensorDict
 
 
 def unpack(dc) -> dict[str, Any]:
@@ -14,8 +14,7 @@ def unpack(dc) -> dict[str, Any]:
 
 
 
-@tensorclass
-class Indexed:
+class Indexed(TensorClass):
   idx: torch.Tensor # N, 1, index of points in larger scene
   data: torch.Tensor # N, K data of points
 
@@ -25,9 +24,7 @@ class Indexed:
     return data
 
 
-
-@tensorclass
-class RenderedPoints:
+class RenderedPoints(TensorClass):
 
     idx: torch.Tensor # 1, index of points in larger scene
     depths: torch.Tensor # 1, point depths

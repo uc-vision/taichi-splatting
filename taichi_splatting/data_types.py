@@ -5,7 +5,7 @@ from beartype import beartype
 import torch
 
 from torch.nn import functional as F
-from tensordict import tensorclass
+from tensordict import TensorClass
 
 
   
@@ -48,8 +48,7 @@ def check_packed2d(packed_gaussians: torch.Tensor):
   assert len(packed_gaussians.shape) == 2 and packed_gaussians.shape[1] == 6, f"Expected shape (N, 6), got {packed_gaussians.shape}"  
 
 
-@tensorclass
-class Gaussians3D():
+class Gaussians3D(TensorClass):
   position     : torch.Tensor # 3  - xyz
   log_scaling   : torch.Tensor # 3  - scale = exp(log_scalining) 
   rotation      : torch.Tensor # 4  - quaternion wxyz
@@ -102,8 +101,7 @@ def inverse_sigmoid(x:torch.Tensor):
   return torch.log(x / (1 - x))
 
 
-@tensorclass
-class Gaussians2D():
+class Gaussians2D(TensorClass):
   position     : torch.Tensor # 2  - xy
   depths        : torch.Tensor # 1  - for sorting
   log_scaling   : torch.Tensor # 2
