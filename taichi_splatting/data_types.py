@@ -49,11 +49,12 @@ def check_packed2d(packed_gaussians: torch.Tensor):
 
 
 class Gaussians3D(TensorClass):
-  position     : torch.Tensor # 3  - xyz
+  position      : torch.Tensor # 3  - xyz
   log_scaling   : torch.Tensor # 3  - scale = exp(log_scalining) 
   rotation      : torch.Tensor # 4  - quaternion wxyz
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
-  feature      : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
+  feature       : torch.Tensor # (any rgb (3), spherical harmonics (3x16) etc)
+  log_w         : torch.Tensor # 1  - log w (homogeneous coordinate)
 
 
   def __post_init__(self):
@@ -61,13 +62,41 @@ class Gaussians3D(TensorClass):
     assert self.log_scaling.shape[1] == 3, f"Expected shape (N, 3), got {self.log_scaling.shape}"
     assert self.rotation.shape[1] == 4, f"Expected shape (N, 4), got {self.rotation.shape}"
     assert self.alpha_logit.shape[1] == 1, f"Expected shape (N, 1), got {self.alpha_logit.shape}"
+    assert self.log_w.shape[1] == 1, f"Expected shape (N, 1), got {self.log_w.shape}"
+
+  def normalized(self) -> 'Gaussians3D':
+    # normalize by homogeneous coordinate w
+    w = torch.exp(self.log_w)
+    return self.replace(
+      position=self.position / w.view(-1, 1),
+      log_scaling=self.log_scaling - self.log_w.view(-1, 1),
+
+      rotation=self.rotation,
+      alpha_logit=self.alpha_logit,
+      feature=self.feature,
+      log_w=torch.zeros_like(self.log_w),
+    )
+
+  def unnormalized(self, w:torch.Tensor) -> 'Gaussians3D':
+
+    log_w = w.log()
+    # unnormalize by homogeneous coordinate w
+    return self.replace(
+      position=self.position * w.view(-1, 1),
+      log_scaling=self.log_scaling + log_w.view(-1, 1),
+
+      rotation=self.rotation,
+      alpha_logit=self.alpha_logit,
+      feature=self.feature,
+      log_w=log_w
+    )
 
 
   def packed(self):
     return torch.cat([self.position, self.log_scaling, self.rotation, self.alpha_logit], dim=-1)
   
   def shape_tensors(self):
-    return (self.position, self.log_scaling, self.rotation, self.alpha_logit)
+    return (self.position, self.log_scaling, self.rotation, self.alpha_logit, self.log_w)
 
   def scaled(self, scale:float) -> 'Gaussians3D':
     return self.replace(log_scaling=math.log(scale) + self.log_scaling)
@@ -77,25 +106,16 @@ class Gaussians3D(TensorClass):
 
   @property
   def scale(self):
-    return torch.exp(self.log_scaling)
+    return torch.exp(self.log_scaling - self.log_w.view(-1, 1))
+
+  @property
+  def normalized_position(self):
+    return self.position / torch.exp(self.log_w).view(-1, 1)
 
   @property
   def alpha(self):
     return torch.sigmoid(self.alpha_logit)
 
-  
-  def replace(self, **kwargs):
-    return replace(self, **kwargs, batch_size=self.batch_size)
-  
-  def concat(self, other):
-    return replace(self,
-      position=torch.cat([self.position, other.position], dim=0),
-      log_scaling=torch.cat([self.log_scaling, other.log_scaling], dim=0),
-      rotation=torch.cat([self.rotation, other.rotation], dim=0),
-      alpha_logit=torch.cat([self.alpha_logit, other.alpha_logit], dim=0),
-      feature=torch.cat([self.feature, other.feature], dim=0),
-      batch_size = (self.batch_size[0] + other.batch_size[0], )
-    )
   
 def inverse_sigmoid(x:torch.Tensor):
   return torch.log(x / (1 - x))

@@ -34,6 +34,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
     log_scale: ti.types.ndarray(lib.vec3, ndim=1),  # (M, 3)
     rotation: ti.types.ndarray(lib.vec4,  ndim=1),  # (M, 4)
     alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
+    log_w: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
 
     # projection parameters
     T_camera_world: ti.types.ndarray(lib.mat3x4, ndim=1),  # (M, 3, 4)
@@ -48,9 +49,14 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
 
   ):
     for idx in range(position.shape[0]):
+      w = log_w[idx][0]
+
       mean, z, cov = lib.project_gaussian(
         T_camera_world[idx], projection[idx], image_size,
-        position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin=clamp_margin)
+        position[idx] / ti.exp(w),
+        ti.math.normalize(rotation[idx]), 
+        ti.exp(log_scale[idx] - w),
+        clamp_margin=clamp_margin)
 
       if ti.static(blur_cov > 0):
         cov += lib.vec3([blur_cov, 0, blur_cov])
@@ -86,6 +92,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
     log_scale: ti.types.ndarray(lib.vec3, ndim=1),  # (M, 3)
     rotation: ti.types.ndarray(lib.vec4,  ndim=1),  # (M, 4)
     alpha_logit: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
+    log_w: ti.types.ndarray(lib.vec1, ndim=1),  # (M)
 
     indexes: ti.types.ndarray(ti.i64, ndim=1),  # (N) indexes of points to render from 0 to M
     T_camera_world: ti.types.ndarray(lib.mat3x4, ndim=1),  # (M, 3, 4)
@@ -100,9 +107,14 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
     for i in range(indexes.shape[0]):
       idx = indexes[i]
 
+      w = log_w[idx][0]
+
       mean, z, cov = lib.project_gaussian(
         T_camera_world[idx], projection[idx], image_size,
-        position[idx], ti.math.normalize(rotation[idx]), ti.exp(log_scale[idx]), clamp_margin)
+        position[idx] / ti.exp(w), 
+        ti.math.normalize(rotation[idx]), 
+        ti.exp(log_scale[idx] - w), 
+        clamp_margin)
       
       if ti.static(blur_cov > 0):
         cov += lib.vec3([blur_cov, 0, blur_cov])
@@ -123,7 +135,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
 
     @queued
     @staticmethod
-    def forward(ctx, position, log_scaling, rotation, alpha_logit,
+    def forward(ctx, position, log_scaling, rotation, alpha_logit, log_w,
                 T_camera_world,
                 projection, image_size, depth_range):
       dtype, device = projection.dtype, projection.device
@@ -133,7 +145,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
       points = torch.empty((n, lib.Gaussian2D.vec.n), dtype=dtype, device=device)
       depth = torch.empty((n, 1), dtype=dtype, device=device)
 
-      gaussian_tensors = (position, log_scaling, rotation, alpha_logit)
+      gaussian_tensors = (position, log_scaling, rotation, alpha_logit, log_w)
 
 
       project_kernel(*gaussian_tensors, 
@@ -165,8 +177,8 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
     @staticmethod
     def backward(ctx, dpoints, ddepth, dindexes):
 
-      gaussian_tensors = ctx.saved_tensors[:4]
-      T_camera_world, projection, points, depth = ctx.saved_tensors[4:]
+      gaussian_tensors = ctx.saved_tensors[:5]
+      T_camera_world, projection, points, depth = ctx.saved_tensors[5:]
 
       with restore_grad(*gaussian_tensors,  projection, T_camera_world, points, depth):
         points.grad = dpoints.contiguous()
@@ -188,7 +200,9 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
 
 @beartype
 def apply(position:torch.Tensor, log_scaling:torch.Tensor,
-          rotation:torch.Tensor, alpha_logit:torch.Tensor,
+          rotation:torch.Tensor, alpha_logit:torch.Tensor, 
+          log_w:torch.Tensor,
+
           T_camera_world:torch.Tensor,
           projection:torch.Tensor, 
           
@@ -208,6 +222,7 @@ def apply(position:torch.Tensor, log_scaling:torch.Tensor,
     log_scaling.contiguous(),
     rotation.contiguous(),
     alpha_logit.contiguous(),
+    log_w.contiguous(),
 
     T_camera_world[:3].unsqueeze(0).expand(n, 3, 4).contiguous(),
     projection.unsqueeze(0).expand(n, 4).contiguous(),

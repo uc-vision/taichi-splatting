@@ -37,6 +37,8 @@ class ParameterClass():
 
     self.tensors:TensorDict = as_parameters(tensors, parameter_groups.keys())
 
+    assert self.tensors.batch_dims == 1, f"batch_dims must be 1, got {self.tensors.batch_dims}"
+
     param_groups = [
       dict(params=[self.tensors[name]], name=name, **group)
         for name, group in parameter_groups.items()
