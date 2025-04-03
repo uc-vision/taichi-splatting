@@ -70,7 +70,9 @@ class Gaussians3D(TensorClass):
     return (self.position, self.log_scaling, self.rotation, self.alpha_logit)
 
   def scaled(self, scale:float) -> 'Gaussians3D':
-    return self.replace(log_scaling=math.log(scale) + self.log_scaling)
+    return self.replace(
+      position=self.position * scale,
+      log_scaling=math.log(scale) + self.log_scaling)
 
   def translated(self, translation:torch.Tensor) -> 'Gaussians3D':
     return self.replace(position=self.position + translation.view(1, 3))
