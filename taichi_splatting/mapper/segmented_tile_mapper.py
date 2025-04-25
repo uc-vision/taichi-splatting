@@ -10,6 +10,7 @@ from taichi_splatting.data_types import RasterConfig
 
 from taichi_splatting.taichi_lib.f32 import (Gaussian2D)
 from taichi_splatting.cuda_lib import full_cumsum, segmented_sort_pairs
+import split_sort
 
 from taichi_splatting.taichi_lib.grid_query import make_grid_query
 from taichi_splatting.taichi_lib.conversions import torch_taichi
@@ -39,24 +40,23 @@ def tile_mapper(config:RasterConfig, depth_type):
   def count_tile_overlaps_kernel(
       gaussians: ti.types.ndarray(Gaussian2D.vec, ndim=1), 
       image_size: ivec2,
-      tile_counts: ti.types.ndarray(ti.i32, ndim=2), 
+      tile_counts: ti.types.ndarray(ti.i32, ndim=2)
   ):
-      ti.loop_config(block_dim=1024)
+      ti.loop_config(block_dim=256)
 
       for idx in range(gaussians.shape[0]):
           lower, upper = grid_ops.gaussian_tile_bounds(gaussians[idx], image_size)
+
           for tile_uv in ti.grouped(ti.ndrange((lower.x, upper.x), (lower.y, upper.y))):
-              ti.atomic_add(tile_counts[tile_uv.y, tile_uv.x], 1)
+              ti.atomic_add(tile_counts[tile_uv.y, tile_uv.x], ti.int32(1))
 
 
   def count_tile_overlaps(gaussians:torch.Tensor, image_size:Tuple[Integral, Integral]):
     tile_counts = torch.zeros((image_size[1] // tile_size, image_size[0] // tile_size), 
                               dtype=torch.int32, device=gaussians.device)
-    
+        
     count_tile_overlaps_kernel(gaussians, ivec2(image_size), tile_counts)
     return tile_counts
-
-
 
 
   @ti.kernel
@@ -76,9 +76,10 @@ def tile_mapper(config:RasterConfig, depth_type):
 
   ):
 
-    ti.loop_config(block_dim=128)
+    ti.loop_config(block_dim=256)
     for point_idx in range(gaussians.shape[0]):
       query = grid_query(gaussians[point_idx], image_size)
+
       for tile_uv in ti.grouped(ti.ndrange(*query.tile_span)):
         depth = depths[point_idx]
 
@@ -94,6 +95,7 @@ def tile_mapper(config:RasterConfig, depth_type):
 
 
 
+
   def f(gaussians : torch.Tensor, depths:torch.Tensor, 
         image_size:Tuple[Integral, Integral]):
     
@@ -101,29 +103,32 @@ def tile_mapper(config:RasterConfig, depth_type):
 
     with torch.no_grad():
       # compute an approximate count of gaussians per tile using bounding box only
-      max_overlap_counts = count_tile_overlaps(gaussians, image_size)      
+      max_tile_counts = count_tile_overlaps(gaussians, image_size)      
 
-          # compute offsets into an overlap array for each tile
-      overlap_sums, total_overlaps = full_cumsum(max_overlap_counts.view(-1))
-      overlap_offsets = overlap_sums[:-1].view(max_overlap_counts.shape)
+      # compute offsets into an overlap array for each tile
+      overlap_sums, max_total_overlaps = full_cumsum(max_tile_counts.view(-1))
+
+      # print(overlap_sums, max_total_overlaps)
+      overlap_offsets = overlap_sums[:-1].view(max_tile_counts.shape)
 
       # allocate overlap array and sort key (depth)
-      overlap_depths = torch.empty((total_overlaps,), dtype=depth_type, device=gaussians.device)
-      overlap_to_point = torch.empty((total_overlaps,), dtype=torch.int32, device=gaussians.device)
+      overlap_depths = torch.empty((max_total_overlaps,), dtype=depth_type, device=gaussians.device)
+      overlap_to_point = torch.empty((max_total_overlaps,), dtype=torch.int32, device=gaussians.device)
 
       # allocate space for precise tile counts
-      overlap_counts = torch.zeros_like(max_overlap_counts)
-
-      # fill in indices and depths into overlap keys and array
+      overlap_counts = torch.zeros_like(overlap_offsets)
       partition_tiles_kernel(depths, gaussians, overlap_offsets, 
                              ivec2(image_size), overlap_counts, overlap_depths, overlap_to_point)
-      
+
+
       # sort the ranges of each tile by depth (in parallel)
       tile_start = overlap_offsets
       tile_end = tile_start + overlap_counts
 
-      _, overlap_to_point = segmented_sort_pairs(overlap_depths, overlap_to_point, 
-                            tile_start.view(-1).to(torch.int64), tile_end.view(-1).to(torch.int64))
+
+      split_sort.segmented_sort_pairs(overlap_depths.view(torch.uint32), 
+                                      overlap_to_point, splits = tile_start[1:].view(-1))
+
     
       tile_overlap_ranges = torch.stack((tile_start, tile_end), dim=2)
       return overlap_to_point, tile_overlap_ranges

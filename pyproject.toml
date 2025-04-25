@@ -12,7 +12,7 @@ maintainers = [
 
 dependencies = [
   "beartype", 
-  "taichi-nightly", 
+  "taichi", 
   "tqdm", 
   "tensordict"
 ]
@@ -21,12 +21,9 @@ dependencies = [
 "Homepage" = "https://github.com/uc-vision/taichi-splatting"
 
 [build-system]
-requires = ["setuptools>=43.0.0",  "wheel", "setuptools-scm"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-
-[options]
-dependency_links = ["https://pypi.taichi.graphics/simple/"]
 
 [project.scripts]  # Optional
 fit_image_gaussians = "taichi_splatting.scripts.fit_image_gaussians:main"

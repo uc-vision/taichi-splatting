@@ -7,14 +7,21 @@ sources = [str(Path(__file__).parent  / filename)
             for filename in 
           ["full_cumsum.cu", "radix_sort_pairs.cu", "segmented_sort_pairs.cu", "module.cpp"]]
 
-cuda_lib = load("cuda_lib", sources=sources, verbose=True)
+cuda_lib = load("taichi_splatting_cuda_lib", sources=sources, verbose=True)
 
 
 def full_cumsum(x:torch.Tensor) -> Tuple[torch.Tensor, int]:
+  assert x.dtype in [torch.int16, torch.int32, torch.int64], \
+      f"full_cumsum: tensor must be integer type, got {x.dtype}"
+
   if x.shape[0] == 0:
     return x.new_zeros((1, )), 0
   
-  out = x.new_empty((x.shape[0] + 1, *x.shape[1:]))
+  if x.dtype == torch.int16:
+    out = x.new_empty((x.shape[0] + 1, ), dtype=torch.int32)
+  else:
+    out = x.new_empty((x.shape[0] + 1, *x.shape[1:]))
+
   total = cuda_lib.full_cumsum(x, out)
   return out, total
 
@@ -39,7 +46,7 @@ if __name__ == "__main__":
   print(k1)
   print(v1)
 
-  k2, v2 = sort_pairs(k.long(), v)
+  k2, v2 = radix_sort_pairs(k.long(), v)
   print(k2, k2.dtype)
   print(v2)
 

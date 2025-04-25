@@ -34,7 +34,7 @@ def render_gaussians(
   gaussians2d = project_gaussians2d(gaussians)
   
   image, alpha = rasterize(gaussians2d=gaussians2d, 
-    encoded_depths= encode_depth32(gaussians.depth),
+    encoded_depths= encode_depth32(gaussians.z_depth),
     features=gaussians.feature, 
     image_size=image_size, 
     config=raster_config)

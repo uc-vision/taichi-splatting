@@ -158,6 +158,8 @@ def tile_mapper(config:RasterConfig, depth_type=torch.int32):
     tile_overlaps_kernel(gaussians, ivec2(image_size), overlap_counts)
 
     cum_overlap_counts, total_overlap = cuda_lib.full_cumsum(overlap_counts)
+
+
     return cum_overlap_counts[:-1], total_overlap
 
   def f(gaussians : torch.Tensor, depths:torch.Tensor, image_size:Tuple[Integral, Integral]):

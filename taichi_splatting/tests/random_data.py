@@ -79,7 +79,7 @@ def random_2d_gaussians(n, image_size, scale_factor=1.0, alpha_range=(0.1, 0.9),
   depth = torch.rand((n, 1)) * (depth_range[1] - depth_range[0]) + depth_range[0]
   
   density_scale = scale_factor * w / (1 + math.sqrt(n))
-  scaling = (torch.rand(n, 2) + 0.2) * density_scale 
+  scaling = torch.randn(n, 2) * 0.5 + math.log(density_scale)
 
   rotation = torch.randn(n, 2) 
   rotation = rotation / torch.norm(rotation, dim=1, keepdim=True)
@@ -89,8 +89,8 @@ def random_2d_gaussians(n, image_size, scale_factor=1.0, alpha_range=(0.1, 0.9),
 
   return Gaussians2D(
     position=position,
-    depth=depth,
-    log_scaling=torch.log(scaling),
+    z_depth=depth,
+    log_scaling=scaling,
     rotation=rotation,
     alpha_logit=torch_proj.inverse_sigmoid(alpha),
     feature=torch.rand(n, 3),

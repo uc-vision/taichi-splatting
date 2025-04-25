@@ -3,18 +3,16 @@
 
 #include <cub/cub.cuh>
 
-template<typename T>
-__global__ void complete_cumsum(T *input, T *output, T *total) {
-  T const v = *output + *input;
+template<typename T, typename O>
+__global__ void complete_cumsum(T *input, O *output, int64_t *total) {
+  int64_t const v = *output + *input;
   *total = *(output + 1) = v;
 }
 
 
 
-
-
-template <typename T>
-T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType input_scalar_type) {
+template <typename T, typename O>
+int64_t full_cumsum_helper(T *input, int64_t input_size, O *output) {
   size_t temp_storage_bytes = 0;
   auto stream = at::cuda::getCurrentCUDAStream();
 
@@ -31,7 +29,7 @@ T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType 
   // cumsum is now in the output but the final value is missing.
 
   // Make storage in pinned_memory.
-  auto total_tensor_options = torch::TensorOptions().dtype(input_scalar_type).pinned_memory(true);
+  auto total_tensor_options = torch::TensorOptions().dtype(torch::kInt64).pinned_memory(true);
   auto total_tensor = torch::empty({int64_t(1)}, total_tensor_options);
 
   // Now we run a kernel that will complete the full_cumsum.  The
@@ -40,10 +38,10 @@ T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType 
   // gets written into total_tensor.
   complete_cumsum<<<1,1>>>(&input[input_size-1],
                            &output[input_size-1],
-                           total_tensor.data_ptr<T>());
+                           total_tensor.data_ptr<int64_t>());
   // complete_cumsum must finish before we can read the total_tensor.
   cudaDeviceSynchronize();
-  return *total_tensor.data_ptr<T>();
+  return *total_tensor.data_ptr<int64_t>();
 }
 
 
@@ -51,13 +49,18 @@ T full_cumsum_helper(T *input, int64_t input_size, T *output, torch::ScalarType 
 int64_t full_cumsum(const torch::Tensor input, const torch::Tensor output) {
   assert(input.size(0) + 1 == output.size(0));
   switch (input.scalar_type()) {
+    case torch::kInt16:
+      return full_cumsum_helper(input.data_ptr<int16_t>(), input.size(0),
+                                output.data_ptr<int32_t>());
+      break;
+
     case torch::kInt32:
       return full_cumsum_helper(input.data_ptr<int32_t>(), input.size(0),
-                                output.data_ptr<int32_t>(), input.scalar_type());
+                                output.data_ptr<int32_t>());
       break;
     case torch::kInt64:
       return full_cumsum_helper(input.data_ptr<int64_t>(), input.size(0),
-                                output.data_ptr<int64_t>(), input.scalar_type());
+                                output.data_ptr<int64_t>());
       break;
     default:
       // TODO, add all the other cases.
