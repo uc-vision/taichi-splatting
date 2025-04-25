@@ -5,10 +5,6 @@ import torch
 from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting import spherical_harmonics
 
-import taichi as ti
-
-from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
-
 
 
 def parse_args(args=None):
@@ -30,7 +26,6 @@ def parse_args(args=None):
 
 
 def bench_sh(args):
-  with taichi_queue(arch=ti.cuda, log_level=ti.INFO if not args.debug else ti.DEBUG, debug=args.debug):
     torch.manual_seed(args.seed)
 
     with torch.no_grad():

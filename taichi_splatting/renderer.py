@@ -16,7 +16,6 @@ from taichi_splatting.perspective import (CameraParams)
 from taichi_splatting.perspective.projection import project_to_image
 from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.torch_lib.projection import ndc_depth
-from tensordict import TensorDict
 
 
 @beartype
