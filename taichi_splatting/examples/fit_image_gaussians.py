@@ -368,5 +368,6 @@ def with_benchmark(f):
       print(prof_table)
       return result
   return g
-      
+
+if __name__ == '__main__':
   main()
