@@ -28,6 +28,9 @@ from torch.profiler import profile, record_function, ProfilerActivity
 import time
 import torch.nn.functional as F
 
+from logger_utils import TrainingLogger
+
+
 def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument('image_file', type=str)
@@ -231,6 +234,8 @@ def split_prune(params:ParameterClass, t, target, prune_rate, split_heuristic:Tu
 
 
 def main():
+  logger = TrainingLogger()
+
   torch.set_printoptions(precision=4, sci_mode=False)
 
   cmd_args = parse_args()
@@ -310,7 +315,7 @@ def main():
 
   pbar = tqdm(total=cmd_args.iters)
   iteration = 0
-  for  epoch_size in epochs:
+  for epoch_size in epochs:
 
     t = (iteration + epoch_size * 0.5) / cmd_args.iters
     params.set_learning_rate(position = log_lerp(t, *lr_range))
@@ -333,7 +338,12 @@ def main():
       cv2.imwrite(str(filename), 
                   (image.detach().clamp(0, 1) * 255).cpu().numpy())
 
-    metrics['CPSNR'] = psnr(ref_image, image).item()
+    psnr_value = psnr(ref_image, image).item()
+
+    # Log PSNR, iteration count, and number of points
+    logger.log(iteration=iteration, psnr=psnr_value, n_points=params.batch_size[0])
+
+    metrics['CPSNR'] = psnr_value
     metrics['n'] = params.batch_size[0]
 
     if cmd_args.prune and cmd_args.target is None:
@@ -355,6 +365,8 @@ def main():
 
     iteration += epoch_size
     pbar.update(epoch_size)
+
+  logger.plot()
 
 def with_benchmark(f):
   def g(*args , **kwargs):
