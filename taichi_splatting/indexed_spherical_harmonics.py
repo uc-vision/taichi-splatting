@@ -8,8 +8,6 @@ from taichi_splatting.optim.autograd import restore_grad
 from taichi_splatting.taichi_lib.conversions import torch_taichi
 from taichi_splatting.taichi_queue import TaichiQueue, queued
 
-from .indexed_spherical_harmonics import evaluate_sh_at
-
 # Derived from torch-spherical-harmonics
 # https://github.com/cheind/torch-spherical-harmonics
 
@@ -118,19 +116,22 @@ def sh_function(degree:int=3, dimension:int=3,
   vec = ti.types.vector(n=dimension, dtype=ti_dtype)
 
   @ti.kernel    
-  def evaluate_sh_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
+  def evaluate_sh_at_kernel(params:ti.types.ndarray(param_mat, ndim=1), 
                           points:ti.types.ndarray(point_vec, ndim=1), 
+                          indexes :ti.types.ndarray(ti.i64, ndim=1),
                           camera_pos:ti.types.ndarray(ti_dtype, ndim=1),
                           out:ti.types.ndarray(vec, ndim=1)):
       
-      for idx in range(points.shape[0]):
+      for i in range(indexes.shape[0]):
           cam_pos = vec3(camera_pos[0], camera_pos[1], camera_pos[2])
+          idx = indexes[i]
 
           coeffs = rsh_cart(ti.math.normalize(points[idx] - cam_pos))
           params_i = params[idx]
 
           for d in ti.static(range(dimension)):
-              out[idx][d] = coeffs.dot(params_i[d, :])
+              out[i][d] = ti.math.clamp(
+                coeffs.dot(params_i[d, :]) + 0.5, 0, 1)
 
 
 
@@ -139,7 +140,7 @@ def sh_function(degree:int=3, dimension:int=3,
     def forward(ctx, params:torch.Tensor, points:torch.Tensor, indexes:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
         out = torch.empty(indexes.shape[0], params.shape[1], dtype=dtype, device=params.device)
-        TaichiQueue.run_sync(evaluate_sh_kernel, params, points, indexes, camera_pos, out)
+        TaichiQueue.run_sync(evaluate_sh_at_kernel, params, points, indexes, camera_pos, out)
 
         ctx.save_for_backward(params, points, camera_pos, out)
         
@@ -154,7 +155,7 @@ def sh_function(degree:int=3, dimension:int=3,
 
         with restore_grad(params, points, camera_pos, out):
           out.grad = doutput.contiguous()
-          TaichiQueue.run_sync(evaluate_sh_kernel.grad, params, points, ctx.indexes, camera_pos, out)
+          TaichiQueue.run_sync(evaluate_sh_at_kernel.grad, params, points, ctx.indexes, camera_pos, out)
 
           return params.grad, points.grad, None, camera_pos.grad
         
@@ -162,7 +163,7 @@ def sh_function(degree:int=3, dimension:int=3,
 
 
 @beartype
-def evaluate_sh(sh_params:torch.Tensor,  # M, K (degree + 1)^2,  (usually K=3, for RGB)
+def evaluate_sh_at(sh_params:torch.Tensor,  # M, K (degree + 1)^2,  (usually K=3, for RGB)
                 positions:torch.Tensor,     # M, 3 (packed gaussian or xyz)
 
                 indexes:torch.Tensor,        # N, 1 (indexes to gaussians) 0 to M
@@ -178,10 +179,7 @@ def evaluate_sh(sh_params:torch.Tensor,  # M, K (degree + 1)^2,  (usually K=3, f
 
 
 
-__all__ = [
-  'evaluate_sh',
-  'evaluate_sh_at',
-]
+
 
 
 
