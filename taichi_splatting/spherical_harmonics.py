@@ -136,16 +136,13 @@ def sh_function(degree:int=3, dimension:int=3,
 
   class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, params:torch.Tensor, points:torch.Tensor, indexes:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
+    def forward(ctx, params:torch.Tensor, points:torch.Tensor, camera_pos:torch.Tensor) -> torch.Tensor:
         
-        out = torch.empty(indexes.shape[0], params.shape[1], dtype=dtype, device=params.device)
-        TaichiQueue.run_sync(evaluate_sh_kernel, params, points, indexes, camera_pos, out)
+        out = torch.empty(points.shape[0], params.shape[1], dtype=dtype, device=params.device)
+        TaichiQueue.run_sync(evaluate_sh_kernel, params, points, camera_pos, out)
 
         ctx.save_for_backward(params, points, camera_pos, out)
         
-        ctx.indexes = indexes
-        ctx.mark_non_differentiable(indexes)
-
         return out
 
     @staticmethod
@@ -154,7 +151,7 @@ def sh_function(degree:int=3, dimension:int=3,
 
         with restore_grad(params, points, camera_pos, out):
           out.grad = doutput.contiguous()
-          TaichiQueue.run_sync(evaluate_sh_kernel.grad, params, points, ctx.indexes, camera_pos, out)
+          TaichiQueue.run_sync(evaluate_sh_kernel.grad, params, points, camera_pos, out)
 
           return params.grad, points.grad, None, camera_pos.grad
         
@@ -164,16 +161,13 @@ def sh_function(degree:int=3, dimension:int=3,
 @beartype
 def evaluate_sh(sh_params:torch.Tensor,  # M, K (degree + 1)^2,  (usually K=3, for RGB)
                 positions:torch.Tensor,     # M, 3 (packed gaussian or xyz)
-
-                indexes:torch.Tensor,        # N, 1 (indexes to gaussians) 0 to M
                 camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
     degree = check_sh_degree(sh_params)
-
     _module_function = sh_function(degree=degree, 
                                    dimension=sh_params.shape[1], 
                                    dtype=sh_params.dtype)
-    return _module_function.apply(sh_params.contiguous(), positions.contiguous(), indexes.contiguous(), camera_pos.contiguous())
+    return _module_function.apply(sh_params.contiguous(), positions.contiguous(),  camera_pos.contiguous())
 
 
 
