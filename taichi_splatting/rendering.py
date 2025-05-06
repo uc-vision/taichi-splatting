@@ -121,6 +121,8 @@ class Rendering:
     camera: CameraParams
     config: RasterConfig
 
+    glo_feature: Optional[torch.Tensor] = None  # (N, C) - GLO features of points
+
     @cached_property
     def ndc_image(self) -> torch.Tensor:
         return ndc_depth(self.depth_image, self.camera.near_plane,

@@ -1,6 +1,7 @@
 from beartype.typing import Tuple
 import torch
 
+
 def quat_to_mat(quat: torch.Tensor) -> torch.Tensor:
   """ Convert quaternion to rotation matrix
   """

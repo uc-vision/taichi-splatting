@@ -1,5 +1,6 @@
 from dataclasses import dataclass, replace
 from numbers import Integral
+from typing import Optional
 from beartype.typing import Tuple
 from beartype import beartype
 import torch
@@ -8,13 +9,14 @@ import torch
 @beartype
 @dataclass
 class CameraParams:
-
   projection: torch.Tensor # (4) - [fx, fy, cx, cy]
   T_camera_world  : torch.Tensor # (4, 4) camera view matrix
 
   near_plane: float
   far_plane: float
   image_size: Tuple[int, int]
+
+  id: Optional[int] = None
 
 
   @property
@@ -69,7 +71,7 @@ class CameraParams:
     fx, fy, cx, cy = self.projection.detach().cpu().numpy()
 
     pos_str = ", ".join([f"{x:.3f}" for x in self.camera_position])
-    return f"CameraParams({w}x{h}, fx={fx:.4f}, fy={fy:.4f}, cx={cx:.4f}, cy={cy:.4f}, clipping={self.near_plane:.4f}-{self.far_plane:.4f}, position=({pos_str})"
+    return f"CameraParams(id={self.id}, {w}x{h}, fx={fx:.4f}, fy={fy:.4f}, cx={cx:.4f}, cy={cy:.4f}, clipping={self.near_plane:.4f}-{self.far_plane:.4f}, position=({pos_str})"
   
 
   @property
@@ -85,6 +87,7 @@ class CameraParams:
 
   def to(self, device=None, dtype=None):
     return CameraParams(
+      id=self.id,
       projection=self.projection.to(device=device, dtype=dtype),
       T_camera_world=self.T_camera_world.to(device=device, dtype=dtype),
       near_plane=self.near_plane,

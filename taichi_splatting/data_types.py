@@ -2,7 +2,10 @@ from dataclasses import dataclass, replace
 import math
 from beartype.typing import Tuple
 from beartype import beartype
+import roma
+from taichi_splatting.torch_lib.transforms import quat_to_mat, split_rt, transform44
 import torch
+
 
 from torch.nn import functional as F
 from tensordict import TensorClass
@@ -80,25 +83,27 @@ class Gaussians3D(TensorClass):
   @property
   def scale(self):
     return torch.exp(self.log_scaling)
+  
+
+  def transform_rigid(self, m:torch.Tensor):
+    """ Transform the gaussians by a 4x4 matrix """
+    assert m.shape == (4, 4), f"Expected shape (4, 4), got {m.shape}"
+
+    n = self.batch_size[0]
+    position = transform44(m, self.position)
+    
+    r, _ = split_rt(m)  
+    rotation = r @ roma.unitquat_to_rotmat(self.rotation)
+  
+    return self.replace(position=position, 
+                        rotation= roma.rotmat_to_unitquat(rotation), 
+                        batch_size=(n,))
 
   @property
   def alpha(self):
     return torch.sigmoid(self.alpha_logit)
 
-  
-  def replace(self, **kwargs):
-    return replace(self, **kwargs, batch_size=self.batch_size)
-  
-  def concat(self, other):
-    return replace(self,
-      position=torch.cat([self.position, other.position], dim=0),
-      log_scaling=torch.cat([self.log_scaling, other.log_scaling], dim=0),
-      rotation=torch.cat([self.rotation, other.rotation], dim=0),
-      alpha_logit=torch.cat([self.alpha_logit, other.alpha_logit], dim=0),
-      feature=torch.cat([self.feature, other.feature], dim=0),
-      batch_size = (self.batch_size[0] + other.batch_size[0], )
-    )
-  
+
 def inverse_sigmoid(x:torch.Tensor):
   return torch.log(x / (1 - x))
 
