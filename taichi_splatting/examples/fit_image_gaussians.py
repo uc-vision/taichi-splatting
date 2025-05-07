@@ -29,6 +29,7 @@ import time
 import torch.nn.functional as F
 
 from logger_utils import TrainingLogger
+from mlp_predictors import LogScalingMLP, AlphaMLP
 
 
 def parse_args():
@@ -90,11 +91,14 @@ def psnr(a, b):
   return 10 * torch.log10(1 / torch.nn.functional.mse_loss(a, b))  
 
 def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image, 
-        config:RasterConfig,        
+        config:RasterConfig,
         epoch_size=100, 
         grad_alpha=0.9, 
         opacity_reg=0.0,
-        scale_reg=0.0):
+        scale_reg=0.0,
+        log_scaling_mlp=None,
+        alpha_mlp=None,
+        mlp_optim=None):
     
   h, w = ref_image.shape[:2]
 
@@ -103,9 +107,15 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
 
   for i in range(epoch_size):
     opt.zero_grad()
+    mlp_optim.zero_grad()
 
     with torch.enable_grad():
       gaussians = Gaussians2D.from_tensordict(params.tensors)
+
+      # Predict attributes using MLPs
+      gaussians.log_scaling = torch.clamp(log_scaling_mlp(gaussians.position), min=-5, max=5)
+      gaussians.alpha_logit = alpha_mlp(gaussians.position).squeeze(-1)
+
       gaussians2d = project_gaussians2d(gaussians)  
 
       raster = rasterize(gaussians2d=gaussians2d, 
@@ -122,7 +132,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
               + scale_reg * scale.pow(2).mean())
 
       loss.backward()
-
+      mlp_optim.step()
 
     check_finite(gaussians, 'gaussians')
     visibility = raster.visibility
@@ -266,13 +276,18 @@ def main():
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5).to(torch.device('cuda:0'))
-  
+
+  # Instantiate MLPs and optimizers
+  log_scaling_mlp = LogScalingMLP().to(device)
+  alpha_mlp = AlphaMLP().to(device)
+  mlp_optim = torch.optim.Adam(list(log_scaling_mlp.parameters()) + list(alpha_mlp.parameters()),
+                               lr = 0.001, betas = (0.9, 0.99))
+
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    log_scaling=dict(lr=0.1),
-
+    # log_scaling=dict(lr=0.1),
     rotation=dict(lr=1.0),
-    alpha_logit=dict(lr=0.1),
+    # alpha_logit=dict(lr=0.1),
     feature=dict(lr=0.1, type='vector')
   )
   
@@ -324,8 +339,10 @@ def main():
     image, split_heuristic, epoch_time = train(params.optimizer, params, ref_image, 
                                       epoch_size=epoch_size, config=config, 
                                       opacity_reg=cmd_args.opacity_reg,
-                                      scale_reg=cmd_args.scale_reg)
-
+                                      scale_reg=cmd_args.scale_reg,
+                                      log_scaling_mlp=log_scaling_mlp,
+                                      alpha_mlp = alpha_mlp,
+                                      mlp_optim = mlp_optim)
 
     if cmd_args.show:
       display_image('rendered', image)
