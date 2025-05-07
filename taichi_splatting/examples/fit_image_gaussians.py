@@ -29,7 +29,7 @@ import time
 import torch.nn.functional as F
 
 from logger_utils import TrainingLogger
-from mlp_predictors import LogScalingMLP, AlphaMLP
+from mlp_predictors import CovarianceMLP, AlphaMLP
 
 
 def parse_args():
@@ -96,7 +96,7 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
         grad_alpha=0.9, 
         opacity_reg=0.0,
         scale_reg=0.0,
-        log_scaling_mlp=None,
+        covariance_mlp=None,
         alpha_mlp=None,
         mlp_optim=None):
     
@@ -113,7 +113,9 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
       gaussians = Gaussians2D.from_tensordict(params.tensors)
 
       # Predict attributes using MLPs
-      gaussians.log_scaling = torch.clamp(log_scaling_mlp(gaussians.position), min=-5, max=5)
+      cov_out = covariance_mlp(gaussians.position)
+      gaussians.log_scaling = torch.clamp(cov_out[..., :2], min=-5, max=5)
+      gaussians.rotation = F.normalize(cov_out[..., 2:], dim=-1)  # Ensure unit-length complex rotation
       gaussians.alpha_logit = alpha_mlp(gaussians.position).squeeze(-1)
 
       gaussians2d = project_gaussians2d(gaussians)  
@@ -149,8 +151,8 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
               basis=point_basis(gaussians[visible]))
 
     params.replace(
-      rotation = torch.nn.functional.normalize(params.rotation.detach()),
-      log_scaling = torch.clamp(params.log_scaling.detach(), min=-5, max=5)
+      # rotation = torch.nn.functional.normalize(params.rotation.detach()),
+      # log_scaling = torch.clamp(params.log_scaling.detach(), min=-5, max=5)
     )
 
     point_heuristic +=  raster.point_heuristic
@@ -278,15 +280,16 @@ def main():
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5).to(torch.device('cuda:0'))
 
   # Instantiate MLPs and optimizers
-  log_scaling_mlp = LogScalingMLP().to(device)
-  alpha_mlp = AlphaMLP().to(device)
-  mlp_optim = torch.optim.Adam(list(log_scaling_mlp.parameters()) + list(alpha_mlp.parameters()),
-                               lr = 0.001, betas = (0.9, 0.99))
+  covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
+  alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
+  mlp_optim = torch.optim.Adam(list(covariance_mlp.parameters()) + list(alpha_mlp.parameters()),
+                               lr=0.001, betas=(0.9, 0.99)
+  )
 
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
     # log_scaling=dict(lr=0.1),
-    rotation=dict(lr=1.0),
+    # rotation=dict(lr=1.0),
     # alpha_logit=dict(lr=0.1),
     feature=dict(lr=0.1, type='vector')
   )
@@ -340,7 +343,7 @@ def main():
                                       epoch_size=epoch_size, config=config, 
                                       opacity_reg=cmd_args.opacity_reg,
                                       scale_reg=cmd_args.scale_reg,
-                                      log_scaling_mlp=log_scaling_mlp,
+                                      covariance_mlp=covariance_mlp,
                                       alpha_mlp = alpha_mlp,
                                       mlp_optim = mlp_optim)
 
