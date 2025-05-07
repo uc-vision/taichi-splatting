@@ -57,8 +57,8 @@ def random_3d_gaussians(n, camera_params:CameraParams,
   fx = camera_params.T_image_camera[0, 0]
 
   scale =  (w / math.sqrt(n)) * (depth / fx) * scale_factor
-  scaling = torch.randn(n, 3) * scale.unsqueeze(1) 
-
+  scaling = torch.randn(n, 3) * 0.5 + torch.log(scale).unsqueeze(1) 
+  
   rotation = torch.randn(n, 4) 
   rotation = F.normalize(rotation, dim=1)
 
@@ -67,7 +67,7 @@ def random_3d_gaussians(n, camera_params:CameraParams,
 
   return Gaussians3D(
     position=position,
-    log_scaling=torch.log(scaling),
+    log_scaling=scaling,
     rotation=rotation,
     alpha_logit=torch_proj.inverse_sigmoid(alpha).unsqueeze(1),
     feature=torch.rand(n, 3),

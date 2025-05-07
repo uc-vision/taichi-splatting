@@ -139,6 +139,7 @@ def weighted_step(group:Group,
     max_step = group.lr * group.clip
     lr_step.clamp_(-max_step, max_step)
 
+
   if group.type == "local_vector":
     lr_step = torch.einsum('bij,bj->bi', basis, lr_step)
 
@@ -149,6 +150,8 @@ def weighted_step(group:Group,
   if group.point_lr is not None:
     lr_step *= group.point_lr[visible_indexes].unsqueeze(1)
 
+
+  lr_step[~lr_step.isfinite()] = 0.0
   return lr_step
 
 def saturate(x:torch.Tensor):

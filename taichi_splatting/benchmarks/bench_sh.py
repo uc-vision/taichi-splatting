@@ -3,7 +3,7 @@ from functools import partial
 
 import torch
 from taichi_splatting.benchmarks.util import benchmarked
-from taichi_splatting import spherical_harmonics
+from taichi_splatting import indexed_spherical_harmonics
 
 import taichi as ti
 
@@ -41,11 +41,11 @@ def bench_sh(args):
       
       camera_pos = torch.zeros(3, device=args.device)
 
-      forward = partial(spherical_harmonics.evaluate_sh_at, sh_features, points, indexes, camera_pos)
+      forward = partial(indexed_spherical_harmonics.evaluate_sh_at, sh_features, points, indexes, camera_pos)
       benchmarked('forward', forward, profile=args.profile, iters=args.iters)  
 
     def backward():
-      colors = spherical_harmonics.evaluate_sh_at(sh_features, points, indexes, camera_pos)
+      colors = indexed_spherical_harmonics.evaluate_sh_at(sh_features, points, indexes, camera_pos)
       loss = colors.sum()
       loss.backward()
 
