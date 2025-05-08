@@ -117,6 +117,7 @@ class Gaussians2D(TensorClass):
   alpha_logit   : torch.Tensor # 1  - alpha = sigmoid(alpha_logit)
   
   feature      : torch.Tensor # N  - (any rgb, label etc)
+  latent: torch.Tensor
 
   @property
   def opacity(self):

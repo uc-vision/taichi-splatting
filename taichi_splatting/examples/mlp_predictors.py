@@ -2,27 +2,26 @@ import torch.nn as nn
 
 
 class CovarianceMLP(nn.Module):
-    def __init__(self, in_dim=2, hidden_dim=32):
+    def __init__(self, in_dim=16, hidden_dim=32):  # was 2, now 16
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 4)  # 2 for log-scaling, 2 for 2D rotation (unit complex number)
+            nn.Linear(hidden_dim, 4)
         )
 
-    def forward(self, positions):
-        return self.net(positions)
+    def forward(self, latent):
+        return self.net(latent)
 
 
 class AlphaMLP(nn.Module):
-    def __init__(self, in_dim=2, hidden_dim=32):
+    def __init__(self, in_dim=16, hidden_dim=32):  # was 2, now 16
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 1),
-            nn.Tanh()
+            nn.Linear(hidden_dim, 1)
         )
 
-    def forward(self, positions):
-        return self.net(positions)
+    def forward(self, latent):
+        return self.net(latent)

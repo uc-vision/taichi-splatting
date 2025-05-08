@@ -113,10 +113,11 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
       gaussians = Gaussians2D.from_tensordict(params.tensors)
 
       # Predict attributes using MLPs
-      cov_out = covariance_mlp(gaussians.position)
+      latent = params.latent  # [N, latent_dim]
+      cov_out = covariance_mlp(latent)
       gaussians.log_scaling = torch.clamp(cov_out[..., :2], min=-5, max=5)
-      gaussians.rotation = F.normalize(cov_out[..., 2:], dim=-1)  # Ensure unit-length complex rotation
-      gaussians.alpha_logit = alpha_mlp(gaussians.position).squeeze(-1)
+      gaussians.rotation = F.normalize(cov_out[..., 2:], dim=-1)
+      gaussians.alpha_logit = alpha_mlp(latent).squeeze(-1)
 
       gaussians2d = project_gaussians2d(gaussians)  
 
@@ -277,7 +278,7 @@ def main():
 
   torch.manual_seed(cmd_args.seed)
   torch.cuda.random.manual_seed(cmd_args.seed)
-  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5).to(torch.device('cuda:0'))
+  gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5, latent_dim=16).to(torch.device('cuda:0'))
 
   # Instantiate MLPs and optimizers
   covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
@@ -291,7 +292,8 @@ def main():
     # log_scaling=dict(lr=0.1),
     # rotation=dict(lr=1.0),
     # alpha_logit=dict(lr=0.1),
-    feature=dict(lr=0.1, type='vector')
+    feature=dict(lr=0.1, type='vector'),
+    latent=dict(lr=0.01)
   )
   
   # params = ParameterClass(gaussians.to_tensordict(), 
