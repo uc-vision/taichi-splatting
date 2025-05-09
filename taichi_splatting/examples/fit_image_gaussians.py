@@ -63,7 +63,10 @@ def parse_args():
   parser.add_argument('--show', action='store_true')
 
   parser.add_argument('--profile', action='store_true')
-  
+
+  parser.add_argument('--use_mlp_covariance', action='store_true', help='Use MLP to predict log scale and rotation')
+  parser.add_argument('--use_mlp_alpha', action='store_true', help='Use MLP to predict alpha')
+
   args = parser.parse_args()
 
   if args.pixel_tile:
@@ -98,7 +101,10 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
         scale_reg=0.0,
         covariance_mlp=None,
         alpha_mlp=None,
-        mlp_optim=None):
+        covariance_optim=None,
+        alpha_optim=None,
+        use_mlp_covariance=True,
+        use_mlp_alpha=True):
     
   h, w = ref_image.shape[:2]
 
@@ -107,17 +113,28 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
 
   for i in range(epoch_size):
     opt.zero_grad()
-    mlp_optim.zero_grad()
+    if covariance_optim: covariance_optim.zero_grad()
+    if alpha_optim: alpha_optim.zero_grad()
 
     with torch.enable_grad():
       gaussians = Gaussians2D.from_tensordict(params.tensors)
 
-      # Predict attributes using MLPs
       latent = params.latent  # [N, latent_dim]
-      cov_out = covariance_mlp(latent)
-      gaussians.log_scaling = torch.clamp(cov_out[..., :2], min=-5, max=5)
-      gaussians.rotation = F.normalize(cov_out[..., 2:], dim=-1)
-      gaussians.alpha_logit = alpha_mlp(latent).squeeze(-1)
+
+      # Predict covariance using MLP or use learned params
+      if use_mlp_covariance:
+        cov_out = covariance_mlp(latent)
+        gaussians.log_scaling = torch.clamp(cov_out[..., :2], min=-5, max=5)
+        gaussians.rotation = F.normalize(cov_out[..., 2:], dim=-1)
+      else:
+        gaussians.log_scaling = params.log_scaling
+        gaussians.rotation = params.rotation
+
+      # Predict alpha using MLP or use learned params
+      if use_mlp_alpha:
+        gaussians.alpha_logit = alpha_mlp(latent).squeeze(-1)
+      else:
+        gaussians.alpha_logit = params.alpha_logit
 
       gaussians2d = project_gaussians2d(gaussians)  
 
@@ -135,7 +152,8 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
               + scale_reg * scale.pow(2).mean())
 
       loss.backward()
-      mlp_optim.step()
+      if covariance_optim: covariance_optim.step()
+      if alpha_optim: alpha_optim.step()
 
     check_finite(gaussians, 'gaussians')
     visibility = raster.visibility
@@ -151,10 +169,11 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
       opt.step(indexes = visible, 
               basis=point_basis(gaussians[visible]))
 
-    params.replace(
-      # rotation = torch.nn.functional.normalize(params.rotation.detach()),
-      # log_scaling = torch.clamp(params.log_scaling.detach(), min=-5, max=5)
-    )
+    if not use_mlp_covariance:
+      params.replace(
+        rotation = torch.nn.functional.normalize(params.rotation.detach()),
+        log_scaling = torch.clamp(params.log_scaling.detach(), min=-5, max=5)
+      )
 
     point_heuristic +=  raster.point_heuristic
     visibility += raster.visibility
@@ -280,21 +299,27 @@ def main():
   torch.cuda.random.manual_seed(cmd_args.seed)
   gaussians = random_2d_gaussians(cmd_args.n, (w, h), alpha_range=(0.5, 1.0), scale_factor=0.5, latent_dim=16).to(torch.device('cuda:0'))
 
+  use_mlp_covariance = cmd_args.use_mlp_covariance
+  use_mlp_alpha = cmd_args.use_mlp_alpha
+
   # Instantiate MLPs and optimizers
   covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
   alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
-  mlp_optim = torch.optim.Adam(list(covariance_mlp.parameters()) + list(alpha_mlp.parameters()),
-                               lr=0.001, betas=(0.9, 0.99)
-  )
+  covariance_optim = torch.optim.Adam(covariance_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+  alpha_optim = torch.optim.Adam(alpha_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
 
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    # log_scaling=dict(lr=0.1),
-    # rotation=dict(lr=1.0),
-    # alpha_logit=dict(lr=0.1),
     feature=dict(lr=0.1, type='vector'),
     latent=dict(lr=0.01)
   )
+
+  if not cmd_args.use_mlp_covariance:
+    parameter_groups['log_scaling'] = dict(lr=0.1)
+    parameter_groups['rotation'] = dict(lr=1.0)
+
+  if not cmd_args.use_mlp_alpha:
+    parameter_groups['alpha_logit'] = dict(lr=0.1)
   
   # params = ParameterClass(gaussians.to_tensordict(), 
   #       parameter_groups, optimizer=SparseAdam, betas=(0.9, 0.95), eps=1e-16, bias_correction=True)
@@ -345,9 +370,12 @@ def main():
                                       epoch_size=epoch_size, config=config, 
                                       opacity_reg=cmd_args.opacity_reg,
                                       scale_reg=cmd_args.scale_reg,
-                                      covariance_mlp=covariance_mlp,
-                                      alpha_mlp = alpha_mlp,
-                                      mlp_optim = mlp_optim)
+                                      covariance_mlp=covariance_mlp if use_mlp_covariance else None,
+                                      alpha_mlp = alpha_mlp if use_mlp_alpha else None,
+                                      covariance_optim=covariance_optim if use_mlp_covariance else None,
+                                      alpha_optim=alpha_optim if use_mlp_alpha else None,
+                                      use_mlp_covariance=use_mlp_covariance,
+                                      use_mlp_alpha=use_mlp_alpha)
 
     if cmd_args.show:
       display_image('rendered', image)
