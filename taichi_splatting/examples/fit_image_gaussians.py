@@ -310,9 +310,11 @@ def main():
 
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
-    feature=dict(lr=0.1, type='vector'),
-    latent=dict(lr=0.01)
+    feature=dict(lr=0.1, type='vector')
   )
+
+  if cmd_args.use_mlp_covariance or cmd_args.use_mlp_alpha:
+    parameter_groups['latent'] = dict(lr=0.01)
 
   if not cmd_args.use_mlp_covariance:
     parameter_groups['log_scaling'] = dict(lr=0.1)
