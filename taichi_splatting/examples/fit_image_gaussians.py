@@ -248,8 +248,8 @@ def split_prune(params:ParameterClass, t, target, prune_rate, split_heuristic:Tu
 
   to_split = params[split_mask]
 
-  
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
+  splits = splits.to(params.position.device)  # Ensure splits are on the correct device
   optim_state = to_split.tensor_state.new_zeros(to_split.batch_size[0], 2)
 
   # optim_state['position']['running_vis'][:] = to_split.tensor_state['position']['running_vis'].unsqueeze(1) * 0.5
