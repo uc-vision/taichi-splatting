@@ -303,12 +303,6 @@ def main():
   use_mlp_covariance = cmd_args.use_mlp_covariance
   use_mlp_alpha = cmd_args.use_mlp_alpha
 
-  # Instantiate MLPs and optimizers
-  covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
-  alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
-  covariance_optim = torch.optim.Adam(covariance_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
-  alpha_optim = torch.optim.Adam(alpha_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
-
   parameter_groups = dict(
     position=dict(lr=lr_range[0], type='local_vector'),
     feature=dict(lr=0.1, type='vector')
@@ -318,10 +312,14 @@ def main():
     parameter_groups['latent'] = dict(lr=0.01)
 
   if not cmd_args.use_mlp_covariance:
+    covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
+    covariance_optim = torch.optim.Adam(covariance_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
     parameter_groups['log_scaling'] = dict(lr=0.1)
     parameter_groups['rotation'] = dict(lr=1.0)
 
   if not cmd_args.use_mlp_alpha:
+    alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
+    alpha_optim = torch.optim.Adam(alpha_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
     parameter_groups['alpha_logit'] = dict(lr=0.1)
   
   # params = ParameterClass(gaussians.to_tensordict(), 
