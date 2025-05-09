@@ -9,7 +9,6 @@ class TrainingLogger:
         self.start_time = time.time()
 
     def log(self, iteration, psnr, n_points):
-        """Log a single training iteration."""
         elapsed_time = time.time() - self.start_time
         self.logs.append({
             'iteration': iteration,
@@ -19,13 +18,11 @@ class TrainingLogger:
         })
 
     def save_csv(self, filename="training_log.csv"):
-        """Save logs to a CSV file."""
         df = pd.DataFrame(self.logs)
         df.to_csv(filename, index=False)
         print(f"Saved training log to {filename}")
 
     def plot(self):
-        """Display plots of PSNR vs Iteration and Time using matplotlib."""
         df = pd.DataFrame(self.logs)
 
         # PSNR vs. Iteration

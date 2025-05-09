@@ -67,6 +67,8 @@ def parse_args():
   parser.add_argument('--use_mlp_covariance', action='store_true', help='Use MLP to predict log scale and rotation')
   parser.add_argument('--use_mlp_alpha', action='store_true', help='Use MLP to predict alpha')
 
+  parser.add_argument('--save_csv', type=str, default=None, help='Filename to save training log as CSV')
+
   args = parser.parse_args()
 
   if args.pixel_tile:
@@ -313,15 +315,19 @@ def main():
   if cmd_args.use_mlp_covariance or cmd_args.use_mlp_alpha:
     parameter_groups['latent'] = dict(lr=0.01)
 
-  if cmd_args.use_mlp_covariance:
-    covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
-    covariance_optim = torch.optim.Adam(covariance_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+    if cmd_args.use_mlp_covariance:
+      covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
+      covariance_optim = torch.optim.Adam(covariance_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+
+    if cmd_args.use_mlp_alpha:
+      alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
+      alpha_optim = torch.optim.Adam(alpha_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+
+  if not cmd_args.use_mlp_covariance:
     parameter_groups['log_scaling'] = dict(lr=0.1)
     parameter_groups['rotation'] = dict(lr=1.0)
 
-  if cmd_args.use_mlp_alpha:
-    alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
-    alpha_optim = torch.optim.Adam(alpha_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+  if not cmd_args.use_mlp_alpha:
     parameter_groups['alpha_logit'] = dict(lr=0.1)
   
   # params = ParameterClass(gaussians.to_tensordict(), 
@@ -420,6 +426,9 @@ def main():
     pbar.update(epoch_size)
 
   logger.plot()
+
+  if cmd_args.save_csv:
+    logger.save_csv(cmd_args.save_csv)
 
 def with_benchmark(f):
   def g(*args , **kwargs):
