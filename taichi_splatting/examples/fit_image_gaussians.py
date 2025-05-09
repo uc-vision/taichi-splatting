@@ -119,7 +119,8 @@ def train_epoch(opt:FractionalAdam, params:ParameterClass, ref_image,
     with torch.enable_grad():
       gaussians = Gaussians2D.from_tensordict(params.tensors)
 
-      latent = params.latent  # [N, latent_dim]
+      if use_mlp_covariance or use_mlp_alpha:
+        latent = params.latent  # [N, latent_dim]
 
       # Predict covariance using MLP or use learned params
       if use_mlp_covariance:
