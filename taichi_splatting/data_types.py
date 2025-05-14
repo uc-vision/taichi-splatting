@@ -1,9 +1,10 @@
 from dataclasses import dataclass, replace
 import math
+from typing import List
 from beartype.typing import Tuple
 from beartype import beartype
 import roma
-from taichi_splatting.torch_lib.transforms import quat_to_mat, split_rt, transform44
+from taichi_splatting.torch_lib.transforms import split_rt, transform44, make_homog
 import torch
 
 
@@ -41,6 +42,8 @@ class RasterConfig:
 
   compute_point_heuristic: bool = False # implies compute_visibility
   compute_visibility: bool = False # compute visibility (pixels) for each gaussian
+
+  median_threshold: float = 0.25 # threshold for median depth computation
 
     
 
@@ -89,19 +92,27 @@ class Gaussians3D(TensorClass):
     """ Transform the gaussians by a 4x4 matrix """
     assert m.shape == (4, 4), f"Expected shape (4, 4), got {m.shape}"
 
-    n = self.batch_size[0]
-    position = transform44(m, self.position)
+    position = transform44(m, make_homog(self.position))[..., 0:3]
     
     r, _ = split_rt(m)  
     rotation = r @ roma.unitquat_to_rotmat(self.rotation)
+
   
     return self.replace(position=position, 
-                        rotation= roma.rotmat_to_unitquat(rotation), 
-                        batch_size=(n,))
+                        rotation=roma.rotmat_to_unitquat(rotation))
 
   @property
   def alpha(self):
     return torch.sigmoid(self.alpha_logit)
+  
+  @staticmethod
+  def concat_batch(gaussians:List['Gaussians3D']) -> 'Gaussians3D':
+    dicts = [g.to_dict() for g in gaussians]
+    dicts = {k: torch.cat([d[k] for d in dicts], dim=0) for k in dicts[0].keys()}
+
+    batch_size = sum([g.batch_size[0] for g in gaussians])
+    return Gaussians3D(**dicts, batch_size=(batch_size,))
+
 
 
 def inverse_sigmoid(x:torch.Tensor):
