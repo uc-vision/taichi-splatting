@@ -9,6 +9,7 @@ import torch
 from taichi_splatting.data_types import Gaussians3D, RasterConfig
 from taichi_splatting.optim.autograd import restore_grad
 from taichi_splatting.taichi_queue import TaichiQueue, queued
+from taichi_splatting.torch_lib.util import check_finite
 
 from .params import CameraParams
 from taichi_splatting.taichi_lib import get_library
@@ -172,6 +173,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
         points.grad = dpoints.contiguous()
         depth.grad = ddepth.contiguous()
 
+
         indexed_project_kernel.grad(
           *gaussian_tensors,  
           ctx.indexes,
@@ -180,6 +182,7 @@ def project_to_image_function(torch_dtype=torch.float32, clamp_margin=0.15, blur
           points, depth)
 
 
+        position, log_scaling, rotation, alpha_logit = gaussian_tensors
         return (*[tensor.grad for tensor in gaussian_tensors], 
                 T_camera_world.grad, projection.grad,
                 None, None)

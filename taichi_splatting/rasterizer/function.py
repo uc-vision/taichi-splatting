@@ -1,6 +1,7 @@
 from functools import cache
 from typing import Optional
 import numpy as np
+from taichi_splatting.torch_lib.util import check_finite
 import torch
 from numbers import Integral
 from beartype import beartype
@@ -72,13 +73,15 @@ def render_function(config: RasterConfig,
       ctx.mark_non_differentiable(image_alpha, overlap_to_point, tile_overlap_ranges, 
                                 visibility, point_heuristic)
       ctx.save_for_backward(gaussians, features, image_feature)
-    
+
       return image_feature, image_alpha, point_heuristic, visibility
 
     @staticmethod
     def backward(ctx, grad_image_feature: torch.Tensor,
                 grad_alpha: torch.Tensor, grad_point_heuristics: torch.Tensor,
                 grad_visibility: torch.Tensor):
+      
+
       
       gaussians, features, image_feature = ctx.saved_tensors
       grad_gaussians = torch.zeros_like(gaussians)
@@ -87,6 +90,7 @@ def render_function(config: RasterConfig,
       backward(gaussians, features, ctx.tile_overlap_ranges, ctx.overlap_to_point,
               image_feature, grad_image_feature.contiguous(),
               grad_gaussians, grad_features, ctx.point_heuristic)
+
 
       return grad_gaussians, grad_features, None, None, None, None
     

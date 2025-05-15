@@ -34,7 +34,8 @@ def make_homog(points):
   return torch.concatenate([points, torch.ones(shape, dtype=points.dtype, device=points.device)], axis=-1)
 
 def transform44(transform, points):
-
+  assert points.shape[-1] == 4, f'transform_points: expected homogeneous 4d points, got {points.shape}'
+  
   points = points.reshape([-1, 4, 1])
   transformed = transform.reshape([1, 4, 4]) @ points
   return transformed[..., 0].reshape(-1, 4)

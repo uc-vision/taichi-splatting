@@ -77,7 +77,7 @@ def render_projected(indexes:torch.Tensor, gaussians2d:torch.Tensor,
   if render_median_depth:
     raster_depth = rasterize_with_tiles(gaussians2d, depths, 
       tile_overlap_ranges=tile_overlap_ranges.view(-1, 2), overlap_to_point=overlap_to_point,
-      image_size=camera_params.image_size, config=replace(config, use_alpha_blending=False, saturate_threshold=0.5))
+      image_size=camera_params.image_size, config=replace(config, use_alpha_blending=False, saturate_threshold=config.median_threshold))
     
     median_depth = raster_depth.image.squeeze(-1)
 
