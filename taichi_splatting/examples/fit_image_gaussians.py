@@ -69,6 +69,14 @@ def parse_args():
 
   parser.add_argument('--save_csv', type=str, default=None, help='Filename to save training log as CSV')
 
+  parser.add_argument('--save_covariance_mlp', type=str, default=None, help='Path to save CovarianceMLP')
+  parser.add_argument('--load_covariance_mlp', type=str, default=None, help='Path to load CovarianceMLP')
+  parser.add_argument('--freeze_covariance_mlp', action='store_true', help='Freeze CovarianceMLP during training')
+
+  parser.add_argument('--save_alpha_mlp', type=str, default=None, help='Path to save AlphaMLP')
+  parser.add_argument('--load_alpha_mlp', type=str, default=None, help='Path to load AlphaMLP')
+  parser.add_argument('--freeze_alpha_mlp', action='store_true', help='Freeze AlphaMLP during training')
+
   args = parser.parse_args()
 
   if args.pixel_tile:
@@ -317,11 +325,37 @@ def main():
 
     if cmd_args.use_mlp_covariance:
       covariance_mlp = CovarianceMLP().to(torch.device('cuda:0'))
-      covariance_optim = torch.optim.Adam(covariance_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+
+      if cmd_args.load_covariance_mlp:
+        covariance_mlp.load_state_dict(torch.load(cmd_args.load_covariance_mlp))
+        print(f"Loaded CovarianceMLP from {cmd_args.load_covariance_mlp}")
+
+      if cmd_args.freeze_covariance_mlp:
+        for param in covariance_mlp.parameters():
+          param.requires_grad = False
+        covariance_optim = None
+      else:
+        covariance_optim = torch.optim.Adam(
+          filter(lambda p: p.requires_grad, covariance_mlp.parameters()),
+          lr=0.001, betas=(0.9, 0.99)
+        )
 
     if cmd_args.use_mlp_alpha:
       alpha_mlp = AlphaMLP().to(torch.device('cuda:0'))
-      alpha_optim = torch.optim.Adam(alpha_mlp.parameters(), lr=0.001, betas=(0.9, 0.99))
+
+      if cmd_args.load_alpha_mlp:
+        alpha_mlp.load_state_dict(torch.load(cmd_args.load_alpha_mlp))
+        print(f"Loaded AlphaMLP from {cmd_args.load_alpha_mlp}")
+
+      if cmd_args.freeze_alpha_mlp:
+        for param in alpha_mlp.parameters():
+          param.requires_grad = False
+        alpha_optim = None
+      else:
+        alpha_optim = torch.optim.Adam(
+          filter(lambda p: p.requires_grad, alpha_mlp.parameters()),
+          lr=0.001, betas=(0.9, 0.99)
+        )
 
   if not cmd_args.use_mlp_covariance:
     parameter_groups['log_scaling'] = dict(lr=0.1)
@@ -429,6 +463,15 @@ def main():
 
   if cmd_args.save_csv:
     logger.save_csv(cmd_args.save_csv)
+
+  if cmd_args.save_covariance_mlp and covariance_mlp is not None:
+    torch.save(covariance_mlp.state_dict(), cmd_args.save_covariance_mlp)
+    print(f"Saved CovarianceMLP to {cmd_args.save_covariance_mlp}")
+
+  if cmd_args.save_alpha_mlp and alpha_mlp is not None:
+    torch.save(alpha_mlp.state_dict(), cmd_args.save_alpha_mlp)
+    print(f"Saved AlphaMLP to {cmd_args.save_alpha_mlp}")
+
 
 def with_benchmark(f):
   def g(*args , **kwargs):
