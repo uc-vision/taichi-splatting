@@ -1,0 +1,83 @@
+digraph GaussianTrainingPipeline {
+  rankdir=TB;
+  node [shape=box style=filled fillcolor="#f0f0f0"];
+
+  // Inputs
+  ref_image [label="Target Image", shape=oval, fillcolor="#ffe0e0"];
+  init_gaussians [label="Random Gaussians", shape=oval, fillcolor="#e0f0ff"];
+
+  // Cluster: Explicitly Optimised Parameters
+  subgraph cluster_optimised {
+    label="Explicitly Optimised Parameters";
+    style=dashed;
+    color=gray;
+
+    position [label="Position", fillcolor="#ccffcc"];
+    colour [label="Colour", fillcolor="#ccffcc"];
+    latent [label="Latent", fillcolor="#ccffcc"];
+  }
+
+  // Cluster: MLPs
+  subgraph cluster_mlps {
+    label="MLP Predictors";
+    style=dashed;
+    color=gray;
+
+    covariance_mlp [label="CovarianceMLP", fillcolor="#e6e6ff"];
+    alpha_mlp [label="AlphaMLP", fillcolor="#e6e6ff"];
+  }
+
+  // Cluster: Predicted Implicitly by MLPs
+  subgraph cluster_predicted {
+    label="Predicted Implicitly by MLPs";
+    style=dashed;
+    color=gray;
+
+    log_scaling [label="log_scaling"];
+    rotation [label="rotation"];
+    alpha_logit [label="alpha_logit"];
+  }
+
+  // Projection & Rasterisation
+  projection [label="project_gaussians2d()", fillcolor="#d0e0ff"];
+  rasteriser [label="rasterise()\n(image, visibility, heuristics)", fillcolor="#d0e0ff"];
+
+  // Loss
+  loss [label="Loss\n(MSE + regularisation)", fillcolor="#ffe0b2"];
+
+  // Optimisers
+  optimiser [label="Optimisers", shape=ellipse, fillcolor="#ffe680"];
+
+  // Flow
+  ref_image -> loss;
+  init_gaussians -> position;
+  init_gaussians -> colour;
+  init_gaussians -> latent;
+
+  // Latent to MLPs
+  latent -> covariance_mlp;
+  latent -> alpha_mlp;
+
+  // MLPs to predicted params
+  covariance_mlp -> log_scaling;
+  covariance_mlp -> rotation;
+  alpha_mlp -> alpha_logit;
+
+  // All params to projection
+  position -> projection;
+  log_scaling -> projection;
+  rotation -> projection;
+  alpha_logit -> projection;
+  colour -> projection;
+
+  projection -> rasteriser;
+  rasteriser -> loss;
+
+  // Backpropagation
+  loss -> optimiser;
+  optimiser -> position [label="update"];
+  optimiser -> colour [label="update"];
+  optimiser -> latent [label="update"];
+  optimiser -> covariance_mlp [label="update"];
+  optimiser -> alpha_mlp [label="update"];
+}
