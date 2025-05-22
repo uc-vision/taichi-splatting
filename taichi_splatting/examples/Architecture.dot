@@ -1,10 +1,18 @@
 digraph GaussianTrainingPipeline {
   rankdir=TB;
+  nodesep=0.5;
+  ranksep=1;
   node [shape=box style=filled fillcolor="#f0f0f0"];
 
   // Inputs
   ref_image [label="Target Image", shape=oval, fillcolor="#ffe0e0"];
   init_gaussians [label="Random Gaussians", shape=oval, fillcolor="#e0f0ff"];
+  
+  subgraph same_rank_inputs {
+  rank=same;
+  ref_image;
+  init_gaussians;
+}
 
   // Cluster: Explicitly Optimised Parameters
   subgraph cluster_optimised {
