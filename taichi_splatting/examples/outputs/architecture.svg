@@ -1,0 +1,244 @@
+<svg width="958pt" height="609pt" viewBox="0.00 0.00 957.78 609.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 605)">
+<title>GaussianTrainingPipeline</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-605 953.78,-605 953.78,4 -4,4"/>
+<g id="clust2" class="cluster">
+<title>cluster_optimised</title>
+<polygon fill="none" stroke="gray" stroke-dasharray="5,2" points="359.78,-303.8 359.78,-405.4 617.78,-405.4 617.78,-303.8 359.78,-303.8"/>
+<text text-anchor="middle" x="488.78" y="-388.8" font-family="Times,serif" font-size="14.00">Explicitly Optimised Parameters</text>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_mlps</title>
+<polygon fill="none" stroke="gray" stroke-dasharray="5,2" points="459.78,-146.6 459.78,-248.2 699.78,-248.2 699.78,-146.6 459.78,-146.6"/>
+<text text-anchor="middle" x="579.78" y="-231.6" font-family="Times,serif" font-size="14.00">MLP Predictors</text>
+</g>
+<g id="clust4" class="cluster">
+<title>cluster_predicted</title>
+<polygon fill="none" stroke="gray" stroke-dasharray="5,2" points="635.78,-8 635.78,-109.6 941.78,-109.6 941.78,-8 635.78,-8"/>
+<text text-anchor="middle" x="788.78" y="-93" font-family="Times,serif" font-size="14.00">Predicted Implicitly by MLPs</text>
+</g>
+<!-- ref_image -->
+<g id="node1" class="node">
+<title>ref_image</title>
+<ellipse fill="#ffe0e0" stroke="black" cx="62.78" cy="-471.2" rx="62.78" ry="18"/>
+<text text-anchor="middle" x="62.78" y="-467" font-family="Times,serif" font-size="14.00">Target Image</text>
+</g>
+<!-- loss -->
+<g id="node13" class="node">
+<title>loss</title>
+<polygon fill="#ffe0b2" stroke="black" points="322.77,-350.6 176.79,-350.6 176.79,-309 322.77,-309 322.77,-350.6"/>
+<text text-anchor="middle" x="249.78" y="-334" font-family="Times,serif" font-size="14.00">Loss</text>
+<text text-anchor="middle" x="249.78" y="-317.2" font-family="Times,serif" font-size="14.00">(MSE + regularisation)</text>
+</g>
+<!-- ref_image&#45;&gt;loss -->
+<g id="edge1" class="edge">
+<title>ref_image-&gt;loss</title>
+<path fill="none" stroke="black" d="M84.59,-453.94C116.35,-430.27 175.67,-386.05 213.91,-357.54"/>
+<polygon fill="black" stroke="black" points="215.53,-360.69 221.46,-351.91 211.35,-355.08 215.53,-360.69"/>
+</g>
+<!-- init_gaussians -->
+<g id="node2" class="node">
+<title>init_gaussians</title>
+<ellipse fill="#e0f0ff" stroke="black" cx="606.78" cy="-471.2" rx="85.34" ry="18"/>
+<text text-anchor="middle" x="606.78" y="-467" font-family="Times,serif" font-size="14.00">Random Gaussians</text>
+</g>
+<!-- position -->
+<g id="node3" class="node">
+<title>position</title>
+<polygon fill="#ccffcc" stroke="black" points="429.73,-347.8 367.83,-347.8 367.83,-311.8 429.73,-311.8 429.73,-347.8"/>
+<text text-anchor="middle" x="398.78" y="-325.6" font-family="Times,serif" font-size="14.00">Position</text>
+</g>
+<!-- init_gaussians&#45;&gt;position -->
+<g id="edge2" class="edge">
+<title>init_gaussians-&gt;position</title>
+<path fill="none" stroke="black" d="M552.39,-456.91C519.49,-446.84 478.17,-430.39 447.78,-405.4 432.32,-392.68 419.98,-373.8 411.56,-358.22"/>
+<polygon fill="black" stroke="black" points="414.72,-356.72 407.05,-349.42 408.49,-359.92 414.72,-356.72"/>
+</g>
+<!-- colour -->
+<g id="node4" class="node">
+<title>colour</title>
+<polygon fill="#ccffcc" stroke="black" points="520.22,-347.8 465.33,-347.8 465.33,-311.8 520.22,-311.8 520.22,-347.8"/>
+<text text-anchor="middle" x="492.78" y="-325.6" font-family="Times,serif" font-size="14.00">Colour</text>
+</g>
+<!-- init_gaussians&#45;&gt;colour -->
+<g id="edge3" class="edge">
+<title>init_gaussians-&gt;colour</title>
+<path fill="none" stroke="black" d="M586.02,-453.36C571.52,-441 552.24,-423.29 537.78,-405.4 525.99,-390.82 515.08,-372.88 506.94,-358.24"/>
+<polygon fill="black" stroke="black" points="510.1,-356.72 502.26,-349.6 503.95,-360.06 510.1,-356.72"/>
+</g>
+<!-- latent -->
+<g id="node5" class="node">
+<title>latent</title>
+<polygon fill="#ccffcc" stroke="black" points="609.78,-347.8 555.78,-347.8 555.78,-311.8 609.78,-311.8 609.78,-347.8"/>
+<text text-anchor="middle" x="582.78" y="-325.6" font-family="Times,serif" font-size="14.00">Latent</text>
+</g>
+<!-- init_gaussians&#45;&gt;latent -->
+<g id="edge4" class="edge">
+<title>init_gaussians-&gt;latent</title>
+<path fill="none" stroke="black" d="M603.79,-452.83C599.74,-429.33 592.47,-387.12 587.64,-359.03"/>
+<polygon fill="black" stroke="black" points="591.13,-358.71 585.99,-349.45 584.24,-359.89 591.13,-358.71"/>
+</g>
+<!-- projection -->
+<g id="node11" class="node">
+<title>projection</title>
+<polygon fill="#d0e0ff" stroke="black" points="676.21,-601 537.35,-601 537.35,-565 676.21,-565 676.21,-601"/>
+<text text-anchor="middle" x="606.78" y="-578.8" font-family="Times,serif" font-size="14.00">project_gaussians2d()</text>
+</g>
+<!-- position&#45;&gt;projection -->
+<g id="edge10" class="edge">
+<title>position-&gt;projection</title>
+<path fill="none" stroke="black" d="M405.27,-347.92C417.4,-378.65 445.59,-444.38 481.78,-492 496.43,-511.28 502.53,-514.31 521.78,-529 535.7,-539.63 551.83,-550.1 566.28,-558.9"/>
+<polygon fill="black" stroke="black" points="564.28,-561.78 574.66,-563.92 567.88,-555.78 564.28,-561.78"/>
+</g>
+<!-- colour&#45;&gt;projection -->
+<g id="edge14" class="edge">
+<title>colour-&gt;projection</title>
+<path fill="none" stroke="black" d="M489.87,-347.9C485.51,-378.58 480.1,-444.25 503.78,-492 517.53,-519.74 543.99,-542.56 566.65,-558.29"/>
+<polygon fill="black" stroke="black" points="564.56,-561.1 574.82,-563.75 568.45,-555.28 564.56,-561.1"/>
+</g>
+<!-- covariance_mlp -->
+<g id="node6" class="node">
+<title>covariance_mlp</title>
+<polygon fill="#e6e6ff" stroke="black" points="576.04,-190.6 467.51,-190.6 467.51,-154.6 576.04,-154.6 576.04,-190.6"/>
+<text text-anchor="middle" x="521.78" y="-168.4" font-family="Times,serif" font-size="14.00">CovarianceMLP</text>
+</g>
+<!-- latent&#45;&gt;covariance_mlp -->
+<g id="edge5" class="edge">
+<title>latent-&gt;covariance_mlp</title>
+<path fill="none" stroke="black" d="M580.02,-311.41C577.34,-296.47 572.66,-274.5 565.78,-256.2 558.51,-236.86 547.6,-216.36 538.47,-200.62"/>
+<polygon fill="black" stroke="black" points="541.66,-199.14 533.55,-192.32 535.64,-202.71 541.66,-199.14"/>
+</g>
+<!-- alpha_mlp -->
+<g id="node7" class="node">
+<title>alpha_mlp</title>
+<polygon fill="#e6e6ff" stroke="black" points="691.28,-190.6 612.28,-190.6 612.28,-154.6 691.28,-154.6 691.28,-190.6"/>
+<text text-anchor="middle" x="651.78" y="-168.4" font-family="Times,serif" font-size="14.00">AlphaMLP</text>
+</g>
+<!-- latent&#45;&gt;alpha_mlp -->
+<g id="edge6" class="edge">
+<title>latent-&gt;alpha_mlp</title>
+<path fill="none" stroke="black" d="M590.43,-311.6C602.29,-284.91 625.24,-233.29 639.46,-201.3"/>
+<polygon fill="black" stroke="black" points="642.62,-202.82 643.48,-192.26 636.22,-199.98 642.62,-202.82"/>
+</g>
+<!-- log_scaling -->
+<g id="node8" class="node">
+<title>log_scaling</title>
+<polygon fill="#f0f0f0" stroke="black" points="724.05,-52 643.51,-52 643.51,-16 724.05,-16 724.05,-52"/>
+<text text-anchor="middle" x="683.78" y="-29.8" font-family="Times,serif" font-size="14.00">log_scaling</text>
+</g>
+<!-- covariance_mlp&#45;&gt;log_scaling -->
+<g id="edge7" class="edge">
+<title>covariance_mlp-&gt;log_scaling</title>
+<path fill="none" stroke="black" d="M542.29,-154.3C570.7,-130.35 622.16,-86.95 654.57,-59.63"/>
+<polygon fill="black" stroke="black" points="656.63,-62.47 662.01,-53.35 652.11,-57.12 656.63,-62.47"/>
+</g>
+<!-- rotation -->
+<g id="node9" class="node">
+<title>rotation</title>
+<polygon fill="#f0f0f0" stroke="black" points="819.55,-52 760.01,-52 760.01,-16 819.55,-16 819.55,-52"/>
+<text text-anchor="middle" x="789.78" y="-29.8" font-family="Times,serif" font-size="14.00">rotation</text>
+</g>
+<!-- covariance_mlp&#45;&gt;rotation -->
+<g id="edge8" class="edge">
+<title>covariance_mlp-&gt;rotation</title>
+<path fill="none" stroke="black" d="M570.68,-154.23C578.7,-151.56 586.94,-148.92 594.78,-146.6 659.37,-127.45 687.06,-148.9 741.78,-109.6 758.14,-97.85 770.31,-78.63 778.31,-62.64"/>
+<polygon fill="black" stroke="black" points="781.47,-64.13 782.53,-53.59 775.13,-61.17 781.47,-64.13"/>
+</g>
+<!-- alpha_logit -->
+<g id="node10" class="node">
+<title>alpha_logit</title>
+<polygon fill="#f0f0f0" stroke="black" points="934.27,-52 855.28,-52 855.28,-16 934.27,-16 934.27,-52"/>
+<text text-anchor="middle" x="894.78" y="-29.8" font-family="Times,serif" font-size="14.00">alpha_logit</text>
+</g>
+<!-- alpha_mlp&#45;&gt;alpha_logit -->
+<g id="edge9" class="edge">
+<title>alpha_mlp-&gt;alpha_logit</title>
+<path fill="none" stroke="black" d="M691.56,-165.41C731.49,-157.66 793.32,-141.35 837.78,-109.6 855.19,-97.17 869.73,-77.88 879.77,-62.02"/>
+<polygon fill="black" stroke="black" points="882.74,-63.88 884.91,-53.51 876.75,-60.25 882.74,-63.88"/>
+</g>
+<!-- log_scaling&#45;&gt;projection -->
+<g id="edge11" class="edge">
+<title>log_scaling-&gt;projection</title>
+<path fill="none" stroke="black" d="M692.01,-52.33C709.09,-89.92 746.78,-182.09 746.78,-263.6 746.78,-472.2 746.78,-472.2 746.78,-472.2 746.78,-514.27 707.15,-542.65 670.06,-560.01"/>
+<polygon fill="black" stroke="black" points="668.81,-556.74 661.09,-564 671.65,-563.13 668.81,-556.74"/>
+</g>
+<!-- rotation&#45;&gt;projection -->
+<g id="edge12" class="edge">
+<title>rotation-&gt;projection</title>
+<path fill="none" stroke="black" d="M796.35,-52.4C805.45,-78.08 820.78,-127.83 820.78,-171.6 820.78,-472.2 820.78,-472.2 820.78,-472.2 820.78,-534.41 748.3,-561.4 687.71,-573.09"/>
+<polygon fill="black" stroke="black" points="687.26,-569.62 678.04,-574.83 688.5,-576.51 687.26,-569.62"/>
+</g>
+<!-- alpha_logit&#45;&gt;projection -->
+<g id="edge13" class="edge">
+<title>alpha_logit-&gt;projection</title>
+<path fill="none" stroke="black" d="M897.26,-52.21C900.78,-78.07 906.78,-128.51 906.78,-171.6 906.78,-472.2 906.78,-472.2 906.78,-472.2 906.78,-519 776.37,-551.82 687.52,-568.75"/>
+<polygon fill="black" stroke="black" points="687.03,-565.28 677.85,-570.55 688.32,-572.16 687.03,-565.28"/>
+</g>
+<!-- rasteriser -->
+<g id="node12" class="node">
+<title>rasteriser</title>
+<polygon fill="#d0e0ff" stroke="black" points="338.26,-492 161.29,-492 161.29,-450.4 338.26,-450.4 338.26,-492"/>
+<text text-anchor="middle" x="249.78" y="-475.4" font-family="Times,serif" font-size="14.00">rasterise()</text>
+<text text-anchor="middle" x="249.78" y="-458.6" font-family="Times,serif" font-size="14.00">(image, visibility, heuristics)</text>
+</g>
+<!-- projection&#45;&gt;rasteriser -->
+<g id="edge15" class="edge">
+<title>projection-&gt;rasteriser</title>
+<path fill="none" stroke="black" d="M536.95,-571.35C487.93,-562.75 421.3,-548.81 364.78,-529 341.05,-520.68 315.88,-508.65 295.15,-497.8"/>
+<polygon fill="black" stroke="black" points="296.87,-494.75 286.4,-493.14 293.58,-500.93 296.87,-494.75"/>
+</g>
+<!-- rasteriser&#45;&gt;loss -->
+<g id="edge16" class="edge">
+<title>rasteriser-&gt;loss</title>
+<path fill="none" stroke="black" d="M249.78,-449.93C249.78,-427.01 249.78,-389.4 249.78,-362.57"/>
+<polygon fill="black" stroke="black" points="253.28,-362.61 249.78,-352.61 246.28,-362.61 253.28,-362.61"/>
+</g>
+<!-- optimiser -->
+<g id="node14" class="node">
+<title>optimiser</title>
+<ellipse fill="#ffe680" stroke="black" cx="341.78" cy="-172.6" rx="53.42" ry="18"/>
+<text text-anchor="middle" x="341.78" y="-168.4" font-family="Times,serif" font-size="14.00">Optimisers</text>
+</g>
+<!-- loss&#45;&gt;optimiser -->
+<g id="edge17" class="edge">
+<title>loss-&gt;optimiser</title>
+<path fill="none" stroke="black" d="M261.8,-308.51C278.26,-280.75 307.81,-230.89 326.02,-200.18"/>
+<polygon fill="black" stroke="black" points="328.86,-202.25 330.95,-191.86 322.84,-198.68 328.86,-202.25"/>
+</g>
+<!-- optimiser&#45;&gt;position -->
+<g id="edge18" class="edge">
+<title>optimiser-&gt;position</title>
+<path fill="none" stroke="black" d="M332.72,-190.7C323.15,-211.27 311.15,-246.36 324.46,-273 331.71,-287.52 344.74,-299.24 357.88,-308.13"/>
+<polygon fill="black" stroke="black" points="355.78,-310.94 366.11,-313.29 359.5,-305.01 355.78,-310.94"/>
+<text text-anchor="middle" x="343.12" y="-260.4" font-family="Times,serif" font-size="14.00">update</text>
+</g>
+<!-- optimiser&#45;&gt;colour -->
+<g id="edge19" class="edge">
+<title>optimiser-&gt;colour</title>
+<path fill="none" stroke="black" d="M349.17,-190.72C358.97,-211.95 377.94,-248.34 402.46,-273 410.95,-281.53 434.29,-295.89 455.12,-307.9"/>
+<polygon fill="black" stroke="black" points="453.33,-310.91 463.75,-312.82 456.79,-304.83 453.33,-310.91"/>
+<text text-anchor="middle" x="421.12" y="-260.4" font-family="Times,serif" font-size="14.00">update</text>
+</g>
+<!-- optimiser&#45;&gt;latent -->
+<g id="edge20" class="edge">
+<title>optimiser-&gt;latent</title>
+<path fill="none" stroke="black" d="M362.34,-189.62C388.93,-210.03 436.97,-245.89 480.46,-273 505,-288.3 512.4,-289.93 537.78,-303.8 540.41,-305.24 543.12,-306.73 545.85,-308.23"/>
+<polygon fill="black" stroke="black" points="543.91,-311.16 554.36,-312.94 547.3,-305.03 543.91,-311.16"/>
+<text text-anchor="middle" x="499.12" y="-260.4" font-family="Times,serif" font-size="14.00">update</text>
+</g>
+<!-- optimiser&#45;&gt;covariance_mlp -->
+<g id="edge21" class="edge">
+<title>optimiser-&gt;covariance_mlp</title>
+<path fill="none" stroke="black" d="M395.3,-172.6C414.27,-172.6 435.84,-172.6 455.73,-172.6"/>
+<polygon fill="black" stroke="black" points="455.71,-176.1 465.71,-172.6 455.71,-169.1 455.71,-176.1"/>
+<text text-anchor="middle" x="431.35" y="-179.8" font-family="Times,serif" font-size="14.00">update</text>
+</g>
+<!-- optimiser&#45;&gt;alpha_mlp -->
+<g id="edge22" class="edge">
+<title>optimiser-&gt;alpha_mlp</title>
+<path fill="none" stroke="black" d="M359.59,-190.06C379.78,-208.53 414.6,-236.57 450.78,-248.2 511.28,-267.65 537.36,-277.47 593.78,-248.2 613.36,-238.04 628.27,-217.96 638.07,-201.04"/>
+<polygon fill="black" stroke="black" points="641.09,-202.83 642.79,-192.37 634.94,-199.48 641.09,-202.83"/>
+<text text-anchor="middle" x="545.78" y="-260.4" font-family="Times,serif" font-size="14.00">update</text>
+</g>
+</g>
+</svg>
