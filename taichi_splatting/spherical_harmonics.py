@@ -4,12 +4,13 @@ import math
 
 from .slang_util import get_float_type, load_module
 
+import slangpy as spy
 
 @cache 
-def get_sh_functions(dtype:torch.dtype):
+def get_sh_functions(dtype:torch.dtype, device:torch.device)  -> dict[int, spy.Function]:
     type_str = get_float_type(dtype)
 
-    module = load_module("spherical_harmonics.slang")
+    module = load_module("spherical_harmonics.slang", device)
     functions = {
         0: module.require_function(f'evaluate_sh0<{type_str}>'),
         1: module.require_function(f'evaluate_sh1<{type_str}>'),
@@ -26,23 +27,22 @@ def check_sh_degree(sh_features):
     assert n * n == n_sh, f"SH feature count must be square, got {n_sh} ({sh_features.shape})"
     return (n - 1)
 
-def evaluate_sh_at(sh_params: torch.Tensor,   # M, K (degree + 1)^2, (usually K=3, for RGB)
-                  positions: torch.Tensor,    # M, 3 (packed gaussian or xyz)
-                  indexes: torch.Tensor,      # N, 1 (indexes to gaussians) 0 to M 
+def evaluate_sh_at(sh_params: torch.Tensor,   # N, K (degree + 1)^2, (usually K=3, for RGB)
+                  positions: torch.Tensor,    # N, 3 (xyz)
                   camera_pos: torch.Tensor    # 3
                   ) -> torch.Tensor:          # N, K
     
     degree = check_sh_degree(sh_params)
-    func = get_sh_functions(sh_params.dtype)[degree]
-    
 
-    if indexes.shape[0] == 0:
-      return torch.zeros_like(positions, requires_grad=sh_params.requires_grad)
-    
-    result = func (
-        sh_params=sh_params[indexes],
-        position=positions[indexes], 
+
+    funcs = get_sh_functions(sh_params.dtype, positions.device)
+    func = funcs[degree]
+
+    result = func(
+        sh_params=sh_params,
+        position=positions, 
         camera_pos=camera_pos
     )
+
 
     return result

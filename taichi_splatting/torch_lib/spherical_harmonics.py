@@ -16,6 +16,7 @@ def check_sh_degree(sh_features):
 @beartype
 def evaluate_sh(params:torch.Tensor,   # N, K, D where D = (degree + 1)^2
                 dirs:torch.Tensor,     # N, 3
+
                 ) -> torch.Tensor:     # N, K
 
   degree = check_sh_degree(params)
@@ -32,16 +33,13 @@ def evaluate_sh(params:torch.Tensor,   # N, K, D where D = (degree + 1)^2
 @beartype
 def evaluate_sh_at(params:torch.Tensor,  # M, K, D where D = (degree + 1)^2
                 points:torch.Tensor,     # M, 3
-                
-                indexes:torch.Tensor,    # N
                 camera_pos:torch.Tensor # 3
                 ) -> torch.Tensor:    # N, K
 
-  dirs = points[indexes] - camera_pos.unsqueeze(0)
+  dirs = points - camera_pos.unsqueeze(0)
   dirs = torch.nn.functional.normalize(dirs, dim=1)
 
- 
-  return evaluate_sh(params[indexes], dirs)
+  return evaluate_sh(params, dirs)
 
 if __name__ == "__main__":
     dimension = 5

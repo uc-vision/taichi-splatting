@@ -9,7 +9,6 @@ from taichi_splatting.mapper.tile_mapper import map_to_tiles
 from taichi_splatting.rasterizer import RasterConfig
 from taichi_splatting.rasterizer.function import rasterize_with_tiles
 from taichi_splatting.rendering import RenderedPoints, Rendering
-from taichi_splatting.spherical_harmonics import  evaluate_sh_at
 
 from taichi_splatting.perspective import (CameraParams)
 

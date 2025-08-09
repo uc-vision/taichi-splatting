@@ -17,15 +17,12 @@ def random_inputs(max_deg=3, max_n=100, device='cuda', dtype=torch.float32):
     degree = 3
     n = torch.randint(1, max_n + 2, (1,) ).item()
 
-    params = torch.rand(n, 3, (degree + 1)**2, device=device, dtype=dtype)
-
-    points = torch.randn(n, 3, device=device, dtype=dtype)
+    params = torch.rand( (n, 3, (degree + 1)**2), device=device, dtype=dtype)
+    points = torch.randn( (n, 3), device=device, dtype=dtype)
     camera_pos = torch.randn(3, device=device, dtype=dtype)
 
-    indexes = torch.randint(0, n, (n  // 2, ), device=device)
-
     return (params.requires_grad_(True), points.requires_grad_(True), 
-            indexes, camera_pos.requires_grad_(True))
+            camera_pos.requires_grad_(True))
   return f
 
 def test_sh(iters = 100, device='cuda'):
