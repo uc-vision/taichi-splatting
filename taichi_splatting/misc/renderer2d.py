@@ -64,10 +64,9 @@ def split_with_offsets(points: Gaussians2D, offsets: torch.Tensor, depth_noise:f
     partial(torch.repeat_interleave, repeats=n, dim=0), 
     batch_size=[num_points * n])
   
-  return replace(gaussians,
+  return gaussians.replace(
     position = gaussians.position + offsets.view(-1,  2),
-    depths = torch.clamp_min(gaussians.depths + torch.randn_like(gaussians.depths) * depth_noise, 1e-6),
-    batch_size=(num_points * n, ))
+    depths = torch.clamp_min(gaussians.depths + torch.randn_like(gaussians.depths) * depth_noise, 1e-6))
    
 
 def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:Optional[float]=None, depth_noise:float=1e-2) -> Gaussians2D:

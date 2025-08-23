@@ -65,7 +65,7 @@ def split_by_samples(points: Gaussians2D, samples: torch.Tensor, depth_noise:flo
     partial(torch.repeat_interleave, repeats=n, dim=0), 
     batch_size=[num_points * n])
   
-  return replace(gaussians,
+  return gaussians.replace(
     position = gaussians.position + point_samples,
     depth = gaussians.depths + torch.randn_like(gaussians.depths) * depth_noise,
     batch_size=(num_points * n, ))
@@ -88,7 +88,7 @@ def split_gaussians2d(points: Gaussians2D, n:int=2, scaling:float=0.8, depth_noi
   samples = torch.randn((points.batch_size[0], n, 2), device=points.position.device) 
 
   factor = math.log(1 / (scaling * n))
-  points = replace(points, 
+  points = points.replace( 
       log_scaling = points.log_scaling + factor,
       batch_size = points.batch_size)
 

@@ -213,6 +213,7 @@ def split_prune(params:ParameterClass, t, target, prune_rate, split_heuristic:Tu
 
   to_split = params[split_mask]
 
+
   
   splits = uniform_split_gaussians2d(Gaussians2D.from_tensordict(to_split.tensors), random_axis=True)
   optim_state = to_split.tensor_state.new_zeros(to_split.batch_size[0], 2)

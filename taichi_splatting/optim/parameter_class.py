@@ -229,6 +229,8 @@ class ParameterClass():
       assert tensors.shape == tensor_state.shape, f"{tensors.shape} != {tensor_state.shape}"
 
     assert set(tensors.keys()) == set(self.tensors.keys()), f"{tensors.keys()} != {self.tensors.keys()}"
+    assert tensors.device == self.tensors.device, f"{tensors.device} != {self.tensors.device}"
+
     n = tensors.batch_size[0]
 
     if tensor_state is None:

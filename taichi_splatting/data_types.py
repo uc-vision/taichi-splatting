@@ -139,7 +139,7 @@ class Gaussians2D(TensorClass):
 
 
   def set_scaling(self, scaling) -> 'Gaussians2D':
-    return replace(self, log_scaling=torch.log(scaling))
+    return self.replace(log_scaling=torch.log(scaling))
 
 
 
