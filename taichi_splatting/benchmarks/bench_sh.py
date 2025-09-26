@@ -27,6 +27,9 @@ def bench_sh(args):
     torch.manual_seed(args.seed)
 
     sh_features = torch.randn(args.n, 3, (args.degree+1)**2, device=args.device).to(args.device)
+    # sh_features = torch.randn(args.n, (args.degree+1)**2, 3, device=args.device).to(args.device)
+
+
     points = torch.randn(args.n, 3, device=args.device).to(args.device)
 
     camera_pos = torch.randn(3, device=args.device)
@@ -40,8 +43,6 @@ def bench_sh(args):
 
 
     forward = partial(spherical_harmonics.evaluate_sh_at, sh_features, points, camera_pos)
-
-
 
     sh_features = torch.randn(args.n, 3, (args.degree+1)**2, device=args.device).to(args.device)
 

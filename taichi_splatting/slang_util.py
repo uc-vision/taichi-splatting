@@ -3,7 +3,7 @@ import slangpy as spy
 import torch
 
 from slangpy import DeviceType
-from slangpy.core.utils import create_torch_device
+# from slangpy.core.utils import create_torch_device
 from importlib.resources import files
 
 from pathlib import Path
@@ -17,11 +17,18 @@ slangpy_path = Path(files('slangpy')) / 'slang'
 def get_device(torch_device:torch.device, defines:dict[str, str]={}, debug:bool=False):
 
 
-  return create_torch_device(
+  # return spy.create_torch_device(
+  #       type= DeviceType.cuda,
+  #       include_paths=[str(shader_path), str(slangpy_path)],
+  #       enable_debug_layers=debug,
+  #       torch_device=torch_device
+  # )
+
+  return spy.create_device(
         type= DeviceType.cuda,
         include_paths=[str(shader_path), str(slangpy_path)],
         enable_debug_layers=debug,
-        torch_device=torch_device
+        # torch_device=torch_device
   )
 
 

@@ -369,4 +369,5 @@ def with_benchmark(f):
       return result
   return g
 
+if __name__ == '__main__':
   main()

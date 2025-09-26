@@ -38,6 +38,9 @@ def evaluate_sh_at(sh_params: torch.Tensor,   # N, K (degree + 1)^2, (usually K=
     funcs = get_sh_functions(sh_params.dtype, positions.device)
     func = funcs[degree]
 
+    # print(degree)
+    # exit()
+
     result = func(
         sh_params=sh_params,
         position=positions, 
