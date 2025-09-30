@@ -29,6 +29,7 @@ void scalar_kernel<let D : int>(
         bias_factor = sqrt(1 - pow(beta2, total_weight[index])) / (1 - pow(beta1, total_weight[index]));
     }
 
+    [ForceUnroll]
     for(int d=0; d<D; d++) {
 
         float g = grad[index, d];
@@ -76,13 +77,11 @@ void vector_kernel<let D : int>(
     }
 
     float norm = 0;
+    float[D] g;
+    [ForceUnroll]
     for(int d=0; d<D; d++) {
-        norm = norm + grad[index, d] * grad[index, d];
-    }
-
-    float[D] m;
-    for(int d=0; d<D; d++) {
-        m[d] = lerp(pow(beta1, weight), m_arr[index, d], grad[index, d]);
+        g[d] = grad[index, d];
+        norm = norm + g[d] * g[d];
     }
 
     float v = lerp(pow(beta1, weight), v_arr[index], norm);
@@ -92,11 +91,14 @@ void vector_kernel<let D : int>(
         sqrt_v = eps;
     }
 
+    [ForceUnroll]
     for(int d=0; d<D; d++) {
-        lr_step[d] = m[d] / sqrt_v * bias_factor * lr;
+      float m = lerp(pow(beta1, weight), m_arr[index, d], g[d]);
+    
+      lr_step[d] = m / sqrt_v * bias_factor * lr;
 
-        int[2] i2 = {index, d};
-        m_arr.set(i2, m[d]);
+      int[2] i2 = {index, d};
+      m_arr.set(i2, m);
     }
 
     int[1] i1 = {index};

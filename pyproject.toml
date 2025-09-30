@@ -15,7 +15,8 @@ dependencies = [
   "taichi", 
   "tqdm", 
   "tensordict",
-  "packaging" 
+  "packaging",
+  "slangpy>=0.35" 
 ]
 
 

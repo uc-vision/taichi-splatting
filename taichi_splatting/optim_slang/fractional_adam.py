@@ -6,9 +6,9 @@ import os
 
 from pathlib import Path
 
-def slang_scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
+def slang_scalar_kernel(dims, betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
 
-    device = spy.create_device(type=spy.DeviceType.cuda)
+    device = spy.create_torch_device(type=spy.DeviceType.cuda, torch_device=torch.device('cuda', 0))
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     shader_file = os.path.join(script_dir, "fractional_adam.slang")
@@ -16,6 +16,8 @@ def slang_scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
     module = spy.Module.load_from_file(device, shader_file)
 
     bias_correction_int = int(bias_correction)
+    slang_kernel = module.require_function(f'scalar_kernel<{dims}>')
+
 
     def kernel(
         lr_step: torch.Tensor,  # M, D
@@ -27,9 +29,6 @@ def slang_scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
         grad: torch.Tensor,  # N, 
         lr: float):
         
-        D = lr_step.shape[1]
-
-        slang_kernel = module.require_function(f'scalar_kernel<{D}>')
 
         indexes_buff = spy.NDBuffer(shape=indexes.shape, dtype=module.int, device=device)
         indexes_buff.copy_from_torch(indexes)
@@ -55,7 +54,7 @@ def slang_scalar_kernel(betas=(0.9, 0.999), eps=1e-16, bias_correction=True):
     return kernel
 
 def slang_vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, bias_correction=True):
-    device = spy.create_device(type=spy.DeviceType.cuda)
+    device = spy.create_torch_device(type=spy.DeviceType.cuda, torch_device=torch.device('cuda', 0))
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     shader_file = os.path.join(script_dir, "fractional_adam.slang")
@@ -63,6 +62,7 @@ def slang_vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, bias_correction=T
     module = spy.Module.load_from_file(device, shader_file)
 
     bias_correction_int = int(bias_correction)
+    slang_kernel = module.require_function(f'vector_kernel<{dims}>')
 
     def kernel(
         lr_step: torch.Tensor,  # M, D
@@ -74,9 +74,6 @@ def slang_vector_kernel(betas=(0.9, 0.999), eps=1e-16, dims=3, bias_correction=T
         grad: torch.Tensor,  # N, 
         lr: float):
         
-        D = lr_step.shape[1]
-
-        slang_kernel = module.require_function(f'vector_kernel<{D}>')
 
         indexes_buff = spy.NDBuffer(shape=indexes.shape, dtype=module.int, device=device)
         indexes_buff.copy_from_torch(indexes)

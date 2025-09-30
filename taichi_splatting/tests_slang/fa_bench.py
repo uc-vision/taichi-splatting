@@ -45,7 +45,7 @@ def run_benchmark(name, kernel, inputs, is_slang):
 def bench_fa():
     TaichiQueue.init(arch=ti.cuda, device_memory_GB=0.1, threaded=True)
 
-    n, m, d = 100000, 50000, 16
+    n, m, d = 1000000, 50000, 32
 
     print(f"Benchmarking Fractional Adam n={n}, m={m}, d={d}")
 
@@ -55,7 +55,7 @@ def bench_fa():
     # Scalar kernels
     print("\n--- Scalar kernels ---")
     run_benchmark("Taichi scalar", taichi_scalar_kernel(), scalar_inputs, is_slang=False)
-    run_benchmark("Slang scalar", slang_scalar_kernel(), scalar_inputs, is_slang=True)
+    run_benchmark("Slang scalar", slang_scalar_kernel(dims=d), scalar_inputs, is_slang=True)
 
     # Vector kernels
     print("\n--- Vector kernels ---")
