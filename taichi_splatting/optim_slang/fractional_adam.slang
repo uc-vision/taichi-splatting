@@ -1,12 +1,9 @@
 // fractional_adam.slang
 import "slangpy";
-
-float lerp(float t, float a, float b) {
-    return a * t + b * (1 - t);
-}
+import "vector.slang";
 
 [mutating]
-void scalar_kernel<let D : int>(
+void scalar_kernel<let D : int, let bias_correction : bool>(
     inout float[D] lr_step,
     int index,
     float weight,
@@ -21,39 +18,38 @@ void scalar_kernel<let D : int>(
     float beta2,
     float eps,
 
-    int bias_correction,
     )
 {   
     float bias_factor = 1;
-    if (bias_correction == 1) {
-        bias_factor = sqrt(1 - pow(beta2, total_weight[index])) / (1 - pow(beta1, total_weight[index]));
+    if (bias_correction) {
+        float tw = total_weight[index];
+        bias_factor = sqrt(1 - pow(beta2, tw)) / (1 - pow(beta1, tw));
     }
 
-    [ForceUnroll]
-    for(int d=0; d<D; d++) {
+    let g = load_vector<float, D>(grad, index);
+    let m = load_vector<float, D>(m_arr, index);
+    let v = load_vector<float, D>(v_arr, index);
 
-        float g = grad[index, d];
+    let g2 = g * g;
 
-        int[2] i = {index, d};
+    float beta1_pow = pow(beta1, weight);
+    float beta2_pow = pow(beta2, weight);
 
-        float m = lerp(pow(beta1, weight), m_arr[index, d], g);
-        float v = lerp(pow(beta2, weight), v_arr[index, d], g * g);
-        
-        float sqrt_v = sqrt(v);
-        if (sqrt_v < eps) {
-            sqrt_v = eps;
-        }
+    let m_new = m.lerp(g, beta1_pow);
+    let v_new = v.lerp(g * g, beta2_pow);
 
-        lr_step[d] = m / sqrt_v * bias_factor * lr;
-        
-        m_arr.set(i, m);
-        v_arr.set(i, v);
-    }
+    store_vector(m_arr, m_new, index);
+    store_vector(v_arr, v_new, index);
+
+    float scale = bias_factor * lr;
+    lr_step = (m_new / (v_new.sqrt() + eps) * scale).data;
+
 }
 
 
+
 [mutating]
-void vector_kernel<let D : int>(
+void vector_kernel<let D : int, let bias_correction : bool>(
     inout float[D] lr_step,
     int index,
     float weight,
@@ -68,39 +64,28 @@ void vector_kernel<let D : int>(
     float beta2,
     float eps,
 
-    int bias_correction,
     )
 {   
     float bias_factor = 1;
-    if (bias_correction == 1) {
+    if (bias_correction) {
         bias_factor = sqrt(1 - pow(beta2, total_weight[index])) / (1 - pow(beta1, total_weight[index]));
     }
 
-    float norm = 0;
-    float[D] g;
-    [ForceUnroll]
-    for(int d=0; d<D; d++) {
-        g[d] = grad[index, d];
-        norm = norm + g[d] * g[d];
-    }
+    let g = load_vector<float, D>(grad, index);
+    let m = load_vector<float, D>(m_arr, index);
 
-    float v = lerp(pow(beta1, weight), v_arr[index], norm);
+    float v = lerp(v_arr[index], g.norm(), pow(beta2, weight));
 
-    float sqrt_v = sqrt(v);
-    if (sqrt_v < eps) {
-        sqrt_v = eps;
-    }
+    let m_new = m.lerp(g, pow(beta1, weight));
+
+    float scale = (lr * bias_factor) / max(sqrt(v), eps);
 
     [ForceUnroll]
-    for(int d=0; d<D; d++) {
-      float m = lerp(pow(beta1, weight), m_arr[index, d], g[d]);
-    
-      lr_step[d] = m / sqrt_v * bias_factor * lr;
-
-      int[2] i2 = {index, d};
-      m_arr.set(i2, m);
+    for (int d = 0; d < D; d++) {
+        lr_step[d] = m_new.data[d] * scale;
     }
 
-    int[1] i1 = {index};
-    v_arr.set(i1, v);
+    store_vector(m_arr, m_new, index);
+    v_arr.set({index}, v);
+
 }

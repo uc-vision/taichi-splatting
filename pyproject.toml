@@ -16,7 +16,7 @@ dependencies = [
   "tqdm", 
   "tensordict",
   "packaging",
-  "slangpy>=0.35" 
+  "slangpy>=0.36" 
 ]
 
 

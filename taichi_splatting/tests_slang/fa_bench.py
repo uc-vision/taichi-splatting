@@ -19,9 +19,7 @@ def random_inputs(n, m, d, vector=False, device='cuda'):
 
     return {
         "lr_step": torch.empty(m, d, device=device),
-        "indexes": torch.from_numpy(
-            np.random.choice(n, m, replace=False).astype(np.int64)
-        ).to(device),
+        "indexes": torch.sort(torch.randperm(n, device=device)[:m]).values.to(torch.int),
         "weight": torch.rand(m, device=device),
         "m_arr": torch.randn(n, d, device=device),
         "v_arr": v_arr,
@@ -39,28 +37,30 @@ def run_benchmark(name, kernel, inputs, is_slang):
         bench_inputs["indexes"] = bench_inputs["indexes"].to(torch.int64)
 
     test_fn = partial(kernel, **bench_inputs)
-    benchmarked(name, test_fn, profile=False, iters=10000, warmup=100)
+    benchmarked(name, test_fn, profile=False, iters=5000, warmup=100)
 
 
 def bench_fa():
-    TaichiQueue.init(arch=ti.cuda, device_memory_GB=0.1, threaded=True)
+    TaichiQueue.init(arch=ti.cuda, device_memory_GB=0.1, threaded=False)
 
-    n, m, d = 1000000, 50000, 32
+    n, m, d = 1000000, 500000, 16
 
     print(f"Benchmarking Fractional Adam n={n}, m={m}, d={d}")
 
     scalar_inputs = random_inputs(n, m, d, vector=False)
     vector_inputs = random_inputs(n, m, d, vector=True)
 
-    # Scalar kernels
-    print("\n--- Scalar kernels ---")
-    run_benchmark("Taichi scalar", taichi_scalar_kernel(), scalar_inputs, is_slang=False)
-    run_benchmark("Slang scalar", slang_scalar_kernel(dims=d), scalar_inputs, is_slang=True)
-
     # Vector kernels
     print("\n--- Vector kernels ---")
-    run_benchmark("Taichi vector", taichi_vector_kernel(dims=d), vector_inputs, is_slang=False)
     run_benchmark("Slang vector", slang_vector_kernel(dims=d), vector_inputs, is_slang=True)
+    run_benchmark("Taichi vector", taichi_vector_kernel(dims=d), vector_inputs, is_slang=False)
+
+
+    # # Scalar kernels
+    print("\n--- Scalar kernels ---")
+    run_benchmark("Slang scalar", slang_scalar_kernel(dims=d), scalar_inputs, is_slang=True)
+    run_benchmark("Taichi scalar", taichi_scalar_kernel(), scalar_inputs, is_slang=False)
+
 
 
 if __name__ == '__main__':
