@@ -269,7 +269,7 @@ def main():
 
     rotation=dict(lr=1.0),
     alpha_logit=dict(lr=0.1),
-    feature=dict(lr=0.1, type='vector')
+    feature=dict(lr=0.025, type='vector')
   )
   
   # params = ParameterClass(gaussians.to_tensordict(), 
