@@ -12,7 +12,7 @@ import taichi_splatting.perspective.projection as ti_proj
 from taichi_splatting.tests.random_data import random_camera, random_3d_gaussians
 
 import torch
-import taichi as ti
+import gstaichi as ti
 
 from torch.autograd.gradcheck import GradcheckError
 

@@ -3,8 +3,8 @@ import math
 from numbers import Integral
 from beartype.typing import Tuple
 from beartype import beartype
-import taichi as ti
-from taichi.math import ivec2
+import gstaichi as ti
+from gstaichi.math import ivec2
 import torch
 
 

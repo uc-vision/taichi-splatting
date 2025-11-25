@@ -3,7 +3,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 import threading
 
-import taichi as ti
+import gstaichi as ti
 
 
 class NullExecutor:

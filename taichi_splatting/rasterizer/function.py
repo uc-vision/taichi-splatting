@@ -7,7 +7,7 @@ from numbers import Integral
 from beartype import beartype
 from beartype.typing import Tuple, NamedTuple
 
-import taichi as ti
+import gstaichi as ti
 
 from taichi_splatting.mapper.tile_mapper import map_to_tiles
 from taichi_splatting.taichi_queue import queued

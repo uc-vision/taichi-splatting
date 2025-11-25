@@ -1,5 +1,5 @@
 from functools import cache
-import taichi as ti
+import gstaichi as ti
 
 from taichi_splatting.taichi_queue import queued
 from taichi_splatting.taichi_lib.f32 import lerp

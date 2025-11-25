@@ -5,7 +5,7 @@ from taichi_splatting.misc.renderer2d import render_gaussians, split_gaussians2d
 from taichi_splatting.taichi_queue import TaichiQueue
 from taichi_splatting.tests.random_data import random_2d_gaussians
 import torch
-import taichi as ti
+import gstaichi as ti
 
 import cv2
 

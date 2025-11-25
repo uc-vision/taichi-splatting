@@ -1,7 +1,7 @@
 import argparse
 
 import torch
-import taichi as ti
+import gstaichi as ti
 from taichi_splatting.benchmarks.util import benchmarked
 
 from taichi_splatting.rasterizer.function import  RasterConfig

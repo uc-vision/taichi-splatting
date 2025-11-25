@@ -12,7 +12,7 @@ from taichi_splatting.taichi_queue import  taichi_queue
 import numpy as np
 
 import torch
-import taichi as ti
+import gstaichi as ti
 
 import cv2
 

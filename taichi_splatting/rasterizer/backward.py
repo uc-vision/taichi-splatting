@@ -1,5 +1,5 @@
 from functools import cache
-import taichi as ti
+import gstaichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib.concurrent import warp_add_vector_32, warp_add_vector_64
@@ -47,6 +47,12 @@ def backward_kernel(config: RasterConfig,
   pdf_with_grad = lib.gaussian_pdf_antialias_with_grad if config.antialias else lib.gaussian_pdf_with_grad
   # pdf = lib.gaussian_pdf_antialias if config.antialias else lib.gaussian_pdf
 
+  pixel_stride = config.pixel_stride
+  compute_point_heuristic = config.compute_point_heuristic
+  saturate_threshold = config.saturate_threshold
+  alpha_threshold = config.alpha_threshold
+  clamp_max_alpha = config.clamp_max_alpha
+
   @ti.kernel
   def _backward_kernel(
       # Input tensors
@@ -77,7 +83,7 @@ def backward_kernel(config: RasterConfig,
     ti.loop_config(block_dim=(block_area))
     for tile_id, tile_idx in ti.ndrange(tiles_wide * tiles_high, block_area):
       pixel_base = tiling.tile_transform(tile_id, tile_idx,
-                                         tile_size, config.pixel_stride, tiles_wide)
+                                         tile_size, pixel_stride, tiles_wide)
 
       # Shared memory arrays
       tile_point = ti.simt.block.SharedArray((block_area, ), dtype=Gaussian2D.vec)
@@ -91,7 +97,7 @@ def backward_kernel(config: RasterConfig,
                            if ti.static(features_requires_grad) else None)
 
       tile_point_heuristics = (ti.simt.block.SharedArray((block_area,), dtype=vec2)
-                               if ti.static(config.compute_point_heuristic) else None)
+                               if ti.static(compute_point_heuristic) else None)
 
       # Per-thread state for each pixel in tile
       grad_pixel_feature = thread_features(0.)
@@ -113,7 +119,7 @@ def backward_kernel(config: RasterConfig,
 
       for point_group_id in range(num_point_groups):
         # Check if all pixels in tile are saturated
-        if ti.simt.block.sync_all_nonzero(ti.i32(total_weight.min() >= ti.static(config.saturate_threshold))):
+        if ti.simt.block.sync_all_nonzero(ti.i32(total_weight.min() >= ti.static(saturate_threshold))):
           break
 
         # Load points into shared memory
@@ -130,7 +136,7 @@ def backward_kernel(config: RasterConfig,
             tile_grad_point[tile_idx] = Gaussian2D.vec(0.0)
           if ti.static(features_requires_grad):
             tile_grad_feature[tile_idx] = feature_vec(0.0)
-          if ti.static(config.compute_point_heuristic):
+          if ti.static(compute_point_heuristic):
             tile_point_heuristics[tile_idx] = vec2(0.0)
 
         ti.simt.block.sync()
@@ -139,7 +145,7 @@ def backward_kernel(config: RasterConfig,
 
         # Process all points in group for each pixel in tile
         for in_group_idx in range(min(block_area, remaining_points)):
-          if ti.simt.warp.all_nonzero(ti.u32(0xffffffff), ti.i32(total_weight.min() >= ti.static(config.saturate_threshold))):
+          if ti.simt.warp.all_nonzero(ti.u32(0xffffffff), ti.i32(total_weight.min() >= ti.static(saturate_threshold))):
             break
 
           grad_point = Gaussian2D.vec(0.0)
@@ -151,16 +157,16 @@ def backward_kernel(config: RasterConfig,
 
           # Process all pixels in tile for current point
           for i, offset in ti.static(pixel_tile):
-            pixel_saturated = total_weight[i] >= ti.static(config.saturate_threshold)
+            pixel_saturated = total_weight[i] >= ti.static(saturate_threshold)
 
             pixelf = ti.cast(pixel_base + ti.math.ivec2(offset), dtype) + 0.5
             gaussian_alpha, dp_dmean, dp_daxis, dp_dsigma = pdf_with_grad(pixelf, mean, axis, sigma)
             alpha = point_alpha * gaussian_alpha
 
-            if alpha > ti.static(config.alpha_threshold) and not pixel_saturated:
+            if alpha > ti.static(alpha_threshold) and not pixel_saturated:
               has_grad = True
 
-              alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+              alpha = ti.min(alpha, ti.static(clamp_max_alpha))
               feature = tile_feature[in_group_idx]
 
               T_i = (1.0 - total_weight[i])  # transmisivity (remaining weight)
@@ -187,7 +193,7 @@ def backward_kernel(config: RasterConfig,
                     alpha_alpha_grad * dp_dsigma,
                     gaussian_alpha * alpha_grad)
 
-              if ti.static(config.compute_point_heuristic):
+              if ti.static(compute_point_heuristic):
                 gaussian_point_heuristics += vec2(
                     alpha_alpha_grad ** 2,
                     ti.abs(pos_grad).sum()
@@ -204,7 +210,7 @@ def backward_kernel(config: RasterConfig,
             if ti.static(features_requires_grad):
               warp_add_vector(tile_grad_feature[in_group_idx], grad_feature)
 
-            if ti.static(config.compute_point_heuristic):
+            if ti.static(compute_point_heuristic):
               warp_add_vector(tile_point_heuristics[in_group_idx], gaussian_point_heuristics)
 
         ti.simt.block.sync()
@@ -220,7 +226,7 @@ def backward_kernel(config: RasterConfig,
           if ti.static(features_requires_grad):
             ti.atomic_add(grad_features[point_idx], tile_grad_feature[tile_idx])
 
-          if ti.static(config.compute_point_heuristic):
+          if ti.static(compute_point_heuristic):
             ti.atomic_add(point_heuristic[point_idx], tile_point_heuristics[tile_idx])
 
 

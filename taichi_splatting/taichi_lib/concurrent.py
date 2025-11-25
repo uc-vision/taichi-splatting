@@ -1,7 +1,7 @@
 
 
-import taichi as ti
-from taichi.lang.simt import block, warp
+import gstaichi as ti
+from gstaichi.lang.simt import block, warp
 
 
 

@@ -1,6 +1,6 @@
 
-import taichi as ti
-from taichi.math import ivec2, vec2, mat2, vec3
+import gstaichi as ti
+from gstaichi.math import ivec2, vec2, mat2, vec3
 
 from taichi_splatting.taichi_lib.f32 import (Gaussian2D, 
     ellipse_bounds)

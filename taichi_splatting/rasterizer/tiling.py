@@ -1,5 +1,5 @@
-import taichi as ti
-from taichi.math import ivec2
+import gstaichi as ti
+from gstaichi.math import ivec2
 
 from taichi_splatting.taichi_lib.concurrent import WARP_SIZE
 
@@ -34,7 +34,9 @@ def morton_tile_inv(order:ti.i32):
 @ti.func
 def warp_transform(i:ti.i32, tile_size:ti.template(), pixel_stride:ti.template()):
   # divide tile into 32 (8x4) sized chunks for a warp
-  w = ti.static(8 * pixel_stride[0])
+  pixel_stride_x = ti.static(pixel_stride[0])
+  pixel_stride_y = ti.static(pixel_stride[1])
+  w = ti.static(8 * pixel_stride_x)
   
   warp_id = i // WARP_SIZE
   warp_offset = i % WARP_SIZE
@@ -45,8 +47,8 @@ def warp_transform(i:ti.i32, tile_size:ti.template(), pixel_stride:ti.template()
   warp_v = (warp_id // warps_wide)
 
   return ivec2(
-    (warp_u * 8 + warp_offset % 8) * pixel_stride[0],
-    (warp_v * 4 + warp_offset // 8) * pixel_stride[1])
+    (warp_u * 8 + warp_offset % 8) * pixel_stride_x,
+    (warp_v * 4 + warp_offset // 8) * pixel_stride_y)
 
 
 

@@ -1,7 +1,7 @@
 import argparse
 import torch
 
-import taichi as ti
+import gstaichi as ti
 from tqdm import tqdm
 
 from taichi_splatting.taichi_lib.f64 import (

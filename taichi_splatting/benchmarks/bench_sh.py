@@ -5,7 +5,7 @@ import torch
 from taichi_splatting.benchmarks.util import benchmarked
 from taichi_splatting import indexed_spherical_harmonics
 
-import taichi as ti
+import gstaichi as ti
 
 from taichi_splatting.taichi_queue import TaichiQueue, taichi_queue
 

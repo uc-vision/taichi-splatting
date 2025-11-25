@@ -12,7 +12,7 @@ maintainers = [
 
 dependencies = [
   "beartype", 
-  "taichi", 
+  "gstaichi", 
   "tqdm", 
   "tensordict >=0.7.0",
   "packaging" 

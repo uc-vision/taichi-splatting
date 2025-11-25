@@ -9,7 +9,7 @@ from taichi_splatting.taichi_queue import taichi_queue
 
 
 import torch
-import taichi as ti
+import gstaichi as ti
 import cv2
 import argparse
 import numpy as np

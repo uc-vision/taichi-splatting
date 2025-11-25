@@ -1,5 +1,5 @@
 import torch
-import taichi as ti
+import gstaichi as ti
 from tqdm import tqdm
 from taichi_splatting.tests.util import compare_with_grad
 

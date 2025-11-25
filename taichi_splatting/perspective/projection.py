@@ -4,7 +4,7 @@ from functools import cache
 from numbers import Integral
 from beartype.typing import Tuple
 from beartype import beartype
-import taichi as ti
+import gstaichi as ti
 import torch
 from taichi_splatting.data_types import Gaussians3D, RasterConfig
 from taichi_splatting.optim.autograd import restore_grad

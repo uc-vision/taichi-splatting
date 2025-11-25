@@ -1,6 +1,6 @@
 from typing import Optional, Tuple
-import taichi as ti
-from taichi.math import vec3, uvec3, clamp, uvec3
+import gstaichi as ti
+from gstaichi.math import vec3, uvec3, clamp, uvec3
 from taichi_splatting import cuda_lib   
 
 import torch

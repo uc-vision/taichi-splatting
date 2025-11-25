@@ -1,5 +1,5 @@
 from functools import cache
-import taichi as ti
+import gstaichi as ti
 from taichi_splatting.data_types import RasterConfig
 from taichi_splatting.rasterizer import tiling
 from taichi_splatting.taichi_lib import get_library
@@ -18,6 +18,12 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
   pdf = lib.gaussian_pdf_antialias if config.antialias else lib.gaussian_pdf
   warp_add_vector = warp_add_vector_32 if dtype == ti.f32 else warp_add_vector_64
+
+  compute_visibility = config.compute_visibility
+  clamp_max_alpha = config.clamp_max_alpha
+  alpha_threshold = config.alpha_threshold
+  use_alpha_blending = config.use_alpha_blending
+  saturate_threshold = config.saturate_threshold
 
   @ti.kernel
   def _forward_kernel(
@@ -62,7 +68,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       tile_point_id = ti.simt.block.SharedArray((tile_area, ), dtype=ti.i32)
 
       tile_visibility = (ti.simt.block.SharedArray((tile_area, ), dtype=vec1) 
-                         if ti.static(config.compute_visibility) else None)
+                         if ti.static(compute_visibility) else None)
 
       for point_group_id in range(num_point_groups):
         if ti.simt.block.sync_all_nonzero(ti.i32(saturated)):
@@ -78,7 +84,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
           tile_feature[tile_idx] = point_features[point_idx]
           tile_point_id[tile_idx] = point_idx
 
-          if ti.static(config.compute_visibility):
+          if ti.static(compute_visibility):
             tile_visibility[tile_idx] = vec1(0.0)
 
         ti.simt.block.sync()
@@ -96,29 +102,29 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
 
           gaussian_alpha = pdf(pixelf, mean, axis, sigma)
           alpha = point_alpha * gaussian_alpha
-          alpha = ti.min(alpha, ti.static(config.clamp_max_alpha))
+          alpha = ti.min(alpha, ti.static(clamp_max_alpha))
 
-          if alpha > ti.static(config.alpha_threshold):
+          if alpha > ti.static(alpha_threshold):
             weight = alpha * (1.0 - total_weight)
             total_weight += weight
 
-            if ti.static(config.use_alpha_blending):
+            if ti.static(use_alpha_blending):
               accum_features += tile_feature[in_group_idx] * weight
             else:
-              # no blending - use this to compute quantile (e.g. median) along with config.saturate_threshold
-              if total_weight >= ti.static(1.0 - config.saturate_threshold) and not saturated:
+              # no blending - use this to compute quantile (e.g. median) along with saturate_threshold
+              if total_weight >= ti.static(1.0 - saturate_threshold) and not saturated:
                 accum_features = tile_feature[in_group_idx]
             
-              saturated = total_weight >= ti.static(1.0 - config.saturate_threshold)
+              saturated = total_weight >= ti.static(1.0 - saturate_threshold)
 
-          if ti.static(config.compute_visibility):
-            if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(alpha > ti.static(config.alpha_threshold))):
+          if ti.static(compute_visibility):
+            if ti.simt.warp.any_nonzero(ti.u32(0xffffffff), ti.i32(alpha > ti.static(alpha_threshold))):
               # Accumulate visibility in shared memory across the warp
               weight_vec = vec1(weight)
               warp_add_vector(tile_visibility[in_group_idx], weight_vec)
 
 
-        if ti.static(config.compute_visibility):
+        if ti.static(compute_visibility):
           ti.simt.block.sync()  
 
           if load_index < end_offset:
@@ -129,7 +135,7 @@ def forward_kernel(config: RasterConfig, feature_size: int, dtype=ti.f32):
       if in_bounds:
         image_feature[pixel.y, pixel.x] = accum_features
 
-        if ti.static(config.use_alpha_blending):
+        if ti.static(use_alpha_blending):
           image_alpha[pixel.y, pixel.x] = total_weight    
         else:
           image_alpha[pixel.y, pixel.x] = dtype(total_weight > 0)

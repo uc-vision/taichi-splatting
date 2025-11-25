@@ -1,5 +1,5 @@
 from beartype import beartype
-import taichi as ti
+import gstaichi as ti
 import torch
 
 from taichi_splatting.optim.autograd import restore_grad

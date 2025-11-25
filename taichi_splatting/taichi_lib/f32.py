@@ -1,5 +1,5 @@
 from taichi_splatting.taichi_lib.generic import make_library
-import taichi as ti
+import gstaichi as ti
 
 
 funcs = make_library(ti.f32)
